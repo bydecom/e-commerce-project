@@ -1,0 +1,35 @@
+<header class="border-b border-gray-200 bg-white shadow-sm">
+  <nav class="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-4 px-4 py-3">
+    <a routerLink="/" class="text-lg font-semibold text-blue-700">E‑Commerce</a>
+    <div class="flex flex-wrap items-center gap-4 text-sm">
+      <a routerLink="/products" class="text-gray-700 hover:text-blue-600">Products</a>
+      <a routerLink="/cart" class="text-gray-700 hover:text-blue-600">
+        Cart
+        @if (cart.itemCount() > 0) {
+          <span class="ml-1 rounded-full bg-blue-100 px-2 py-0.5 text-xs text-blue-800">
+            {{ cart.itemCount() }}
+          </span>
+        }
+      </a>
+      @if (auth.isAuthenticated()) {
+        <a routerLink="/orders" class="text-gray-700 hover:text-blue-600">Orders</a>
+        <a routerLink="/profile" class="text-gray-700 hover:text-blue-600">Profile</a>
+        @if (auth.isAdmin()) {
+          <a routerLink="/admin" class="font-medium text-amber-700 hover:text-amber-900">Admin</a>
+        }
+        <button
+          type="button"
+          class="rounded border border-gray-300 px-3 py-1 hover:bg-gray-50"
+          (click)="auth.logout()"
+        >
+          Log out
+        </button>
+      } @else {
+        <a routerLink="/login" class="text-gray-700 hover:text-blue-600">Login</a>
+        <a routerLink="/register" class="rounded bg-blue-600 px-3 py-1 text-white hover:bg-blue-700">
+          Register
+        </a>
+      }
+    </div>
+  </nav>
+</header>

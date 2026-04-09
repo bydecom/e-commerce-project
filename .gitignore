@@ -1,8 +1,26 @@
 node_modules/
 dist/
-build/
+npm-debug.log
+*.log
+coverage/
+*.tsbuildinfo
 
 .env
+.env.*.local
+
+backend/dist/
+frontend/out-tsc/
+
+backend/prisma/dev.db
+backend/prisma/dev.db-journal
+
+frontend/.angular/
+frontend/dist/
+
+postgres_data/
+redis_data/
+portainer_data/
 
 .DS_Store
-Thumbs.db
+.vscode/
+.idea/

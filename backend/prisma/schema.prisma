@@ -1,0 +1,106 @@
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["postgresqlExtensions"]
+}
+
+datasource db {
+  provider   = "postgresql"
+  url        = env("DATABASE_URL")
+  extensions = [pg_trgm]
+}
+
+enum Role {
+  USER
+  ADMIN
+}
+
+enum OrderStatus {
+  PENDING
+  CONFIRMED
+  SHIPPING
+  DONE
+  CANCELLED
+}
+
+enum SentimentLabel {
+  POSITIVE
+  NEUTRAL
+  NEGATIVE
+}
+
+model User {
+  id        Int        @id @default(autoincrement()) 
+  email     String     @unique                      
+  password  String
+  name      String?
+  phone     String?
+  address   String?
+  role      Role       @default(USER)             
+
+  orders    Order[]
+  feedbacks Feedback[]
+}
+
+model Category {
+  id       Int       @id @default(autoincrement())
+  name     String
+  products Product[]
+}
+
+model Product {
+  id             Int         @id @default(autoincrement())
+  name           String
+  title_unaccent String?
+  description    String?
+  price          Float
+  stock          Int
+  imageUrl       String?
+
+  categoryId     Int
+  category       Category    @relation(fields: [categoryId], references: [id]) // Thêm Relation
+
+  orderItems     OrderItem[]
+  feedbacks      Feedback[]
+
+  @@index([title_unaccent], name: "product_title_btree_idx")
+  @@index([title_unaccent(ops: raw("gin_trgm_ops"))], type: Gin, name: "product_title_gin_idx")
+}
+
+model Order {
+  id              Int         @id @default(autoincrement())
+  userId          Int
+  status          OrderStatus @default(PENDING)
+  total           Float
+  shippingAddress String
+  createdAt       DateTime    @default(now())              
+  updatedAt       DateTime    @updatedAt                   
+
+  user            User        @relation(fields: [userId], references: [id])
+  items           OrderItem[]
+  feedback        Feedback?
+}
+
+model OrderItem {
+  id        Int     @id @default(autoincrement())
+  orderId   Int
+  productId Int
+  quantity  Int
+  unitPrice Float
+
+  order     Order   @relation(fields: [orderId], references: [id])
+  product   Product @relation(fields: [productId], references: [id])
+}
+
+model Feedback {
+  id        Int             @id @default(autoincrement())
+  userId    Int
+  productId Int
+  orderId   Int             @unique                     
+  rating    Int
+  comment   String?
+  sentiment SentimentLabel?
+
+  user      User    @relation(fields: [userId], references: [id])
+  product   Product @relation(fields: [productId], references: [id])
+  order     Order   @relation(fields: [orderId], references: [id])
+}

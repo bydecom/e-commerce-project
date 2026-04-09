@@ -1,0 +1,1 @@
+// GET /categories, admin CRUD

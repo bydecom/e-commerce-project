@@ -1,0 +1,15 @@
+@if (sentiment) {
+  <span
+    class="inline-flex rounded-full px-2 py-0.5 text-xs font-medium"
+    [class.bg-green-100]="sentiment === 'POSITIVE'"
+    [class.text-green-800]="sentiment === 'POSITIVE'"
+    [class.bg-gray-100]="sentiment === 'NEUTRAL'"
+    [class.text-gray-700]="sentiment === 'NEUTRAL'"
+    [class.bg-red-100]="sentiment === 'NEGATIVE'"
+    [class.text-red-800]="sentiment === 'NEGATIVE'"
+  >
+    {{ sentiment }}
+  </span>
+} @else {
+  <span class="text-xs text-gray-400">—</span>
+}
