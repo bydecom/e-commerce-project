@@ -1,0 +1,113 @@
+# E-Commerce Project Rules
+
+## Stack
+- Frontend: Angular 17+ (standalone components, signals), SCSS, Tailwind, TypeScript strict
+- Backend: Node.js 20, Express, **TypeScript**, Prisma ORM, PostgreSQL (`Int` PKs — see `backend/prisma/schema.prisma`)
+- Auth: JWT (`Authorization: Bearer`); logout blacklist Redis (planned)
+- AI: Google Gemini (`@google/genai`) — see `GEMINI_API_KEY`
+- Email: Nodemailer → Mailpit (dev)
+- Cache: Redis
+
+**Contracts:** `contexts/API_CONTRACT.md`, `contexts/codebase_index.md`
+
+---
+
+## General Rules
+- NEVER commit secrets — use `backend/.env` (gitignored), keys only in `.env.example` as placeholders
+- Prefer `environment.apiUrl` / `process.env.*` over hardcoded production URLs (localhost in env files for dev is OK)
+- In Express: use `try/catch` in async handlers and `next(err)` for errors
+- NEVER return raw Prisma errors to the client — map to safe messages
+- Dates in API responses: ISO 8601 strings
+- Code identifiers in English; comments may be Vietnamese
+
+---
+
+## Backend Rules
+
+### Response Format
+Use helpers in **`backend/src/utils/response.ts`** (and a shared error type / factory if you add `createError`):
+
+```ts
+res.json(success(data, message, meta));
+// → { success: true, message, data, meta }
+
+// Errors: next(err) → handled by error middleware → { success: false, message, errors }
+```
+
+Do not return unwrapped `{ data }` for success responses.
+
+### Module layout (TypeScript)
+```
+backend/src/modules/<name>/
+  <name>.route.ts      → Router, mount paths
+  <name>.controller.ts → validate, call service, send response
+  <name>.service.ts    → business logic + Prisma
+```
+
+### Prisma
+- Use `prisma.$transaction()` when multiple writes must succeed or fail together (e.g. order + order items + stock).
+- Never return `password` — `select` / `omit: { password: true }` on User.
+- Pagination defaults: `page=1`, `limit=12` (align with `API_CONTRACT.md`).
+
+### Auth
+- Protected routes: `authMiddleware`; admin: add role check after auth (e.g. `requireRole('ADMIN')` once implemented).
+- JWT payload minimum: `{ userId, role }` (match Prisma `User.id` and `Role` enum).
+
+### Order status (CRITICAL)
+Valid transitions (enforce in `order.service.ts`):
+```
+PENDING → CONFIRMED → SHIPPING → DONE
+PENDING → CANCELLED (user or admin)
+```
+No cancel when status is CONFIRMED / SHIPPING / DONE (unless product policy changes — document first).
+
+### AI
+- Centralize Gemini calls in **`backend/src/modules/ai/ai.service.ts`**
+- Functions: e.g. `getRecommendations`, `classifySentiment`, `generateDescription`, `getBusinessAdvice`
+- Wrap in try/catch; on failure return a safe fallback or partial result — do not crash the HTTP handler
+- Prompt strings as named constants at top of file or `prompts/` folder
+
+---
+
+## Frontend Rules
+
+### Components
+- Standalone components only; prefer `inject()` over constructor DI where it reads cleaner
+- Prefer `signal` / `computed` for local and simple shared UI state
+
+### Services
+- Feature services own `HttpClient` calls; components call services, not `HttpClient` directly (exceptions: tiny one-off is discouraged)
+- **`AuthService`:** current user via **signals** (`currentUser` / `isAuthenticated`) — not mandatory to use `BehaviorSubject` unless you standardize on it
+- **`CartService`:** state + persist (e.g. localStorage); SSR-safe (`isPlatformBrowser`)
+
+### API URLs
+Base: `environment.apiUrl` (e.g. `http://localhost:3000`). Paths include **`/api`** prefix:
+```ts
+`${environment.apiUrl}/api/products`
+```
+
+### Routing
+- Lazy load heavy features (e.g. `/admin` subtree)
+- `authGuard` / `adminGuard` as in `app.routes.ts`
+
+### Styling
+- Tailwind utilities in templates; global tokens in `styles.scss` where useful
+- Prefer `:host` in component SCSS for host-level layout; avoid `style="..."` for static layout (dynamic values OK sparingly)
+
+---
+
+## File naming
+```
+Backend:  kebab-case     → auth.route.ts, product.service.ts
+Frontend: kebab-case     → product-list.component.ts, auth.guard.ts
+Models:   singular       → user.model.ts
+```
+
+---
+
+## What NOT to do
+- NgRx for this project — services + signals are enough
+- Avoid `any`; use `unknown` + narrowing if needed
+- No business logic only in route files — keep it in services
+- `prisma.$disconnect()`: call on process shutdown if you add a graceful shutdown hook; not per request
+- Avoid scope creep late in the sprint — align with `API_CONTRACT.md`
