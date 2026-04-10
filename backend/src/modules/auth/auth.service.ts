@@ -2,6 +2,8 @@ import bcrypt from 'bcrypt';
 import { Prisma } from '@prisma/client';
 import { prisma } from '../../db';
 import { httpError } from '../../utils/http-error';
+import * as jwt from 'jsonwebtoken';
+import { randomUUID } from 'crypto';
 
 function normalizeEmail(email: string): string {
   return email.trim().toLowerCase();
@@ -46,4 +48,42 @@ export async function register(input: { name: string; email: string; password: s
     }
     throw e;
   }
+}
+
+export async function login(input: { email: string; password: string }) {
+  const email = normalizeEmail(input.email);
+  const password = input.password;
+
+  if (!email) throw httpError(400, 'email is required');
+  if (!password) throw httpError(400, 'password is required');
+
+  const user = await prisma.user.findUnique({
+    where: { email },
+    select: { id: true, name: true, email: true, role: true, password: true },
+  });
+  if (!user) throw httpError(401, 'Invalid credentials');
+
+  const ok = await bcrypt.compare(password, user.password);
+  if (!ok) throw httpError(401, 'Invalid credentials');
+
+  const secret = process.env.JWT_SECRET;
+  if (!secret) throw httpError(500, 'JWT secret is not configured');
+
+  const jti = randomUUID();
+  const expiresIn = (process.env.JWT_EXPIRES_IN || '7d').trim() as jwt.SignOptions['expiresIn'];
+  const token = jwt.sign(
+    { userId: user.id, role: user.role },
+    secret,
+    {
+      algorithm: 'HS256',
+      expiresIn,
+      subject: String(user.id),
+      jwtid: jti,
+    }
+  );
+
+  return {
+    token,
+    user: mapUser({ id: user.id, name: user.name, email: user.email, role: user.role }),
+  };
 }

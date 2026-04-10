@@ -15,3 +15,16 @@ export async function register(req: Request, res: Response, next: NextFunction):
     next(err);
   }
 }
+
+export async function login(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const b = req.body as Record<string, unknown>;
+    const email = typeof b.email === 'string' ? b.email : '';
+    const password = typeof b.password === 'string' ? b.password : '';
+
+    const data = await authService.login({ email, password });
+    res.json(success(data));
+  } catch (err) {
+    next(err);
+  }
+}

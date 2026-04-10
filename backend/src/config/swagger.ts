@@ -97,6 +97,60 @@ export const openApiSpec = {
         },
       },
     },
+    '/api/auth/login': {
+      post: {
+        tags: ['Auth'],
+        summary: 'Login, returns JWT',
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: { $ref: '#/components/schemas/AuthLoginRequest' },
+              examples: {
+                example: {
+                  value: { email: 'a@gmail.com', password: '123456' },
+                },
+              },
+            },
+          },
+        },
+        responses: {
+          '200': {
+            description: 'OK',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/SuccessResponse_Login' },
+              },
+            },
+          },
+          '400': {
+            description: 'Bad Request — invalid input',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/FailureResponse' },
+                examples: {
+                  missingEmail: { value: { success: false, message: 'email is required', errors: null } },
+                  missingPassword: { value: { success: false, message: 'password is required', errors: null } },
+                },
+              },
+            },
+          },
+          '401': {
+            description: 'Unauthorized — invalid credentials',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/FailureResponse' },
+                examples: {
+                  invalidCredentials: {
+                    value: { success: false, message: 'Email or Password wrong', errors: null },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    },
     '/api/products': {
       get: {
         tags: ['Products'],
@@ -221,6 +275,14 @@ export const openApiSpec = {
           password: { type: 'string', example: '123456' },
         },
       },
+      AuthLoginRequest: {
+        type: 'object',
+        required: ['email', 'password'],
+        properties: {
+          email: { type: 'string', example: 'a@gmail.com' },
+          password: { type: 'string', example: '123456' },
+        },
+      },
       UserPublic: {
         type: 'object',
         required: ['id', 'email', 'role'],
@@ -231,6 +293,14 @@ export const openApiSpec = {
           role: { type: 'string', enum: ['USER', 'ADMIN'], example: 'USER' },
         },
       },
+      LoginData: {
+        type: 'object',
+        required: ['token', 'user'],
+        properties: {
+          token: { type: 'string', example: 'jwt...' },
+          user: { $ref: '#/components/schemas/UserPublic' },
+        },
+      },
       SuccessResponse_UserPublic: {
         type: 'object',
         required: ['success', 'message', 'data', 'meta'],
@@ -238,6 +308,16 @@ export const openApiSpec = {
           success: { type: 'boolean', example: true },
           message: { type: 'string', example: 'Created' },
           data: { $ref: '#/components/schemas/UserPublic' },
+          meta: { nullable: true, example: null },
+        },
+      },
+      SuccessResponse_Login: {
+        type: 'object',
+        required: ['success', 'message', 'data', 'meta'],
+        properties: {
+          success: { type: 'boolean', example: true },
+          message: { type: 'string', example: 'OK' },
+          data: { $ref: '#/components/schemas/LoginData' },
           meta: { nullable: true, example: null },
         },
       },
