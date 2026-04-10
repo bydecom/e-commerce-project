@@ -1,10 +1,16 @@
 import { prisma } from '../../db';
 import { httpError } from '../../utils/http-error';
 
+const categorySelect = {
+  id: true,
+  name: true,
+  _count: { select: { products: true } },
+} as const;
+
 export async function listCategories() {
   return prisma.category.findMany({
     orderBy: { name: 'asc' },
-    select: { id: true, name: true },
+    select: categorySelect,
   });
 }
 
@@ -19,6 +25,6 @@ export async function createCategory(name: string) {
 
   return prisma.category.create({
     data: { name: trimmed },
-    select: { id: true, name: true },
+    select: categorySelect,
   });
 }

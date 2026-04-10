@@ -1,7 +1,7 @@
 # E-Commerce Project Rules
 
 ## Stack
-- Frontend: Angular 17+ (standalone components, signals), SCSS, Tailwind, TypeScript strict
+- Frontend: Angular 17 (not 18) (standalone components, signals), SCSS, Tailwind, TypeScript strict
 - Backend: Node.js 20, Express, TypeScript, Prisma ORM, PostgreSQL (Int PKs — see `backend/prisma/schema.prisma`)
 - Auth: JWT (`Authorization: Bearer`); logout token blacklist in Redis (planned)
 - AI: Google Gemini (`@google/genai`) — see `GEMINI_API_KEY`

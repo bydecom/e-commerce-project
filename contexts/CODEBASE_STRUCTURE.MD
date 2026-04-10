@@ -26,11 +26,17 @@ D:\WORKSPACE\PROJECT\E-COMMERCE-PROJECT\FRONTEND\SRC
 │   │   └───services
 │   │           auth.service.ts
 │   │           cart.service.ts
+│   │           product-api.service.ts
+│   │           store-setting.service.ts
 │   │           toast.service.ts
 │   │
 │   ├───features
 │   │   ├───admin
 │   │   │   │   admin.routes.ts
+│   │   │   │
+│   │   │   ├───categories
+│   │   │   │   └───category-list
+│   │   │   │           category-list.component.ts
 │   │   │   │
 │   │   │   ├───dashboard
 │   │   │   │       dashboard.component.ts
@@ -42,6 +48,7 @@ D:\WORKSPACE\PROJECT\E-COMMERCE-PROJECT\FRONTEND\SRC
 │   │   │   │       admin-layout.component.html
 │   │   │   │       admin-layout.component.scss
 │   │   │   │       admin-layout.component.ts
+│   │   │   │       admin-navbar.component.ts
 │   │   │   │
 │   │   │   ├───orders
 │   │   │   │   ├───order-detail
@@ -50,12 +57,15 @@ D:\WORKSPACE\PROJECT\E-COMMERCE-PROJECT\FRONTEND\SRC
 │   │   │   │   └───order-list
 │   │   │   │           order-list.component.ts
 │   │   │   │
-│   │   │   └───products
-│   │   │       ├───product-form
-│   │   │       │       product-form.component.ts
-│   │   │       │
-│   │   │       └───product-list
-│   │   │               product-list.component.ts
+│   │   │   ├───products
+│   │   │   │   ├───product-form
+│   │   │   │   │       product-form.component.ts
+│   │   │   │   │
+│   │   │   │   └───product-list
+│   │   │   │           product-list.component.ts
+│   │   │   │
+│   │   │   └───shop-settings
+│   │   │           shop-settings.component.ts
 │   │   │
 │   │   ├───auth
 │   │   │   ├───login
@@ -72,6 +82,26 @@ D:\WORKSPACE\PROJECT\E-COMMERCE-PROJECT\FRONTEND\SRC
 │   │   │
 │   │   ├───home
 │   │   │       home.component.ts
+│   │   │
+│   │   ├───info
+│   │   │   ├───about
+│   │   │   │       about.component.ts
+│   │   │   │
+│   │   │   ├───contact
+│   │   │   │       contact.component.ts
+│   │   │   │
+│   │   │   ├───privacy
+│   │   │   │       privacy.component.ts
+│   │   │   │
+│   │   │   ├───shipping-policy
+│   │   │   │       shipping-policy.component.ts
+│   │   │   │
+│   │   │   └───terms
+│   │   │           terms.component.ts
+│   │   │
+│   │   ├───layout
+│   │   │       user-layout.component.html
+│   │   │       user-layout.component.ts
 │   │   │
 │   │   ├───orders
 │   │   │   ├───order-detail
@@ -127,11 +157,15 @@ D:\WORKSPACE\PROJECT\E-COMMERCE-PROJECT\FRONTEND\SRC
 │       │           sentiment-badge.component.scss
 │       │           sentiment-badge.component.ts
 │       │
+│       ├───constants
+│       │       footer-contact.ts
+│       │
 │       ├───models
 │       │       api-response.model.ts
 │       │       feedback.model.ts
 │       │       order.model.ts
 │       │       product.model.ts
+│       │       store-setting.model.ts
 │       │       user.model.ts
 │       │
 │       └───pipes
@@ -147,6 +181,7 @@ D:\WORKSPACE\PROJECT\E-COMMERCE-PROJECT\FRONTEND\SRC
 
 D:\WORKSPACE\PROJECT\E-COMMERCE-PROJECT\BACKEND\SRC
 │   app.ts
+│   db.ts
 │
 ├───config
 │       redis.ts
@@ -192,12 +227,18 @@ D:\WORKSPACE\PROJECT\E-COMMERCE-PROJECT\BACKEND\SRC
 │   │       product.route.ts
 │   │       product.service.ts
 │   │
+│   ├───store-setting
+│   │       store-setting.controller.ts
+│   │       store-setting.route.ts
+│   │       store-setting.service.ts
+│   │
 │   └───user
 │           user.controller.ts
 │           user.route.ts
 │           user.service.ts
 │
 └───utils
+        http-error.ts
         mail.ts
         pagination.ts
         response.ts

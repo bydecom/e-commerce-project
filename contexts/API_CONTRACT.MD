@@ -10,6 +10,18 @@
 { "success": false, "message": "Error message", "errors": [] }
 ```
 
+> **Trạng thái triển khai (backend hiện tại):** đã có handler cho `GET /api/health`, `GET|POST|PUT|DELETE /api/products`, `GET|POST /api/categories`, `GET|PUT /api/store-settings`. Các mục **Auth**, **Users**, **Orders**, **Feedback**, **Dashboard**, **AI** bên dưới là **hợp đồng mục tiêu** — router tương ứng trong `backend/src/app.ts` có thể **chưa gắn route con** (xem `contexts/CODEBASE_INDEX.MD`).
+
+---
+
+## Health `/health`
+
+| Method | Endpoint | Auth | Description |
+|--------|----------|------|-------------|
+| GET | `/health` | ❌ | Server + DB alive (`prisma.$queryRaw`) |
+
+**GET /health** — `200` với `data: null`, `message` kiểu `"Server and database are running."`
+
 ---
 
 ## Auth `/auth`
@@ -61,15 +73,17 @@
 |--------|----------|------|-------------|
 | GET | `/products` | ❌ | Product list (filter + search + pagination) |
 | GET | `/products/:id` | ❌ | Product detail |
-| POST | `/products` | ✅ Admin | Create product |
-| PUT | `/products/:id` | ✅ Admin | Update product |
-| DELETE | `/products/:id` | ✅ Admin | Delete product |
+| POST | `/products` | ❌ | Create product |
+| PUT | `/products/:id` | ❌ | Update product |
+| DELETE | `/products/:id` | ❌ | Delete product |
+
+> Hiện `backend/src/modules/product/product.route.ts` **chưa** gắn `authMiddleware` / `roleMiddleware` — các method trên có thể gọi công khai trong môi trường dev (phù hợp admin FE không bắt login).
 
 **GET /products — Query params**
 ```
-?page=1&limit=12&search=keyword&categoryId=1&minPrice=0&maxPrice=1000&sort=price_asc|price_desc|newest
+?page=1&limit=12&search=keyword&categoryId=1&minPrice=0&maxPrice=1000&sort=price_asc|price_desc|newest&status=AVAILABLE|UNAVAILABLE|DRAFT
 ```
-> `search` maps to search columns (e.g. `title_unaccent` / `name` depending on implementation).
+> `search` khớp `name` (contains, insensitive) hoặc `title_unaccent` (contains, sau khi normalize phía server).
 
 **Response data item:**
 ```json
@@ -81,6 +95,7 @@
   "price": 199000,
   "stock": 50,
   "imageUrl": "https://...",
+  "status": "AVAILABLE",
   "categoryId": 2,
   "category": { "id": 2, "name": "Category" }
 }
@@ -95,10 +110,11 @@
   "price": 199000,
   "stock": 50,
   "imageUrl": "https://...",
-  "categoryId": 2
+  "categoryId": 2,
+  "status": "AVAILABLE"
 }
 ```
-> Server may generate/update `titleUnaccent` on create/update (sync with `pg_trgm` index).
+> `status` tùy chọn — mặc định DB là `DRAFT` nếu không gửi. Server có thể generate/update `title_unaccent` khi tạo/cập nhật (index `pg_trgm` trên `title_unaccent`).
 
 ---
 
@@ -106,10 +122,38 @@
 
 | Method | Endpoint | Auth | Description |
 |--------|----------|------|-------------|
-| GET | `/categories` | ❌ | List categories |
-| POST | `/categories` | ✅ Admin | Create category |
-| PUT | `/categories/:id` | ✅ Admin | Update category |
-| DELETE | `/categories/:id` | ✅ Admin | Delete category |
+| GET | `/categories` | ❌ | List categories (có `_count.products`) |
+| POST | `/categories` | ❌ | Create category |
+
+> `backend/src/modules/category/category.route.ts` chỉ đăng ký **GET /** và **POST /** — chưa có `PUT`/`DELETE`. Middleware admin **chưa** gắn.
+
+**GET /categories** — mỗi phần tử `data`:
+```json
+{
+  "id": 1,
+  "name": "Electronics",
+  "_count": { "products": 5 }
+}
+```
+
+**POST /categories**
+```json
+// Request
+{ "name": "New Category" }
+
+// Response 201 — cùng shape như một item GET (kèm `_count.products`, category mới thường là 0)
+```
+
+---
+
+## Store settings `/store-settings`
+
+| Method | Endpoint | Auth | Description |
+|--------|----------|------|-------------|
+| GET | `/store-settings` | ❌ | Lấy cấu hình cửa hàng (tạo bản ghi mặc định nếu chưa có) |
+| PUT | `/store-settings` | ✅ Bearer + role `ADMIN` (middleware có trong route; verify JWT/role có thể còn TODO) | Cập nhật cửa hàng |
+
+**PUT /store-settings** — body (các field tùy chọn): `name`, `address`, `phone`, `email`, `logoUrl`, `description` (chuỗi hoặc `null`).
 
 ---
 

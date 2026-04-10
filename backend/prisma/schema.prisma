@@ -122,3 +122,9 @@ model StoreSetting {
   description String?
   updatedAt   DateTime @updatedAt
 }
+
+model FeedbackSetting {
+  id          Int      @id @default(autoincrement())
+  name        String   @unique
+  description String?
+}

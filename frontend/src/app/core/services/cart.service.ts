@@ -1,4 +1,4 @@
-import { Injectable, PLATFORM_ID, inject, signal, computed } from '@angular/core';
+import { Injectable, PLATFORM_ID, afterNextRender, computed, inject, signal } from '@angular/core';
 import { isPlatformBrowser } from '@angular/common';
 
 export interface CartLine {
@@ -13,7 +13,7 @@ const STORAGE_KEY = 'cart';
 @Injectable({ providedIn: 'root' })
 export class CartService {
   private readonly platformId = inject(PLATFORM_ID);
-  private readonly linesSignal = signal<CartLine[]>(this.load());
+  private readonly linesSignal = signal<CartLine[]>([]);
 
   readonly lines = this.linesSignal.asReadonly();
   readonly itemCount = computed(() =>
@@ -22,6 +22,12 @@ export class CartService {
   readonly subtotal = computed(() =>
     this.linesSignal().reduce((sum, l) => sum + l.quantity * l.unitPrice, 0)
   );
+
+  constructor() {
+    afterNextRender(() => {
+      this.linesSignal.set(this.load());
+    });
+  }
 
   add(line: CartLine): void {
     const next = [...this.linesSignal()];

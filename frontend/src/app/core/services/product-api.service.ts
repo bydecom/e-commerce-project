@@ -8,6 +8,7 @@ import type { Product, ProductStatus } from '../../shared/models/product.model';
 export interface CategoryDto {
   id: number;
   name: string;
+  _count?: { products: number };
 }
 
 function mapHttpError(err: HttpErrorResponse) {
@@ -35,6 +36,16 @@ export class ProductApiService {
 
   getCategories(): Observable<CategoryDto[]> {
     return this.http.get<ApiSuccess<CategoryDto[]>>(this.categoriesUrl).pipe(
+      map((r) => {
+        if (!r.success) throw new Error(r.message);
+        return r.data;
+      }),
+      catchError(mapHttpError)
+    );
+  }
+
+  createCategory(name: string): Observable<CategoryDto> {
+    return this.http.post<ApiSuccess<CategoryDto>>(this.categoriesUrl, { name }).pipe(
       map((r) => {
         if (!r.success) throw new Error(r.message);
         return r.data;
