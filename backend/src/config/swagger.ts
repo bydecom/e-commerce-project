@@ -12,6 +12,7 @@ export const openApiSpec = {
   servers: [{ url: 'http://localhost:3000', description: 'Development' }],
   tags: [
     { name: 'Health' },
+    { name: 'Auth' },
     { name: 'Products' },
     { name: 'Categories' },
     { name: 'Store settings' },
@@ -34,6 +35,61 @@ export const openApiSpec = {
                     data: { nullable: true },
                     meta: { nullable: true },
                   },
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+    '/api/auth/register': {
+      post: {
+        tags: ['Auth'],
+        summary: 'Register account',
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: { $ref: '#/components/schemas/AuthRegisterRequest' },
+              examples: {
+                example: {
+                  value: { name: 'John Doe', email: 'a@gmail.com', password: '123456' },
+                },
+              },
+            },
+          },
+        },
+        responses: {
+          '201': {
+            description: 'Created',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/SuccessResponse_UserPublic' },
+              },
+            },
+          },
+          '400': {
+            description: 'Bad Request — invalid input',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/FailureResponse' },
+                examples: {
+                  missingEmail: { value: { success: false, message: 'email is required', errors: null } },
+                  invalidEmail: { value: { success: false, message: 'Invalid email', errors: null } },
+                  shortPassword: {
+                    value: { success: false, message: 'Password must be at least 6 characters', errors: null },
+                  },
+                },
+              },
+            },
+          },
+          '409': {
+            description: 'Conflict — email already exists',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/FailureResponse' },
+                examples: {
+                  duplicateEmail: { value: { success: false, message: 'Email already exists', errors: null } },
                 },
               },
             },
@@ -156,6 +212,44 @@ export const openApiSpec = {
   },
   components: {
     schemas: {
+      AuthRegisterRequest: {
+        type: 'object',
+        required: ['name', 'email', 'password'],
+        properties: {
+          name: { type: 'string', example: 'John Doe' },
+          email: { type: 'string', example: 'a@gmail.com' },
+          password: { type: 'string', example: '123456' },
+        },
+      },
+      UserPublic: {
+        type: 'object',
+        required: ['id', 'email', 'role'],
+        properties: {
+          id: { type: 'integer', example: 1 },
+          name: { type: 'string', nullable: true, example: 'John Doe' },
+          email: { type: 'string', example: 'a@gmail.com' },
+          role: { type: 'string', enum: ['USER', 'ADMIN'], example: 'USER' },
+        },
+      },
+      SuccessResponse_UserPublic: {
+        type: 'object',
+        required: ['success', 'message', 'data', 'meta'],
+        properties: {
+          success: { type: 'boolean', example: true },
+          message: { type: 'string', example: 'Created' },
+          data: { $ref: '#/components/schemas/UserPublic' },
+          meta: { nullable: true, example: null },
+        },
+      },
+      FailureResponse: {
+        type: 'object',
+        required: ['success', 'message', 'errors'],
+        properties: {
+          success: { type: 'boolean', example: false },
+          message: { type: 'string', example: 'Error message' },
+          errors: { nullable: true, example: null },
+        },
+      },
       CategoryCreate: {
         type: 'object',
         required: ['name'],

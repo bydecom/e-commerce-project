@@ -28,6 +28,23 @@ export class AuthService {
     return localStorage.getItem(TOKEN_KEY);
   }
 
+  register(name: string, email: string, password: string): Observable<User> {
+    return this.http
+      .post<{ success: boolean; data: User }>(`${environment.apiUrl}/api/auth/register`, {
+        name,
+        email,
+        password,
+      })
+      .pipe(
+        map((res) => {
+          if (!res.success || !res.data) {
+            throw new Error('Register failed');
+          }
+          return res.data;
+        })
+      );
+  }
+
   login(email: string, password: string): Observable<{ user: User; token: string }> {
     return this.http
       .post<{ success: boolean; data: { user: User; token: string } }>(
