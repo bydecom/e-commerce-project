@@ -4,6 +4,9 @@ import { prisma } from '../../db';
 import { httpError } from '../../utils/http-error';
 import * as jwt from 'jsonwebtoken';
 import { randomUUID } from 'crypto';
+import { randomBytes } from 'crypto';
+import { ensureRedisConnected, redisClient } from '../../config/redis';
+import { sendMail } from '../../utils/mail';
 
 function normalizeEmail(email: string): string {
   return email.trim().toLowerCase();
@@ -18,6 +21,78 @@ function mapUser(u: { id: number; name: string | null; email: string; role: 'USE
   return { id: u.id, name: u.name, email: u.email, role: u.role };
 }
 
+type PendingRegistration = {
+  name: string | null;
+  email: string;
+  passwordHash: string;
+  createdAt: string;
+  lastSentAt: string | null;
+  resendCount: number;
+};
+
+function redisKeyPending(email: string): string {
+  return `pending:register:${email}`;
+}
+function redisKeyToken(token: string): string {
+  return `verify:token:${token}`;
+}
+function redisKeyEmail(email: string): string {
+  return `verify:email:${email}`;
+}
+
+function tokenTtlSeconds(): number {
+  const raw = process.env.VERIFY_TOKEN_TTL_SECONDS?.trim();
+  if (!raw) return 180;
+  const n = Number(raw);
+  if (!Number.isFinite(n) || n <= 0) throw httpError(500, 'VERIFY_TOKEN_TTL_SECONDS must be a positive number');
+  return Math.floor(n);
+}
+
+function pendingTtlSeconds(): number {
+  const raw = process.env.PENDING_REGISTER_TTL_SECONDS?.trim();
+  if (!raw) return 1800; // 30 minutes
+  const n = Number(raw);
+  if (!Number.isFinite(n) || n <= 0) throw httpError(500, 'PENDING_REGISTER_TTL_SECONDS must be a positive number');
+  return Math.floor(n);
+}
+
+function nowIso(): string {
+  return new Date().toISOString();
+}
+
+function newToken(): string {
+  return randomBytes(32).toString('base64url');
+}
+
+function verifyLink(token: string): string {
+  const base = (process.env.API_BASE_URL || '').trim();
+  if (!base) throw httpError(500, 'API_BASE_URL is not configured');
+  const url = new URL('/api/auth/verify-email', base);
+  url.searchParams.set('token', token);
+  return url.toString();
+}
+
+async function issueVerificationEmail(email: string, token: string): Promise<void> {
+  const ttl = tokenTtlSeconds();
+  const link = verifyLink(token);
+  const minutes = Math.max(1, Math.round(ttl / 60));
+
+  await sendMail({
+    to: email,
+    subject: 'Verify your email',
+    text: `Hi,
+
+Thanks for registering.
+
+Please verify your email address by clicking the link below (expires in ${minutes} minutes):
+${link}
+
+If you didn’t create an account, you can ignore this email.
+
+Thank you.`,
+  });
+}
+
 export async function register(input: { name: string; email: string; password: string }) {
   const email = normalizeEmail(input.email);
   const password = input.password;
@@ -28,26 +103,42 @@ export async function register(input: { name: string; email: string; password: s
   if (!password) throw httpError(400, 'password is required');
   if (password.length < 6) throw httpError(400, 'Password must be at least 6 characters');
 
-  const passwordHash = await bcrypt.hash(password, 10);
+  // If user already exists in DB, do not create a pending registration.
+  const existing = await prisma.user.findUnique({
+    where: { email },
+    select: { id: true },
+  });
+  if (existing) throw httpError(409, 'Email already exists');
 
-  try {
-    const u = await prisma.user.create({
-      data: {
-        email,
-        password: passwordHash,
-        name,
-        role: 'USER',
-      },
-      select: { id: true, name: true, email: true, role: true },
-    });
-    return mapUser(u);
-  } catch (e) {
-    if (e instanceof Prisma.PrismaClientKnownRequestError) {
-      // Unique constraint (email already exists)
-      if (e.code === 'P2002') throw httpError(409, 'Email already exists');
-    }
-    throw e;
-  }
+  await ensureRedisConnected();
+  const redis = redisClient();
+
+  const passwordHash = await bcrypt.hash(password, 10);
+  const pending: PendingRegistration = {
+    name,
+    email,
+    passwordHash,
+    createdAt: nowIso(),
+    lastSentAt: null,
+    resendCount: 0,
+  };
+
+  // Store pending registration (longer TTL than token).
+  await redis.set(redisKeyPending(email), JSON.stringify(pending), { EX: pendingTtlSeconds() });
+
+  // Issue a verification token (3 minutes) and send email.
+  const token = newToken();
+  await redis.set(redisKeyToken(token), email, { EX: tokenTtlSeconds() });
+  await redis.set(redisKeyEmail(email), token, { EX: tokenTtlSeconds() });
+
+  // Update pending with "sent" bookkeeping.
+  pending.lastSentAt = nowIso();
+  pending.resendCount = 1;
+  await redis.set(redisKeyPending(email), JSON.stringify(pending), { EX: pendingTtlSeconds() });
+
+  await issueVerificationEmail(email, token);
+
+  return { email, message: 'Verification email sent' };
 }
 
 export async function login(input: { email: string; password: string }) {
@@ -86,4 +177,107 @@ export async function login(input: { email: string; password: string }) {
     token,
     user: mapUser({ id: user.id, name: user.name, email: user.email, role: user.role }),
   };
+}
+
+export async function verifyEmail(input: { token: string }) {
+  const token = (input.token || '').trim();
+  if (!token) throw httpError(400, 'token is required');
+
+  await ensureRedisConnected();
+  const redis = redisClient();
+
+  const email = await redis.get(redisKeyToken(token));
+  if (!email) throw httpError(400, 'Invalid or expired token');
+
+  const pendingRaw = await redis.get(redisKeyPending(email));
+  if (!pendingRaw) throw httpError(400, 'Registration is no longer pending');
+
+  let pending: PendingRegistration;
+  try {
+    pending = JSON.parse(pendingRaw) as PendingRegistration;
+  } catch {
+    throw httpError(500, 'Corrupted pending registration');
+  }
+
+  try {
+    const u = await prisma.user.create({
+      data: {
+        email: pending.email,
+        password: pending.passwordHash,
+        name: pending.name,
+        role: 'USER',
+      },
+      select: { id: true, name: true, email: true, role: true },
+    });
+
+    // Cleanup keys (best-effort).
+    const latestToken = await redis.get(redisKeyEmail(email));
+    const keysToDelete = [redisKeyPending(email), redisKeyEmail(email), redisKeyToken(token)];
+    if (latestToken && latestToken !== token) {
+      keysToDelete.push(redisKeyToken(latestToken));
+    }
+    await redis.del(keysToDelete);
+
+    return { user: mapUser(u) };
+  } catch (e) {
+    if (e instanceof Prisma.PrismaClientKnownRequestError) {
+      if (e.code === 'P2002') throw httpError(409, 'Email already exists');
+    }
+    throw e;
+  }
+}
+
+export async function resendVerification(input: { email: string }) {
+  const email = normalizeEmail(input.email);
+  if (!email) throw httpError(400, 'email is required');
+  if (!isValidEmail(email)) throw httpError(400, 'Invalid email');
+
+  // If user already exists, do not resend (treat as no-op).
+  const existing = await prisma.user.findUnique({ where: { email }, select: { id: true } });
+  if (existing) {
+    return { email, message: 'If the account exists, a verification email has been sent' };
+  }
+
+  await ensureRedisConnected();
+  const redis = redisClient();
+
+  const pendingRaw = await redis.get(redisKeyPending(email));
+  if (!pendingRaw) {
+    // Generic success response to avoid email enumeration.
+    return { email, message: 'If the account exists, a verification email has been sent' };
+  }
+
+  let pending: PendingRegistration;
+  try {
+    pending = JSON.parse(pendingRaw) as PendingRegistration;
+  } catch {
+    return { email, message: 'If the account exists, a verification email has been sent' };
+  }
+
+  const now = Date.now();
+  const last = pending.lastSentAt ? Date.parse(pending.lastSentAt) : 0;
+  if (last && Number.isFinite(last) && now - last < 30_000) {
+    throw httpError(429, 'Please wait before requesting another email');
+  }
+  if (pending.resendCount >= 5) {
+    throw httpError(429, 'Too many resend attempts. Please try again later.');
+  }
+
+  // Invalidate old token if present.
+  const oldToken = await redis.get(redisKeyEmail(email));
+  if (oldToken) {
+    await redis.del(redisKeyToken(oldToken));
+  }
+
+  const token = newToken();
+  await redis.set(redisKeyToken(token), email, { EX: tokenTtlSeconds() });
+  await redis.set(redisKeyEmail(email), token, { EX: tokenTtlSeconds() });
+
+  pending.lastSentAt = nowIso();
+  pending.resendCount = pending.resendCount + 1;
+  await redis.set(redisKeyPending(email), JSON.stringify(pending), { EX: pendingTtlSeconds() });
+
+  await issueVerificationEmail(email, token);
+
+  return { email, message: 'If the account exists, a verification email has been sent' };
 }

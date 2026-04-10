@@ -1,4 +1,6 @@
 import type { Request, Response, NextFunction } from 'express';
+import * as jwt from 'jsonwebtoken';
+import { httpError } from '../utils/http-error';
 
 /** TODO: verify JWT from Authorization header */
 export function authMiddleware(req: Request, res: Response, next: NextFunction): void {
@@ -7,5 +9,29 @@ export function authMiddleware(req: Request, res: Response, next: NextFunction):
     res.status(401).json({ success: false, message: 'Unauthorized' });
     return;
   }
-  next();
+  const token = header.slice('Bearer '.length).trim();
+  const secret = process.env.JWT_SECRET;
+  if (!secret) {
+    next(httpError(500, 'JWT secret is not configured'));
+    return;
+  }
+  try {
+    const decoded = jwt.verify(token, secret, { algorithms: ['HS256'] }) as jwt.JwtPayload;
+    const userId = decoded.userId;
+    const role = decoded.role;
+    const jti = decoded.jti;
+    const exp = decoded.exp;
+    if (typeof userId !== 'number' || (role !== 'USER' && role !== 'ADMIN')) {
+      res.status(401).json({ success: false, message: 'Unauthorized' });
+      return;
+    }
+    if (typeof jti !== 'string' || typeof exp !== 'number') {
+      res.status(401).json({ success: false, message: 'Unauthorized' });
+      return;
+    }
+    (req as Request & { auth?: unknown }).auth = { userId, role, jti, exp };
+    next();
+  } catch {
+    res.status(401).json({ success: false, message: 'Unauthorized' });
+  }
 }

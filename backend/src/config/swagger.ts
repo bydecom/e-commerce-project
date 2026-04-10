@@ -45,7 +45,7 @@ export const openApiSpec = {
     '/api/auth/register': {
       post: {
         tags: ['Auth'],
-        summary: 'Register account',
+        summary: 'Register account (sends verification email)',
         requestBody: {
           required: true,
           content: {
@@ -64,7 +64,7 @@ export const openApiSpec = {
             description: 'Created',
             content: {
               'application/json': {
-                schema: { $ref: '#/components/schemas/SuccessResponse_UserPublic' },
+                schema: { $ref: '#/components/schemas/SuccessResponse_RegisterPending' },
               },
             },
           },
@@ -94,6 +94,60 @@ export const openApiSpec = {
               },
             },
           },
+        },
+      },
+    },
+    '/api/auth/verify-email': {
+      get: {
+        tags: ['Auth'],
+        summary: 'Verify email from token (redirects by default)',
+        parameters: [
+          { name: 'token', in: 'query', required: true, schema: { type: 'string' } },
+          {
+            name: 'mode',
+            in: 'query',
+            required: false,
+            schema: { type: 'string', enum: ['json'] },
+            description: 'Use `json` to get JSON response instead of redirect',
+          },
+        ],
+        responses: {
+          '200': {
+            description: 'OK (mode=json)',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/SuccessResponse_VerifyEmail' },
+              },
+            },
+          },
+          '302': { description: 'Redirect to frontend login' },
+          '400': { description: 'Invalid or expired token' },
+        },
+      },
+    },
+    '/api/auth/resend-verification': {
+      post: {
+        tags: ['Auth'],
+        summary: 'Resend verification email (pending only)',
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: { $ref: '#/components/schemas/AuthResendVerificationRequest' },
+              examples: { example: { value: { email: 'a@gmail.com' } } },
+            },
+          },
+        },
+        responses: {
+          '200': {
+            description: 'OK',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/SuccessResponse_ResendVerification' },
+              },
+            },
+          },
+          '429': { description: 'Too many requests' },
         },
       },
     },
@@ -283,6 +337,13 @@ export const openApiSpec = {
           password: { type: 'string', example: '123456' },
         },
       },
+      AuthResendVerificationRequest: {
+        type: 'object',
+        required: ['email'],
+        properties: {
+          email: { type: 'string', example: 'a@gmail.com' },
+        },
+      },
       UserPublic: {
         type: 'object',
         required: ['id', 'email', 'role'],
@@ -308,6 +369,59 @@ export const openApiSpec = {
           success: { type: 'boolean', example: true },
           message: { type: 'string', example: 'Created' },
           data: { $ref: '#/components/schemas/UserPublic' },
+          meta: { nullable: true, example: null },
+        },
+      },
+      RegisterPendingData: {
+        type: 'object',
+        required: ['email', 'message'],
+        properties: {
+          email: { type: 'string', example: 'a@gmail.com' },
+          message: { type: 'string', example: 'Verification email sent' },
+        },
+      },
+      SuccessResponse_RegisterPending: {
+        type: 'object',
+        required: ['success', 'message', 'data', 'meta'],
+        properties: {
+          success: { type: 'boolean', example: true },
+          message: { type: 'string', example: 'Created' },
+          data: { $ref: '#/components/schemas/RegisterPendingData' },
+          meta: { nullable: true, example: null },
+        },
+      },
+      VerifyEmailData: {
+        type: 'object',
+        required: ['user'],
+        properties: {
+          user: { $ref: '#/components/schemas/UserPublic' },
+        },
+      },
+      SuccessResponse_VerifyEmail: {
+        type: 'object',
+        required: ['success', 'message', 'data', 'meta'],
+        properties: {
+          success: { type: 'boolean', example: true },
+          message: { type: 'string', example: 'Verification successful' },
+          data: { $ref: '#/components/schemas/VerifyEmailData' },
+          meta: { nullable: true, example: null },
+        },
+      },
+      ResendVerificationData: {
+        type: 'object',
+        required: ['email', 'message'],
+        properties: {
+          email: { type: 'string', example: 'a@gmail.com' },
+          message: { type: 'string', example: 'If the account exists, a verification email has been sent' },
+        },
+      },
+      SuccessResponse_ResendVerification: {
+        type: 'object',
+        required: ['success', 'message', 'data', 'meta'],
+        properties: {
+          success: { type: 'boolean', example: true },
+          message: { type: 'string', example: 'OK' },
+          data: { $ref: '#/components/schemas/ResendVerificationData' },
           meta: { nullable: true, example: null },
         },
       },

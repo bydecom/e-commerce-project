@@ -16,6 +16,7 @@ import { storeSettingRoute } from './modules/store-setting/store-setting.route';
 
 import { errorMiddleware } from './middlewares/error.middleware';
 import { setupSwagger } from './config/swagger';
+import { ensureRedisConnected } from './config/redis';
 
 export const app = express();
 
@@ -39,6 +40,12 @@ app.use(
 app.use(express.json());
 
 setupSwagger(app);
+
+// Best-effort Redis connect at boot (routes may also lazy-connect).
+ensureRedisConnected().catch((err) => {
+  // eslint-disable-next-line no-console
+  console.error('Redis connection failed:', err);
+});
 
 const success = (data: unknown, message = 'OK', meta: unknown = null) => ({
   success: true,
