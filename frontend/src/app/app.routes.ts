@@ -3,10 +3,6 @@ import { authGuard } from './core/guards/auth.guard';
 
 export const routes: Routes = [
   {
-    path: '',
-    loadComponent: () => import('./features/home/home.component').then((m) => m.HomeComponent),
-  },
-  {
     path: 'login',
     loadComponent: () =>
       import('./features/auth/login/login.component').then((m) => m.LoginComponent),
@@ -17,53 +13,95 @@ export const routes: Routes = [
       import('./features/auth/register/register.component').then((m) => m.RegisterComponent),
   },
   {
-    path: 'products',
-    loadComponent: () =>
-      import('./features/products/product-list/product-list.component').then(
-        (m) => m.ProductListComponent
-      ),
-  },
-  {
-    path: 'products/:id',
-    loadComponent: () =>
-      import('./features/products/product-detail/product-detail.component').then(
-        (m) => m.ProductDetailComponent
-      ),
-  },
-  {
-    path: 'cart',
-    loadComponent: () => import('./features/cart/cart.component').then((m) => m.CartComponent),
-  },
-  {
-    path: 'checkout',
-    canActivate: [authGuard],
-    loadComponent: () =>
-      import('./features/checkout/checkout.component').then((m) => m.CheckoutComponent),
-  },
-  {
-    path: 'orders',
-    canActivate: [authGuard],
-    loadComponent: () =>
-      import('./features/orders/order-list/order-list.component').then((m) => m.OrderListComponent),
-  },
-  {
-    path: 'orders/:id',
-    canActivate: [authGuard],
-    loadComponent: () =>
-      import('./features/orders/order-detail/order-detail.component').then(
-        (m) => m.OrderDetailComponent
-      ),
-  },
-  {
-    path: 'profile',
-    canActivate: [authGuard],
-    loadComponent: () =>
-      import('./features/profile/profile.component').then((m) => m.ProfileComponent),
-  },
-  {
     path: 'admin',
     loadChildren: () =>
       import('./features/admin/admin.routes').then((m) => m.ADMIN_ROUTES),
+  },
+  {
+    path: '',
+    loadComponent: () =>
+      import('./features/layout/user-layout.component').then((m) => m.UserLayoutComponent),
+    children: [
+      {
+        path: '',
+        loadComponent: () =>
+          import('./features/home/home.component').then((m) => m.HomeComponent),
+      },
+      {
+        path: 'products',
+        loadComponent: () =>
+          import('./features/products/product-list/product-list.component').then(
+            (m) => m.ProductListComponent
+          ),
+      },
+      {
+        path: 'products/:id',
+        loadComponent: () =>
+          import('./features/products/product-detail/product-detail.component').then(
+            (m) => m.ProductDetailComponent
+          ),
+      },
+      {
+        path: 'cart',
+        loadComponent: () =>
+          import('./features/cart/cart.component').then((m) => m.CartComponent),
+      },
+      {
+        path: 'checkout',
+        canActivate: [authGuard],
+        loadComponent: () =>
+          import('./features/checkout/checkout.component').then((m) => m.CheckoutComponent),
+      },
+      {
+        path: 'orders',
+        canActivate: [authGuard],
+        loadComponent: () =>
+          import('./features/orders/order-list/order-list.component').then(
+            (m) => m.OrderListComponent
+          ),
+      },
+      {
+        path: 'orders/:id',
+        canActivate: [authGuard],
+        loadComponent: () =>
+          import('./features/orders/order-detail/order-detail.component').then(
+            (m) => m.OrderDetailComponent
+          ),
+      },
+      {
+        path: 'profile',
+        canActivate: [authGuard],
+        loadComponent: () =>
+          import('./features/profile/profile.component').then((m) => m.ProfileComponent),
+      },
+      {
+        path: 'about',
+        loadComponent: () =>
+          import('./features/info/about/about.component').then((m) => m.AboutComponent),
+      },
+      {
+        path: 'contact',
+        loadComponent: () =>
+          import('./features/info/contact/contact.component').then((m) => m.ContactComponent),
+      },
+      {
+        path: 'privacy',
+        loadComponent: () =>
+          import('./features/info/privacy/privacy.component').then((m) => m.PrivacyComponent),
+      },
+      {
+        path: 'terms',
+        loadComponent: () =>
+          import('./features/info/terms/terms.component').then((m) => m.TermsComponent),
+      },
+      {
+        path: 'shipping',
+        loadComponent: () =>
+          import('./features/info/shipping-policy/shipping-policy.component').then(
+            (m) => m.ShippingPolicyComponent
+          ),
+      },
+    ],
   },
   { path: '**', redirectTo: '' },
 ];

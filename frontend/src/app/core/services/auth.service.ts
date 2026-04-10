@@ -45,7 +45,6 @@ export class AuthService {
       );
   }
 
-  /** Dev-only helper until `/api/auth/login` exists */
   loginStub(user: User, token: string): void {
     this.persistSession(token, user);
   }

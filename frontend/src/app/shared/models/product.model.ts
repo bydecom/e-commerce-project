@@ -1,3 +1,5 @@
+export type ProductStatus = 'AVAILABLE' | 'UNAVAILABLE' | 'DRAFT';
+
 export interface Product {
   id: number;
   name: string;
@@ -6,5 +8,7 @@ export interface Product {
   price: number;
   stock: number;
   imageUrl?: string | null;
+  status: ProductStatus;
   categoryId: number;
+  category?: { id: number; name: string };
 }

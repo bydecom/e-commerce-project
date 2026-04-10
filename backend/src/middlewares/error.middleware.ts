@@ -6,8 +6,8 @@ export function errorMiddleware(
   res: Response,
   _next: NextFunction
 ): void {
-  console.error(err.stack);
-  res.status(err.status || 500).json({
+  if (err.stack) console.error(err.stack);
+  res.status(typeof err.status === 'number' ? err.status : 500).json({
     success: false,
     message: err.message || 'Internal Server Error',
     errors: err.errors ?? null,

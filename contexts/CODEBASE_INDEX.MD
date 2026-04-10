@@ -1,10 +1,13 @@
 # Codebase Index — E-Commerce Mock Project
 
+> Use this file to give context to AI coding tools (Cursor, Windsurf, Copilot).
+> Paste into a system prompt or keep at repo root for the AI to read.
+
 ---
 
 ## Project Overview
 
-E-commerce web app với 2 roles: **User (buyer)** và **Admin (seller)**.  
+E-commerce web app with two roles: **User (buyer)** and **Admin (seller)**.  
 Demo scope — 5 working days, 2 developers.
 
 ---
@@ -13,14 +16,14 @@ Demo scope — 5 working days, 2 developers.
 
 | Layer | Technology |
 |-------|-----------|
-| Frontend | Angular 17+ standalone, SCSS, TypeScript strict mode |
-| Backend | Node.js 20, Express.js, Prisma ORM |
-| Database | PostgreSQL 16 |
+| Frontend | Angular 17+ standalone, Tailwind CSS, SCSS, TypeScript strict |
+| Backend | Node.js 20, **Express 5**, **TypeScript**, Prisma ORM |
+| Database | PostgreSQL 16 (with `pg_trgm` extension for search) |
 | Cache | Redis 7 (JWT blacklist on logout) |
 | AI | Google Gemini API (`gemini-2.5-flash`) |
 | Email | Nodemailer + Mailpit (dev only) |
-| Docs | Swagger UI at `/api-docs` (khi đã mount — hiện placeholder trong `docs/swagger.json`) |
-| DevOps | Docker Desktop, docker-compose |
+| Docs | Swagger UI at `/api-docs` |
+| DevOps | Docker Desktop, docker-compose (infra only — apps run on host) |
 
 ---
 
@@ -31,30 +34,33 @@ Demo scope — 5 working days, 2 developers.
 3. **Feedback rule:** User can only submit feedback after order status is `DONE`, one feedback per order.
 4. **Inventory:** Stock is decremented when order moves from `PENDING → CONFIRMED` (not at order creation).
 5. **Auth:** JWT in Authorization header. On logout, token is blacklisted in Redis until expiry.
-6. **Admin APIs:** Các endpoint **yêu cầu role `ADMIN`** (vd. `POST /products`, `PATCH /orders/:id/status`) — kiểm tra qua JWT, **không** nhầm với **route Angular** `/admin/...` (chỉ là UI).
+6. **Admin APIs:** All `/admin` routes require role `ADMIN` in JWT payload.
 
 ---
 
 ## Database Models (Prisma)
 
-**Source of truth:** `backend/prisma/schema.prisma`
-
-- **PKs:** Tất cả `id` kiểu **`Int`** `@id @default(autoincrement())` (không dùng UUID).
-- **Datasource:** PostgreSQL; bật extension **`pg_trgm`** (`previewFeatures: ["postgresqlExtensions"]`) phục vụ tìm kiếm / index GIN trên `Product.title_unaccent`.
+> ⚠️ All IDs are `Int` with `autoincrement()` — NOT uuid
 
 ```
-User        → id, email @unique, password, name?, phone?, address?, role @default(USER)
-Category    → id, name
-Product     → id, name, title_unaccent?, description?, price, stock, imageUrl?, categoryId
-             → @@index B-tree + GIN (gin_trgm_ops) trên title_unaccent
-Order       → id, userId, status @default(PENDING), total, shippingAddress, createdAt, updatedAt
-OrderItem   → id, orderId, productId, quantity, unitPrice
-Feedback    → id, userId, productId, orderId @unique, rating, comment?, sentiment?
+User        → id(Int), email(unique), password, name?, phone?, address?, role(USER|ADMIN)
+Category    → id(Int), name
+Product     → id(Int), name, title_unaccent?(for search), description?, price, stock,
+              imageUrl?, status(AVAILABLE|UNAVAILABLE|DRAFT), categoryId(→Category)
+Order       → id(Int), userId(→User), status(OrderStatus), total, shippingAddress,
+              createdAt, updatedAt
+OrderItem   → id(Int), orderId(→Order), productId(→Product), quantity, unitPrice
+Feedback    → id(Int), userId(→User), productId(→Product), orderId(unique,→Order),
+              rating, comment?, sentiment?(POSITIVE|NEUTRAL|NEGATIVE)
 ```
 
-**Quan hệ:** `User` 1–n `Order` / `Feedback`; `Category` 1–n `Product`; `Order` 1–n `OrderItem`; `Product` 1–n `OrderItem` / `Feedback`; `Order` 1–0..1 `Feedback` (orderId unique trên `Feedback`).
+Enums:
+- `Role`: `USER`, `ADMIN`
+- `OrderStatus`: `PENDING`, `CONFIRMED`, `SHIPPING`, `DONE`, `CANCELLED`
+- `SentimentLabel`: `POSITIVE`, `NEUTRAL`, `NEGATIVE`
+- `ProductStatus`: `AVAILABLE`, `UNAVAILABLE`, `DRAFT`
 
-Enums: `Role(USER|ADMIN)`, `OrderStatus(PENDING,CONFIRMED,SHIPPING,DONE,CANCELLED)`, `SentimentLabel(POSITIVE,NEUTRAL,NEGATIVE)` — `sentiment` trên `Feedback` optional.
+Search: `pg_trgm` extension enabled. `Product.title_unaccent` has both btree and GIN (`gin_trgm_ops`) indexes.
 
 ---
 
@@ -62,14 +68,13 @@ Enums: `Role(USER|ADMIN)`, `OrderStatus(PENDING,CONFIRMED,SHIPPING,DONE,CANCELLE
 
 `http://localhost:3000/api`
 
-**Chi tiết endpoint:** [`contexts/API_CONTRACT.md`](API_CONTRACT.md) (chuẩn tham chiếu). Swagger: `docs/swagger.json` (placeholder) khi generate từ server.
+Full contract: see `contexts/API_CONTRACT.MD`
 
-Key endpoints (rút gọn — xem contract đầy đủ):
-- `POST /auth/register`, `POST /auth/login`, `POST /auth/logout`
-- `GET/POST/PUT/DELETE /products`… — public list/detail; Admin cho mutate
-- `GET /users/me`, `PUT /users/me`
-- `POST /orders`, `GET /orders/me`, `GET /orders/me/:id`, `PATCH /orders/me/:id/cancel`
-- `GET /orders`, `GET /orders/:id`, `PATCH /orders/:id/status` — Admin
+Key endpoints:
+- `POST /auth/login` — returns `{ token, user }`
+- `GET /products?page&limit&search&categoryId` — public
+- `POST /orders` — body: `{ items: [{productId, quantity}], shippingAddress }`
+- `PATCH /orders/:id/status` — Admin, body: `{ status }`
 - `POST /feedbacks` — body: `{ orderId, productId, rating, comment }`
 - `GET /dashboard/summary` — Admin
 - `POST /ai/description` — body: `{ name, category, keywords }`
@@ -82,8 +87,8 @@ Key endpoints (rút gọn — xem contract đầy đủ):
 ## Backend Patterns
 
 ### Standard response (always use this):
-```ts
-// backend/src/utils/response.ts
+```js
+// src/utils/response.js
 success(data, message = 'OK', meta = null)
 // → { success: true, message, data, meta }
 
@@ -92,7 +97,7 @@ success(data, message = 'OK', meta = null)
 ```
 
 ### Controller pattern:
-```ts
+```js
 const handler = async (req, res, next) => {
   try {
     const result = await someService.doThing(req.body);
@@ -104,7 +109,7 @@ const handler = async (req, res, next) => {
 ```
 
 ### Prisma transaction (for order creation):
-```ts
+```js
 await prisma.$transaction(async (tx) => {
   const order = await tx.order.create({...});
   await tx.orderItem.createMany({...});
@@ -113,21 +118,91 @@ await prisma.$transaction(async (tx) => {
 ```
 
 ### Auth middleware usage:
-```ts
+```js
 router.get('/me', authMiddleware, userController.getMe);
 router.post('/products', authMiddleware, roleMiddleware('ADMIN'), productController.create);
 ```
 
 ---
 
-## Frontend Patterns
+## Frontend TypeScript Models
+
+```ts
+// shared/models/product.model.ts
+export type ProductStatus = 'AVAILABLE' | 'UNAVAILABLE' | 'DRAFT';
+export interface Product {
+  id: number;           // Int, NOT string
+  name: string;
+  description?: string;
+  price: number;
+  stock: number;
+  imageUrl?: string;
+  status: ProductStatus;
+  categoryId: number;
+  category?: Category;
+}
+
+// shared/models/order.model.ts
+export type OrderStatus = 'PENDING' | 'CONFIRMED' | 'SHIPPING' | 'DONE' | 'CANCELLED';
+export interface Order {
+  id: number;
+  userId: number;
+  status: OrderStatus;
+  total: number;
+  shippingAddress: string;
+  createdAt: string;
+  updatedAt: string;
+  items?: OrderItem[];
+}
+
+// shared/models/user.model.ts
+export type Role = 'USER' | 'ADMIN';
+export interface User {
+  id: number;
+  email: string;
+  name?: string;
+  phone?: string;
+  address?: string;
+  role: Role;
+}
+
+// shared/models/api-response.model.ts
+export interface ApiResponse<T> {
+  success: boolean;
+  message: string;
+  data: T;
+  meta?: { page: number; limit: number; total: number } | null;
+}
+```
+
+---
+
+## Angular Component Pattern
+
+```ts
+// Standalone, signals, inject(), new control flow
+@Component({ standalone: true, imports: [...] })
+export class ExampleComponent {
+  private service = inject(SomeService);
+  items = signal<Item[]>([]);
+
+  ngOnInit() {
+    this.service.getItems().subscribe({
+      next: res => this.items.set(res.data),
+      error: err => console.error(err)
+    });
+  }
+}
+```
+
+Template uses `@if`, `@for`, `@empty` — NOT `*ngIf` / `*ngFor`.
 
 ### Service pattern:
 ```ts
 @Injectable({ providedIn: 'root' })
 export class ProductService {
   private http = inject(HttpClient);
-  private apiUrl = `${environment.apiUrl}/api/products`;
+  private apiUrl = `${environment.apiUrl}/products`;
 
   getProducts(params: ProductQuery): Observable<ApiResponse<Product[]>> {
     return this.http.get<ApiResponse<Product[]>>(this.apiUrl, { params: params as any });
@@ -153,14 +228,15 @@ export class ProductListComponent {
 
 ### Auth guard:
 ```ts
-// authGuard: AuthService.isAuthenticated() → /login
-// adminGuard: đăng nhập + role === 'ADMIN'
+// Checks AuthService.isLoggedIn() → redirects to /login if false
+// Admin guard also checks role === 'ADMIN'
 ```
 
 ### Cart service:
 ```ts
-// frontend: CartService — signals + localStorage (SSR-safe)
-// Methods: add(), remove(), clear(); itemCount / subtotal computed
+// State: BehaviorSubject<CartItem[]>
+// Persists to localStorage on every mutation
+// Methods: addItem(), removeItem(), clearCart(), getTotal()
 ```
 
 ---
@@ -195,11 +271,11 @@ export class ProductListComponent {
 | Feature | Trigger | Where |
 |---------|---------|-------|
 | Product description generator | Admin clicks "Generate" in product form | `POST /ai/description` |
-| Feedback sentiment classification | Sau khi lưu feedback (AI nội bộ) hoặc test qua `POST /ai/sentiment` | Xem `API_CONTRACT.md` |
+| Feedback sentiment classification | Auto after user submits feedback | `POST /ai/sentiment` (called server-side) |
 | Product recommendation | Shown on product detail page | `GET /ai/recommend/:productId` |
 | Business advisor | Admin types question in dashboard chatbox | `POST /ai/advisor` |
 
-AI dùng **Google Gemini** (model cụ thể thống nhất trong team, vd. `gemini-2.5-flash` trong tech stack). Fallback im lặng nếu API lỗi.
+All AI calls use **Gemini 2.5 Flash** model. Fallback silently if Gemini fails.
 
 ---
 
@@ -224,7 +300,7 @@ CLIENT_URL         http://localhost:4200
 ```
 localhost:4200  → Angular app
 localhost:3000  → Express API
-localhost:3000/api-docs → Swagger UI (planned)
+localhost:3000/api-docs → Swagger UI
 localhost:5050  → pgAdmin (postgres GUI)
 localhost:8082  → Redis Commander
 localhost:8025  → Mailpit (email UI)

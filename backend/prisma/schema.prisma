@@ -28,6 +28,12 @@ enum SentimentLabel {
   NEGATIVE
 }
 
+enum ProductStatus {
+  AVAILABLE   
+  UNAVAILABLE 
+  DRAFT       
+}
+
 model User {
   id        Int        @id @default(autoincrement()) 
   email     String     @unique                      
@@ -55,9 +61,10 @@ model Product {
   price          Float
   stock          Int
   imageUrl       String?
+  status         ProductStatus @default(DRAFT)
 
   categoryId     Int
-  category       Category    @relation(fields: [categoryId], references: [id]) // Thêm Relation
+  category       Category    @relation(fields: [categoryId], references: [id])
 
   orderItems     OrderItem[]
   feedbacks      Feedback[]
@@ -103,4 +110,15 @@ model Feedback {
   user      User    @relation(fields: [userId], references: [id])
   product   Product @relation(fields: [productId], references: [id])
   order     Order   @relation(fields: [orderId], references: [id])
+}
+
+model StoreSetting {
+  id          Int      @id @default(autoincrement())
+  name        String
+  address     String?
+  phone       String?
+  email       String?
+  logoUrl     String?
+  description String?
+  updatedAt   DateTime @updatedAt
 }

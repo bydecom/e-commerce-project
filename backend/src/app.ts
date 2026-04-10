@@ -2,7 +2,7 @@ import 'dotenv/config';
 import express from 'express';
 import type { Request, Response } from 'express';
 import cors from 'cors';
-import { PrismaClient } from '@prisma/client';
+import { prisma } from './db';
 
 import { authRouter } from './modules/auth/auth.route';
 import { userRouter } from './modules/user/user.route';
@@ -12,14 +12,33 @@ import { orderRouter } from './modules/order/order.route';
 import { feedbackRouter } from './modules/feedback/feedback.route';
 import { dashboardRouter } from './modules/dashboard/dashboard.route';
 import { aiRouter } from './modules/ai/ai.route';
+import { storeSettingRoute } from './modules/store-setting/store-setting.route';
 
 import { errorMiddleware } from './middlewares/error.middleware';
+import { setupSwagger } from './config/swagger';
 
-export const prisma = new PrismaClient();
 export const app = express();
 
-app.use(cors({ origin: process.env.CLIENT_URL || 'http://localhost:4200' }));
+/** Allow localhost and 127.0.0.1 (any port) during local development to avoid CORS mismatches. */
+app.use(
+  cors({
+    origin: (origin, cb) => {
+      if (!origin) {
+        cb(null, true);
+        return;
+      }
+      if (process.env.CLIENT_URL && origin === process.env.CLIENT_URL) {
+        cb(null, true);
+        return;
+      }
+      const devLocal = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/;
+      cb(null, devLocal.test(origin));
+    },
+  })
+);
 app.use(express.json());
+
+setupSwagger(app);
 
 const success = (data: unknown, message = 'OK', meta: unknown = null) => ({
   success: true,
@@ -45,5 +64,6 @@ app.use('/api/orders', orderRouter);
 app.use('/api/feedbacks', feedbackRouter);
 app.use('/api/dashboard', dashboardRouter);
 app.use('/api/ai', aiRouter);
+app.use('/api/store-settings', storeSettingRoute);
 
 app.use(errorMiddleware);

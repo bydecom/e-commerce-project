@@ -1,3 +1,22 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/*
+ * E-commerce scroll strategy:
+ * - Do NOT set `scroll-behavior: smooth` on `html` globally — it makes every route jump feel slow.
+ * - Router uses `scrollPositionRestoration: 'enabled'` for instant navigation + smart Back/Forward.
+ * - Use `scrollIntoView({ behavior: 'smooth' })` or `.scroll-smooth` only for in-page jumps (anchors, pagination).
+ */
+html {
+  scroll-behavior: auto;
+}
+
+app-root {
+  display: block;
+}
+
+/** Opt-in smooth scrolling for specific containers (e.g. anchor sections inside a page). */
+.scroll-smooth {
+  scroll-behavior: smooth;
+}

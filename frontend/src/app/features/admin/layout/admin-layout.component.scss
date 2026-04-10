@@ -1,3 +1,9 @@
 :host {
-  display: block;
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-height: 0;
+  width: 100%;
+  /* Fill the <main> area below the navbar (part of the min-h-screen block, footer not included) */
+  align-self: stretch;
 }

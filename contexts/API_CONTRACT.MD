@@ -1,8 +1,8 @@
 # API Contract
 
 **Base URL:** `http://localhost:3000/api`  
-**Auth:** `Authorization: Bearer <token>` trên mọi protected route  
-**IDs:** Trùng với Prisma — mọi `id`, `userId`, `productId`, `categoryId`, `orderId` trong JSON là **số nguyên (Int)**, không dùng UUID.
+**Auth:** `Authorization: Bearer <token>` on every protected route  
+**IDs:** Same as Prisma — every `id`, `userId`, `productId`, `categoryId`, `orderId` in JSON is an **integer (Int)**, not UUID.
 
 **Response format:**
 ```json
@@ -16,14 +16,14 @@
 
 | Method | Endpoint | Auth | Description |
 |--------|----------|------|-------------|
-| POST | `/auth/register` | ❌ | Đăng ký tài khoản |
-| POST | `/auth/login` | ❌ | Đăng nhập, trả về JWT |
-| POST | `/auth/logout` | ✅ User | Blacklist token hiện tại |
+| POST | `/auth/register` | ❌ | Register account |
+| POST | `/auth/login` | ❌ | Login, returns JWT |
+| POST | `/auth/logout` | ✅ User | Blacklist current token |
 
 **POST /auth/register**
 ```json
 // Request
-{ "name": "Nguyen Van A", "email": "a@gmail.com", "password": "123456" }
+{ "name": "John Doe", "email": "a@gmail.com", "password": "123456" }
 
 // Response 201
 { "success": true, "data": { "id": 1, "name": "...", "email": "...", "role": "USER" } }
@@ -44,8 +44,8 @@
 
 | Method | Endpoint | Auth | Description |
 |--------|----------|------|-------------|
-| GET | `/users/me` | ✅ User | Lấy profile hiện tại |
-| PUT | `/users/me` | ✅ User | Cập nhật profile |
+| GET | `/users/me` | ✅ User | Current profile |
+| PUT | `/users/me` | ✅ User | Update profile |
 
 **PUT /users/me**
 ```json
@@ -59,17 +59,17 @@
 
 | Method | Endpoint | Auth | Description |
 |--------|----------|------|-------------|
-| GET | `/products` | ❌ | Danh sách sản phẩm (filter + search + pagination) |
-| GET | `/products/:id` | ❌ | Chi tiết sản phẩm |
-| POST | `/products` | ✅ Admin | Tạo sản phẩm mới |
-| PUT | `/products/:id` | ✅ Admin | Cập nhật sản phẩm |
-| DELETE | `/products/:id` | ✅ Admin | Xoá sản phẩm |
+| GET | `/products` | ❌ | Product list (filter + search + pagination) |
+| GET | `/products/:id` | ❌ | Product detail |
+| POST | `/products` | ✅ Admin | Create product |
+| PUT | `/products/:id` | ✅ Admin | Update product |
+| DELETE | `/products/:id` | ✅ Admin | Delete product |
 
 **GET /products — Query params**
 ```
 ?page=1&limit=12&search=keyword&categoryId=1&minPrice=0&maxPrice=1000&sort=price_asc|price_desc|newest
 ```
-> `search` map sang cột tìm kiếm (vd. `title_unaccent` / `name` tùy implement).
+> `search` maps to search columns (e.g. `title_unaccent` / `name` depending on implementation).
 
 **Response data item:**
 ```json
@@ -98,7 +98,7 @@
   "categoryId": 2
 }
 ```
-> Có thể tự sinh / cập nhật `titleUnaccent` phía server khi tạo–sửa (đồng bộ index `pg_trgm`).
+> Server may generate/update `titleUnaccent` on create/update (sync with `pg_trgm` index).
 
 ---
 
@@ -106,10 +106,10 @@
 
 | Method | Endpoint | Auth | Description |
 |--------|----------|------|-------------|
-| GET | `/categories` | ❌ | Danh sách categories |
-| POST | `/categories` | ✅ Admin | Tạo category |
-| PUT | `/categories/:id` | ✅ Admin | Sửa category |
-| DELETE | `/categories/:id` | ✅ Admin | Xoá category |
+| GET | `/categories` | ❌ | List categories |
+| POST | `/categories` | ✅ Admin | Create category |
+| PUT | `/categories/:id` | ✅ Admin | Update category |
+| DELETE | `/categories/:id` | ✅ Admin | Delete category |
 
 ---
 
@@ -117,13 +117,13 @@
 
 | Method | Endpoint | Auth | Description |
 |--------|----------|------|-------------|
-| POST | `/orders` | ✅ User | Tạo đơn hàng mới |
-| GET | `/orders/me` | ✅ User | Lịch sử đơn hàng của user |
-| GET | `/orders/me/:id` | ✅ User | Chi tiết đơn hàng của user |
-| PATCH | `/orders/me/:id/cancel` | ✅ User | Cancel đơn (chỉ khi PENDING) |
-| GET | `/orders` | ✅ Admin | Tất cả đơn hàng |
-| GET | `/orders/:id` | ✅ Admin | Chi tiết đơn hàng bất kỳ |
-| PATCH | `/orders/:id/status` | ✅ Admin | Cập nhật trạng thái |
+| POST | `/orders` | ✅ User | Create order |
+| GET | `/orders/me` | ✅ User | User order history |
+| GET | `/orders/me/:id` | ✅ User | User order detail |
+| PATCH | `/orders/me/:id/cancel` | ✅ User | Cancel order (only when PENDING) |
+| GET | `/orders` | ✅ Admin | All orders |
+| GET | `/orders/:id` | ✅ Admin | Any order detail |
+| PATCH | `/orders/:id/status` | ✅ Admin | Update order status |
 
 **POST /orders**
 ```json
@@ -169,20 +169,20 @@
 
 | Method | Endpoint | Auth | Description |
 |--------|----------|------|-------------|
-| POST | `/feedbacks` | ✅ User | Gửi feedback (chỉ khi order DONE) |
-| GET | `/feedbacks` | ✅ Admin | Tất cả feedbacks |
-| GET | `/feedbacks/product/:id` | ❌ | Feedbacks của 1 sản phẩm |
+| POST | `/feedbacks` | ✅ User | Submit feedback (only when order is DONE) |
+| GET | `/feedbacks` | ✅ Admin | All feedbacks |
+| GET | `/feedbacks/product/:id` | ❌ | Feedbacks for one product |
 
 **POST /feedbacks**
 ```json
 // Request
-{ "orderId": 10, "productId": 1, "rating": 5, "comment": "Sản phẩm tốt!" }
+{ "orderId": 10, "productId": 1, "rating": 5, "comment": "Great product!" }
 
 // Response 201
 { "id": 5, "rating": 5, "comment": "...", "sentiment": "POSITIVE" }
 ```
 
-> `sentiment` (enum `POSITIVE` | `NEUTRAL` | `NEGATIVE`) được gán sau khi lưu — thường gọi AI nội bộ; không nhất thiết trả về ngay trong response nếu xử lý async.
+> `sentiment` (`POSITIVE` | `NEUTRAL` | `NEGATIVE`) is set after save — often via internal AI; may not be returned immediately if processing is async.
 
 ---
 
@@ -190,10 +190,10 @@
 
 | Method | Endpoint | Auth | Description |
 |--------|----------|------|-------------|
-| GET | `/dashboard/summary` | ✅ Admin | Tổng doanh thu, tổng đơn, tổng sản phẩm |
-| GET | `/dashboard/orders-by-status` | ✅ Admin | Số đơn theo từng status |
-| GET | `/dashboard/top-products` | ✅ Admin | Top 5 sản phẩm bán chạy |
-| GET | `/dashboard/revenue-chart` | ✅ Admin | Doanh thu theo ngày (7 hoặc 30 ngày) |
+| GET | `/dashboard/summary` | ✅ Admin | Total revenue, orders, products |
+| GET | `/dashboard/orders-by-status` | ✅ Admin | Order counts by status |
+| GET | `/dashboard/top-products` | ✅ Admin | Top 5 selling products |
+| GET | `/dashboard/revenue-chart` | ✅ Admin | Revenue by day (7 or 30 days) |
 
 **GET /dashboard/summary**
 ```json
@@ -221,10 +221,10 @@
 
 | Method | Endpoint | Auth | Description |
 |--------|----------|------|-------------|
-| GET | `/ai/recommend/:productId` | ❌ | Sản phẩm gợi ý từ product hiện tại |
-| POST | `/ai/sentiment` | ✅ Admin | Classify sentiment của text (test/manual); luồng feedback thật có thể gọi AI **nội bộ** sau `POST /feedbacks` |
-| POST | `/ai/description` | ✅ Admin | Generate mô tả sản phẩm |
-| POST | `/ai/advisor` | ✅ Admin | Business advisor dựa trên data |
+| GET | `/ai/recommend/:productId` | ❌ | Recommended products from current product |
+| POST | `/ai/sentiment` | ✅ Admin | Classify sentiment of text (test/manual); real feedback flow may call AI **internally** after `POST /feedbacks` |
+| POST | `/ai/description` | ✅ Admin | Generate product description |
+| POST | `/ai/advisor` | ✅ Admin | Business advisor from data |
 
 **GET /ai/recommend/:productId**
 ```json
@@ -235,12 +235,12 @@
   ]
 }
 ```
-> `:productId` là **Int** (vd. `5`).
+> `:productId` is **Int** (e.g. `5`).
 
 **POST /ai/sentiment**
 ```json
 // Request
-{ "text": "Sản phẩm rất tệ, giao hàng chậm" }
+{ "text": "Very bad product, slow shipping" }
 
 // Response
 { "sentiment": "NEGATIVE", "confidence": 0.92 }
@@ -249,10 +249,10 @@
 **POST /ai/description**
 ```json
 // Request
-{ "name": "Áo thun nam basic", "category": "Thời trang", "keywords": ["cotton", "thoáng mát"] }
+{ "name": "Basic men's tee", "category": "Fashion", "keywords": ["cotton", "breathable"] }
 
 // Response
-{ "description": "Áo thun nam basic chất liệu cotton 100%..." }
+{ "description": "Basic men's tee in 100% cotton..." }
 ```
 
 **POST /ai/advisor**
@@ -261,11 +261,11 @@
 {
   "summary": { "totalRevenue": 15000000, "totalOrders": 120 },
   "topProducts": [...],
-  "question": "Sản phẩm nào nên nhập thêm hàng?"
+  "question": "Which products should we restock?"
 }
 
 // Response
-{ "advice": "Dựa trên dữ liệu, sản phẩm X đang bán chạy nhất..." }
+{ "advice": "Based on the data, product X is selling the fastest..." }
 ```
 
 ---
@@ -274,19 +274,19 @@
 
 | HTTP Status | Meaning |
 |-------------|---------|
-| 400 | Bad Request — sai input |
-| 401 | Unauthorized — chưa login hoặc token hết hạn |
-| 403 | Forbidden — không đủ quyền |
+| 400 | Bad Request — invalid input |
+| 401 | Unauthorized — not logged in or token expired |
+| 403 | Forbidden — insufficient permissions |
 | 404 | Not Found |
-| 409 | Conflict — email đã tồn tại, v.v. |
-| 422 | Unprocessable — vi phạm business rule (cancel order đã confirm) |
+| 409 | Conflict — email already exists, etc. |
+| 422 | Unprocessable — business rule violation (e.g. cancel confirmed order) |
 | 500 | Internal Server Error |
 
 ---
 
-## Tham chiếu chéo
+## Cross-references
 
-| Tài liệu | Nội dung |
+| Document | Contents |
 |----------|----------|
-| `contexts/codebase_index.md` | Tech stack, Prisma tóm tắt, route Angular, env |
-| `backend/prisma/schema.prisma` | Model, enum, index — **chuẩn dữ liệu** |
+| `contexts/CODEBASE_INDEX.MD` | Tech stack, Prisma summary, Angular routes, env |
+| `backend/prisma/schema.prisma` | Models, enums, indexes — **source of truth** |

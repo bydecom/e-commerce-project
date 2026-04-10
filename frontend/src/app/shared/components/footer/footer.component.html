@@ -1,3 +1,82 @@
-<footer class="mt-auto border-t border-gray-200 bg-gray-50 py-6 text-center text-sm text-gray-600">
-  <p>E‑Commerce mock — Angular + Express + Prisma</p>
+<footer class="mt-auto border-t border-gray-200 bg-gray-900 text-gray-300">
+  <div class="mx-auto max-w-6xl px-4 py-10">
+    <div class="grid gap-8 sm:grid-cols-2 lg:grid-cols-4">
+      <div>
+        @if (logoUrl(); as src) {
+          <img [src]="src" [alt]="shopName()" class="mb-3 h-10 w-auto max-w-[200px] object-contain object-left" />
+        }
+        <p class="text-lg font-semibold text-white">{{ shopName() }}</p>
+        <p class="mt-2 text-sm leading-relaxed text-gray-400">{{ tagline() }}</p>
+      </div>
+
+      <div>
+        <p class="text-sm font-semibold uppercase tracking-wide text-gray-400">Shop</p>
+        <ul class="mt-3 space-y-2 text-sm">
+          <li>
+            <a routerLink="/products" class="hover:text-white">Products</a>
+          </li>
+          <li>
+            <a routerLink="/cart" class="hover:text-white">Cart</a>
+          </li>
+          <li>
+            <a routerLink="/" class="hover:text-white">Home</a>
+          </li>
+        </ul>
+      </div>
+
+      <div>
+        <p class="text-sm font-semibold uppercase tracking-wide text-gray-400">Company</p>
+        <ul class="mt-3 space-y-2 text-sm">
+          <li>
+            <a routerLink="/about" class="hover:text-white">About us</a>
+          </li>
+          <li>
+            <a routerLink="/contact" class="hover:text-white">Contact us</a>
+          </li>
+          <li>
+            <a routerLink="/privacy" class="hover:text-white">Privacy policy</a>
+          </li>
+          <li>
+            <a routerLink="/terms" class="hover:text-white">Terms of service</a>
+          </li>
+          <li>
+            <a routerLink="/shipping" class="hover:text-white">Shipping &amp; returns</a>
+          </li>
+        </ul>
+      </div>
+
+      <div>
+        <p class="text-sm font-semibold uppercase tracking-wide text-gray-400">Contact</p>
+        <ul class="mt-3 space-y-2 text-sm">
+          <li class="flex flex-col gap-0.5">
+            <span class="text-xs text-gray-500">Email</span>
+            <a [href]="'mailto:' + email()" class="text-white hover:underline">{{ email() }}</a>
+          </li>
+          <li class="flex flex-col gap-0.5">
+            <span class="text-xs text-gray-500">Phone</span>
+            <a [href]="'tel:' + phoneDial()" class="text-white hover:underline">{{ phone() }}</a>
+          </li>
+          <li class="pt-1">
+            <span class="text-xs text-gray-500">Address</span>
+            <p class="mt-0.5 leading-snug text-gray-400">{{ address() }}</p>
+          </li>
+          <li>
+            <span class="text-xs text-gray-500">Hours</span>
+            <p class="mt-0.5 text-gray-400">{{ fallback.hours }}</p>
+          </li>
+        </ul>
+      </div>
+    </div>
+
+    <div
+      class="mt-10 flex flex-col items-center justify-between gap-3 border-t border-gray-800 pt-6 text-xs text-gray-500 sm:flex-row"
+    >
+      <p>&copy; {{ year }} {{ shopName() }}. All rights reserved.</p>
+      <p class="flex flex-wrap justify-center gap-x-4 gap-y-1">
+        <a routerLink="/privacy" class="hover:text-gray-300">Privacy</a>
+        <a routerLink="/terms" class="hover:text-gray-300">Terms</a>
+        <a routerLink="/shipping" class="hover:text-gray-300">Shipping</a>
+      </p>
+    </div>
+  </div>
 </footer>
