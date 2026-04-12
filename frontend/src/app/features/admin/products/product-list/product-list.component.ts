@@ -21,11 +21,11 @@ interface CacheEntry {
   standalone: true,
   imports: [RouterLink, FormsModule, CurrencyVndPipe, ConfirmDialogComponent, PaginationComponent],
   template: `
-    <div class="mx-auto max-w-6xl">
+    <div class="mx-auto w-full max-w-6xl">
       <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 class="text-2xl font-bold text-gray-900">Products</h1>
-          <p class="mt-1 text-sm text-gray-600">Create, edit, and delete products (no login required in this dev setup).</p>
+          <p class="mt-1 text-sm text-gray-600">Create, edit, and delete products.</p>
         </div>
         
         <a

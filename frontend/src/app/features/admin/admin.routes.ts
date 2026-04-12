@@ -55,6 +55,20 @@ export const ADMIN_ROUTES: Routes = [
         loadComponent: () =>
           import('./feedbacks/feedback-list.component').then((m) => m.AdminFeedbackListComponent),
       },
+      {
+        path: 'feedback-types',
+        loadComponent: () =>
+          import('./feedbacks/feedback-type-settings.component').then(
+            (m) => m.FeedbackTypeSettingsComponent
+          ),
+      },
+      {
+        path: 'system-logs',
+        loadComponent: () =>
+          import('./system-log/system-log.component').then(
+            (m) => m.AdminSystemLogComponent
+          ),
+      },
     ],
   },
 ];

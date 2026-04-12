@@ -22,9 +22,16 @@ import { StoreSettingService } from '../../../core/services/store-setting.servic
         <div class="group relative">
           <button type="button" class="flex items-center gap-2 hover:opacity-80">
             <div
-              class="flex h-8 w-8 items-center justify-center rounded-full bg-blue-100 text-sm font-bold text-blue-700"
+              class="flex h-8 w-8 items-center justify-center rounded-full bg-blue-100 text-blue-700"
+              aria-hidden="true"
             >
-              A
+              <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"
+                />
+              </svg>
             </div>
             <span class="text-sm font-medium text-gray-700">Administrator</span>
           </button>

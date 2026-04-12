@@ -20,12 +20,12 @@ interface CacheEntry {
   standalone: true,
   imports: [NgClass, RouterLink, FormsModule, CurrencyVndPipe, PaginationComponent],
   template: `
-    <div class="mx-auto max-w-6xl">
+    <div class="mx-auto w-full max-w-6xl">
       <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 class="text-2xl font-bold text-gray-900">Orders</h1>
           <p class="mt-1 text-sm text-gray-600">
-            List of all orders (admin API may not require JWT in dev).
+            List of all orders.
           </p>
         </div>
       </div>

@@ -9,3 +9,6 @@ feedbackRouter.get('/', feedbackController.listAdminFeedbacks);
 
 /** Public: GET /feedbacks/product/:id — list feedbacks by product */
 feedbackRouter.get('/product/:id', feedbackController.listByProduct);
+
+/** User: POST /feedbacks — submit a new feedback */
+feedbackRouter.post('/', feedbackController.createFeedback);
