@@ -19,7 +19,7 @@ Demo scope — 5 working days, 2 developers.
 | Frontend | Angular 17+ standalone, Tailwind CSS, SCSS, TypeScript strict |
 | Backend | Node.js 20, **Express 5**, **TypeScript**, Prisma ORM |
 | Database | PostgreSQL 16 (with `pg_trgm` extension for search) |
-| Cache | Redis 7 (JWT blacklist on logout) |
+| Cache | Redis 7 (pending registration + verify tokens; JWT `jti` blacklist on `/auth/logout`) |
 | AI | Google Gemini API (`gemini-2.5-flash`) |
 | Email | Nodemailer + Mailpit (dev only) |
 | Docs | Swagger UI at `/api-docs` |
@@ -33,8 +33,8 @@ Demo scope — 5 working days, 2 developers.
 2. **Cancel rule:** User can only cancel when status is `PENDING`. Admin can cancel `PENDING` only.
 3. **Feedback rule:** User can only submit feedback after order status is `DONE`, one feedback per order.
 4. **Inventory:** Stock is decremented when order moves from `PENDING → CONFIRMED` (not at order creation).
-5. **Auth:** JWT in Authorization header. On logout, token is blacklisted in Redis until expiry.
-6. **Admin APIs:** All `/admin` routes require role `ADMIN` in JWT payload.
+5. **Auth:** Register sends a verification link; user is created in DB only after `GET /auth/verify-email`. Login returns a JWT (`HS256`, claims `userId`, `role`, `jti`). Protected routes use `Authorization: Bearer <token>`. **`POST /auth/logout`** blacklists the current `jti` in Redis until JWT `exp`; `authMiddleware` rejects blacklisted tokens. The client still clears `localStorage` after calling logout.
+6. **Admin APIs:** Intended to require `role: ADMIN` in JWT; `roleMiddleware` is still a pass-through in code — verify `authMiddleware` + role checks on each admin route before assuming enforcement.
 
 ---
 
@@ -71,7 +71,11 @@ Search: `pg_trgm` extension enabled. `Product.title_unaccent` has both btree and
 Full contract: see `contexts/API_CONTRACT.MD`
 
 Key endpoints:
+- `POST /auth/register` — starts signup (Redis pending + email); response `{ email, message }`, no JWT
+- `GET /auth/verify-email?token=...` — creates user; usually redirects to `CLIENT_URL/login?verified=1|0`
+- `POST /auth/resend-verification` — resend link for pending signup (`429` if throttled)
 - `POST /auth/login` — returns `{ token, user }`
+- `POST /auth/logout` — Bearer required; blacklists JWT until expiry
 - `GET /products?page&limit&search&categoryId` — public
 - `POST /orders` — body: `{ items: [{productId, quantity}], shippingAddress }`
 - `PATCH /orders/:id/status` — Admin, body: `{ status }`
@@ -228,9 +232,13 @@ export class ProductListComponent {
 
 ### Auth guard:
 ```ts
-// Checks AuthService.isLoggedIn() → redirects to /login if false
-// Admin guard also checks role === 'ADMIN'
+// authGuard: AuthService.isAuthenticated() (token + user in localStorage) → /login if false
+// adminGuard: authenticated + role === 'ADMIN'
 ```
+
+### Auth UI (frontend):
+- `/register` — after submit, “check email” + resend; no auto-login until verify + login
+- `/login` — reads `?verified=` / `?reason=` from backend redirect after email verification
 
 ### Cart service:
 ```ts
@@ -256,6 +264,7 @@ export class ProductListComponent {
 /profile              → ProfileComponent
 /admin                → lazy loaded, adminGuard
   /admin/dashboard    → DashboardComponent (charts + AI advisor)
+  /admin/settings     → AdminShopSettingsComponent
   /admin/products     → AdminProductListComponent
   /admin/products/new → ProductFormComponent (AI description generator)
   /admin/products/:id → ProductFormComponent (edit)
@@ -282,15 +291,19 @@ All AI calls use **Gemini 2.5 Flash** model. Fallback silently if Gemini fails.
 ## Environment Variables (backend)
 
 ```
-DATABASE_URL       postgresql://admin:secret123@localhost:5432/ecommerce
-REDIS_URL          redis://:redissecret@localhost:6379
-JWT_SECRET         your_secret
-JWT_EXPIRES_IN     7d
-MAIL_HOST          localhost (mailpit)
-MAIL_PORT          1025
-GEMINI_API_KEY     your_key
-PORT               3000
-CLIENT_URL         http://localhost:4200
+DATABASE_URL                  postgresql://admin:secret123@localhost:5432/ecommerce
+REDIS_URL                     redis://:redissecret@localhost:6379
+JWT_SECRET                    your_secret
+JWT_EXPIRES_IN                7d
+API_BASE_URL                  http://localhost:3000   # base for verification links in email
+CLIENT_URL                    http://localhost:4200   # redirect target after verify-email
+VERIFY_TOKEN_TTL_SECONDS      180                     # verification link TTL (optional)
+PENDING_REGISTER_TTL_SECONDS  1800                    # pending signup TTL (optional)
+MAIL_HOST                     localhost (mailpit)
+MAIL_PORT                     1025
+MAIL_FROM                     no-reply@...
+GEMINI_API_KEY                your_key
+PORT                          3000
 ```
 
 ---

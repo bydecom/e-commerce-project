@@ -1,6 +1,7 @@
+import { isPlatformBrowser, Location } from '@angular/common';
 import { HttpErrorResponse } from '@angular/common/http';
-import { Component, inject } from '@angular/core';
-import { Router, RouterLink } from '@angular/router';
+import { Component, inject, OnInit, PLATFORM_ID } from '@angular/core';
+import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { FormsModule } from '@angular/forms';
 import { AuthService } from '../../../core/services/auth.service';
 
@@ -12,6 +13,16 @@ import { AuthService } from '../../../core/services/auth.service';
     <div class="mx-auto max-w-md px-4 py-12">
       <h1 class="text-2xl font-bold text-gray-900">Login</h1>
       <p class="mt-2 text-sm text-gray-600">Sign in to your account.</p>
+      @if (bannerSuccess) {
+        <div class="mt-4 rounded border border-green-200 bg-green-50 px-3 py-2 text-sm text-green-900">
+          {{ bannerSuccess }}
+        </div>
+      }
+      @if (bannerError) {
+        <div class="mt-4 rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
+          {{ bannerError }}
+        </div>
+      }
       <form class="mt-6 space-y-4" (ngSubmit)="submit()">
         @if (errorMessage) {
           <div class="rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
@@ -53,15 +64,36 @@ import { AuthService } from '../../../core/services/auth.service';
     </div>
   `,
 })
-export class LoginComponent {
+export class LoginComponent implements OnInit {
   private readonly auth = inject(AuthService);
   private readonly router = inject(Router);
+  private readonly route = inject(ActivatedRoute);
+  private readonly location = inject(Location);
+  private readonly platformId = inject(PLATFORM_ID);
 
   email = '';
   password = '';
 
   loading = false;
   errorMessage = '';
+  bannerSuccess = '';
+  bannerError = '';
+
+  ngOnInit(): void {
+    const verified = this.route.snapshot.queryParamMap.get('verified');
+    const reason = this.route.snapshot.queryParamMap.get('reason');
+    if (verified === '1') {
+      this.bannerSuccess = 'Email verified. You can sign in now.';
+    } else if (verified === '0') {
+      this.bannerError =
+        reason === 'invalid_or_expired'
+          ? 'That verification link is invalid or has expired. Register again or resend from the register page.'
+          : 'Email verification did not complete. Try again or request a new link.';
+    }
+    if (verified !== null && isPlatformBrowser(this.platformId)) {
+      this.location.replaceState('/login');
+    }
+  }
 
   submit(): void {
     this.errorMessage = '';

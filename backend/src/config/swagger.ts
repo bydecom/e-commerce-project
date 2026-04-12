@@ -205,6 +205,24 @@ export const openApiSpec = {
         },
       },
     },
+    '/api/auth/logout': {
+      post: {
+        tags: ['Auth'],
+        summary: 'Logout (blacklist current JWT in Redis until expiry)',
+        security: [{ bearerAuth: [] }],
+        responses: {
+          '200': {
+            description: 'OK',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/SuccessResponse_Logout' },
+              },
+            },
+          },
+          '401': { description: 'Missing/invalid token or already logged out' },
+        },
+      },
+    },
     '/api/products': {
       get: {
         tags: ['Products'],
@@ -319,6 +337,14 @@ export const openApiSpec = {
     },
   },
   components: {
+    securitySchemes: {
+      bearerAuth: {
+        type: 'http',
+        scheme: 'bearer',
+        bearerFormat: 'JWT',
+        description: 'JWT from POST /api/auth/login (HS256)',
+      },
+    },
     schemas: {
       AuthRegisterRequest: {
         type: 'object',
@@ -432,6 +458,16 @@ export const openApiSpec = {
           success: { type: 'boolean', example: true },
           message: { type: 'string', example: 'OK' },
           data: { $ref: '#/components/schemas/LoginData' },
+          meta: { nullable: true, example: null },
+        },
+      },
+      SuccessResponse_Logout: {
+        type: 'object',
+        required: ['success', 'message', 'data', 'meta'],
+        properties: {
+          success: { type: 'boolean', example: true },
+          message: { type: 'string', example: 'Logged out' },
+          data: { nullable: true, example: null },
           meta: { nullable: true, example: null },
         },
       },

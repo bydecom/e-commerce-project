@@ -26,6 +26,8 @@ D:\WORKSPACE\PROJECT\E-COMMERCE-PROJECT\FRONTEND\SRC
 │   │   └───services
 │   │           auth.service.ts
 │   │           cart.service.ts
+│   │           product-api.service.ts
+│   │           store-setting.service.ts
 │   │           toast.service.ts
 │   │
 │   ├───features
@@ -34,6 +36,9 @@ D:\WORKSPACE\PROJECT\E-COMMERCE-PROJECT\FRONTEND\SRC
 │   │   │   │
 │   │   │   ├───dashboard
 │   │   │   │       dashboard.component.ts
+│   │   │   │
+│   │   │   ├───shop-settings
+│   │   │   │       shop-settings.component.ts
 │   │   │   │
 │   │   │   ├───feedbacks
 │   │   │   │       feedback-list.component.ts
@@ -192,6 +197,11 @@ D:\WORKSPACE\PROJECT\E-COMMERCE-PROJECT\BACKEND\SRC
 │   │       product.route.ts
 │   │       product.service.ts
 │   │
+│   ├───store-setting
+│   │       store-setting.controller.ts
+│   │       store-setting.route.ts
+│   │       store-setting.service.ts
+│   │
 │   └───user
 │           user.controller.ts
 │           user.route.ts
@@ -201,3 +211,16 @@ D:\WORKSPACE\PROJECT\E-COMMERCE-PROJECT\BACKEND\SRC
         mail.ts
         pagination.ts
         response.ts
+
+---
+
+## Backend `modules/auth` (behavior)
+
+| File | Role |
+|------|------|
+| `auth.route.ts` | `POST /register`, `POST /login`, `GET /verify-email`, `POST /resend-verification`, `POST /logout` |
+| `auth.controller.ts` | Parses body/query; verify-email redirects to `CLIENT_URL/login` unless `mode=json` |
+| `auth.service.ts` | bcrypt, Redis pending + verification tokens, Nodemailer link (`API_BASE_URL`), Prisma user on verify, JWT on login, logout blacklist |
+| `utils/jwt-blacklist.ts` | Redis `jwt:blacklist:<jti>` until `exp` |
+
+Protected routes use `middlewares/auth.middleware.ts` (`Bearer` JWT + blacklist check). See `contexts/API_CONTRACT.MD` § Auth.

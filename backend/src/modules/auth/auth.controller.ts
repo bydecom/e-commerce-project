@@ -1,5 +1,6 @@
 import type { NextFunction, Request, Response } from 'express';
 import { success } from '../../utils/response';
+import { httpError } from '../../utils/http-error';
 import * as authService from './auth.service';
 
 export async function register(req: Request, res: Response, next: NextFunction): Promise<void> {
@@ -67,6 +68,20 @@ export async function resendVerification(req: Request, res: Response, next: Next
 
     const data = await authService.resendVerification({ email });
     res.json(success(data, 'OK'));
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function logout(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const auth = req.auth;
+    if (!auth) {
+      next(httpError(500, 'Auth context missing'));
+      return;
+    }
+    await authService.logoutSession(auth.jti, auth.exp);
+    res.json(success(null, 'Logged out'));
   } catch (err) {
     next(err);
   }

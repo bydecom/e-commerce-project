@@ -7,6 +7,7 @@ import { randomUUID } from 'crypto';
 import { randomBytes } from 'crypto';
 import { ensureRedisConnected, redisClient } from '../../config/redis';
 import { sendMail } from '../../utils/mail';
+import { blacklistJwt } from '../../utils/jwt-blacklist';
 
 function normalizeEmail(email: string): string {
   return email.trim().toLowerCase();
@@ -280,4 +281,8 @@ export async function resendVerification(input: { email: string }) {
   await issueVerificationEmail(email, token);
 
   return { email, message: 'If the account exists, a verification email has been sent' };
+}
+
+export async function logoutSession(jti: string, exp: number): Promise<void> {
+  await blacklistJwt(jti, exp);
 }

@@ -1,9 +1,10 @@
+/// <reference path="../types/express.d.ts" />
 import type { Request, Response, NextFunction } from 'express';
 import * as jwt from 'jsonwebtoken';
 import { httpError } from '../utils/http-error';
+import { isJwtBlacklisted } from '../utils/jwt-blacklist';
 
-/** TODO: verify JWT from Authorization header */
-export function authMiddleware(req: Request, res: Response, next: NextFunction): void {
+export async function authMiddleware(req: Request, res: Response, next: NextFunction): Promise<void> {
   const header = req.headers.authorization;
   if (!header?.startsWith('Bearer ')) {
     res.status(401).json({ success: false, message: 'Unauthorized' });
@@ -29,7 +30,11 @@ export function authMiddleware(req: Request, res: Response, next: NextFunction):
       res.status(401).json({ success: false, message: 'Unauthorized' });
       return;
     }
-    (req as Request & { auth?: unknown }).auth = { userId, role, jti, exp };
+    if (await isJwtBlacklisted(jti)) {
+      res.status(401).json({ success: false, message: 'Unauthorized' });
+      return;
+    }
+    req.auth = { userId, role, jti, exp };
     next();
   } catch {
     res.status(401).json({ success: false, message: 'Unauthorized' });

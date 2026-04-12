@@ -14,29 +14,131 @@
 
 ## Auth `/auth`
 
+Registration is **email-verification first**: `POST /register` stores a **pending** record and a short-lived verify token in **Redis** and sends mail. The **User** row in PostgreSQL is created only when the user opens **`GET /verify-email`** with a valid token.
+
+**Logout:** `POST /auth/logout` with a valid **`Authorization: Bearer`** JWT adds that token’s **`jti`** to a **Redis blacklist** until the JWT’s **`exp`**. After that, `authMiddleware` rejects the same token with **401**. The client should still clear local storage after a successful (or failed) logout call.
+
+**Environment (backend):** `API_BASE_URL` — public base used in verification links (e.g. `http://localhost:3000`). `CLIENT_URL` — frontend origin used for redirects after verify (e.g. `http://localhost:4200`). `VERIFY_TOKEN_TTL_SECONDS` (default `180`), `PENDING_REGISTER_TTL_SECONDS` (default `1800`). `JWT_SECRET`, `JWT_EXPIRES_IN` (default `7d`).
+
 | Method | Endpoint | Auth | Description |
 |--------|----------|------|-------------|
-| POST | `/auth/register` | ❌ | Register account |
-| POST | `/auth/login` | ❌ | Login, returns JWT |
-| POST | `/auth/logout` | ✅ User | Blacklist current token |
+| POST | `/auth/register` | ❌ | Start registration: pending data + verification email (no JWT, no DB user yet) |
+| GET | `/auth/verify-email` | ❌ | Complete registration via `?token=` (redirects to frontend by default) |
+| POST | `/auth/resend-verification` | ❌ | Resend verification email for a **pending** registration |
+| POST | `/auth/login` | ❌ | Login; returns JWT after user exists in DB |
+| POST | `/auth/logout` | ✅ Bearer | Blacklist current JWT (`jti` in Redis until `exp`) |
+
+**JWT (HS256):** Payload includes `userId` (number), `role` (`USER` \| `ADMIN`), standard `sub` (user id string), `jti`, `exp`. Send on protected routes as `Authorization: Bearer <token>`.
+
+---
 
 **POST /auth/register**
+
 ```json
 // Request
 { "name": "John Doe", "email": "a@gmail.com", "password": "123456" }
 
 // Response 201
-{ "success": true, "data": { "id": 1, "name": "...", "email": "...", "role": "USER" } }
+{
+  "success": true,
+  "message": "Created",
+  "data": {
+    "email": "a@gmail.com",
+    "message": "Verification email sent"
+  },
+  "meta": null
+}
 ```
 
+Errors: `400` (validation), `409` if email already exists in DB (`Email already exists`).
+
+---
+
+**GET /auth/verify-email**
+
+Query: `token` (required). Optional: `mode=json` — return JSON instead of redirecting to the frontend.
+
+- **Default** (browser / email link, when `CLIENT_URL` is set): **302** redirect to  
+  `{CLIENT_URL}/login?verified=1` on success, or  
+  `{CLIENT_URL}/login?verified=0&reason=invalid_or_expired` on failure.
+- **`?mode=json`**: **200** JSON body (same envelope as other routes).
+
+```json
+// Response 200 (mode=json, success)
+{
+  "success": true,
+  "message": "Verification successful",
+  "data": { "user": { "id": 1, "name": "...", "email": "...", "role": "USER" } },
+  "meta": null
+}
+```
+
+Errors (mode=json): `400` invalid/expired token or pending expired; `409` if email already taken at create time.
+
+---
+
+**POST /auth/resend-verification**
+
+```json
+// Request
+{ "email": "a@gmail.com" }
+
+// Response 200
+{
+  "success": true,
+  "message": "OK",
+  "data": {
+    "email": "a@gmail.com",
+    "message": "If the account exists, a verification email has been sent"
+  },
+  "meta": null
+}
+```
+
+> The same generic `message` is returned when there is no pending registration (anti-enumeration).  
+> **429** if resend is too soon (30s cooldown) or too many attempts (≥ 5 resends while pending).
+
+---
+
 **POST /auth/login**
+
 ```json
 // Request
 { "email": "a@gmail.com", "password": "123456" }
 
 // Response 200
-{ "success": true, "data": { "token": "jwt...", "user": { "id", "name", "email", "role" } } }
+{
+  "success": true,
+  "message": "OK",
+  "data": {
+    "token": "jwt...",
+    "user": { "id": 1, "name": "...", "email": "...", "role": "USER" }
+  },
+  "meta": null
+}
 ```
+
+Errors: `400` missing fields; `401` invalid credentials.
+
+---
+
+**POST /auth/logout**
+
+Requires **`Authorization: Bearer <access_token>`** (same JWT as other protected routes).
+
+```json
+// Response 200
+{
+  "success": true,
+  "message": "Logged out",
+  "data": null,
+  "meta": null
+}
+```
+
+Errors: `401` missing/invalid/expired token, or token already blacklisted. `500` if Redis is unavailable (propagated via error middleware).
+
+> Idempotent in practice: calling logout again with the same token returns **401** after the first call because the token is blacklisted.
 
 ---
 
@@ -280,6 +382,7 @@
 | 404 | Not Found |
 | 409 | Conflict — email already exists, etc. |
 | 422 | Unprocessable — business rule violation (e.g. cancel confirmed order) |
+| 429 | Too Many Requests — e.g. auth resend cooldown / resend limit |
 | 500 | Internal Server Error |
 
 ---
