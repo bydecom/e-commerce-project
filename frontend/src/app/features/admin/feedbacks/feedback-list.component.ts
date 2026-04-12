@@ -4,7 +4,7 @@ import { FormsModule } from '@angular/forms';
 import { catchError, map, throwError, type Subscription } from 'rxjs';
 import { environment } from '../../../../environments/environment';
 import type { ApiSuccess, PaginationMeta } from '../../../shared/models/api-response.model';
-import type { Feedback, SentimentLabel } from '../../../shared/models/feedback.model';
+import type { Feedback, FeedbackType, SentimentLabel } from '../../../shared/models/feedback.model';
 import { PaginationComponent } from '../../../shared/components/pagination/pagination.component';
 import { SentimentBadgeComponent } from '../../../shared/components/sentiment-badge/sentiment-badge.component';
 
@@ -54,6 +54,20 @@ interface CacheEntry {
           </select>
         </div>
 
+        <div class="w-full sm:w-44">
+          <label class="block text-xs font-medium text-gray-600">Type</label>
+          <select
+            [(ngModel)]="typeFilter"
+            (ngModelChange)="applyFilters()"
+            class="mt-1 w-full rounded border border-gray-300 px-3 py-2 text-sm"
+          >
+            <option [ngValue]="''">All</option>
+            @for (t of feedbackTypes(); track t.id) {
+              <option [ngValue]="t.id">{{ t.name }}</option>
+            }
+          </select>
+        </div>
+
         <div class="w-full sm:w-36">
           <label class="block text-xs font-medium text-gray-600">Rating</label>
           <select
@@ -90,6 +104,7 @@ interface CacheEntry {
                 <th class="px-4 py-3 font-medium text-gray-700">Order</th>
                 <th class="px-4 py-3 font-medium text-gray-700">Customer</th>
                 <th class="px-4 py-3 font-medium text-gray-700">Product</th>
+                <th class="px-4 py-3 font-medium text-gray-700">Type</th>
                 <th class="px-4 py-3 font-medium text-gray-700">Rating</th>
                 <th class="px-4 py-3 font-medium text-gray-700">Sentiment</th>
                 <th class="px-4 py-3 font-medium text-gray-700">Comment</th>
@@ -117,6 +132,13 @@ interface CacheEntry {
                       #{{ f.productId }}
                     }
                   </td>
+                  <td class="px-4 py-3 text-gray-600">
+                    @if (f.type?.name) {
+                      {{ f.type!.name }}
+                    } @else {
+                      <span class="text-gray-400">—</span>
+                    }
+                  </td>
                   <td class="px-4 py-3">{{ f.rating }}★</td>
                   <td class="px-4 py-3">
                     <app-sentiment-badge [sentiment]="f.sentiment" />
@@ -131,7 +153,7 @@ interface CacheEntry {
                 </tr>
               } @empty {
                 <tr>
-                  <td colspan="7" class="px-4 py-8 text-center text-gray-500">No feedbacks yet.</td>
+                  <td colspan="8" class="px-4 py-8 text-center text-gray-500">No feedbacks yet.</td>
                 </tr>
               }
             </tbody>
@@ -157,14 +179,17 @@ export class AdminFeedbackListComponent implements OnInit, OnDestroy {
   readonly error = signal<string | null>(null);
   readonly feedbacks = signal<AdminFeedbackItem[]>([]);
   readonly meta = signal<{ page: number; totalPages: number } | null>(null);
+  readonly feedbackTypes = signal<FeedbackType[]>([]);
 
   searchInput = '';
   sentimentFilter: '' | SentimentLabel = '';
   ratingFilter: '' | number = '';
+  typeFilter: '' | number = '';
 
   private appliedSearch = '';
   private appliedSentiment: SentimentLabel | undefined;
   private appliedRating: number | undefined;
+  private appliedType: number | undefined;
 
   page = 1;
   readonly limit = 20;
@@ -186,6 +211,7 @@ export class AdminFeedbackListComponent implements OnInit, OnDestroy {
   private pendingSub: Subscription | null = null;
 
   ngOnInit(): void {
+    this.loadFeedbackTypes();
     this.load();
   }
 
@@ -205,6 +231,7 @@ export class AdminFeedbackListComponent implements OnInit, OnDestroy {
     this.appliedSearch = this.searchInput.trim();
     this.appliedSentiment = this.sentimentFilter || undefined;
     this.appliedRating = this.ratingFilter === '' ? undefined : Number(this.ratingFilter);
+    this.appliedType = this.typeFilter === '' ? undefined : Number(this.typeFilter);
     this.page = 1;
     this.throttledLoad();
   }
@@ -250,6 +277,7 @@ export class AdminFeedbackListComponent implements OnInit, OnDestroy {
     if (this.appliedSearch) params = params.set('search', this.appliedSearch);
     if (this.appliedSentiment) params = params.set('sentiment', this.appliedSentiment);
     if (this.appliedRating) params = params.set('rating', String(this.appliedRating));
+    if (this.appliedType) params = params.set('typeId', String(this.appliedType));
 
     const url = `${environment.apiUrl}/api/feedbacks`;
 
@@ -286,8 +314,18 @@ export class AdminFeedbackListComponent implements OnInit, OnDestroy {
       });
   }
 
+  private loadFeedbackTypes(): void {
+    this.http
+      .get<ApiSuccess<FeedbackType[]>>(`${environment.apiUrl}/api/feedback-types`)
+      .pipe(
+        map((r) => (r.success && Array.isArray(r.data) ? r.data : [])),
+        catchError(() => [])
+      )
+      .subscribe((types) => this.feedbackTypes.set(types));
+  }
+
   private buildCacheKey(): string {
-    return `${this.page}|${this.limit}|${this.appliedSearch}|${this.appliedSentiment ?? ''}|${this.appliedRating ?? ''}`;
+    return `${this.page}|${this.limit}|${this.appliedSearch}|${this.appliedSentiment ?? ''}|${this.appliedRating ?? ''}|${this.appliedType ?? ''}`;
   }
 
   private cancelPending(): void {
@@ -313,4 +351,5 @@ export class AdminFeedbackListComponent implements OnInit, OnDestroy {
 type AdminFeedbackItem = Feedback & {
   user?: { id: number; email: string; name?: string | null };
   product?: { id: number; name: string };
+  type?: FeedbackType;
 };

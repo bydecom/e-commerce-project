@@ -20,7 +20,7 @@ Demo scope — 5 working days, 2 developers.
 | Backend | Node.js 20, **Express 5**, **TypeScript**, Prisma ORM |
 | Database | PostgreSQL 16 (with `pg_trgm` extension for search) |
 | Cache | Redis 7 (JWT blacklist on logout) |
-| AI | Google Gemini API (`gemini-2.5-flash`) |
+| AI | Google Gemini API (`gemini-1.5-flash`) |
 | Email | Nodemailer + Mailpit (dev only) |
 | Docs | Swagger UI at `/api-docs` |
 | DevOps | Docker Desktop, docker-compose (infra only — apps run on host) |

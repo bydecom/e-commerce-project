@@ -54,6 +54,25 @@ export class ProductApiService {
     );
   }
 
+  updateCategory(id: number, name: string): Observable<CategoryDto> {
+    return this.http.patch<ApiSuccess<CategoryDto>>(`${this.categoriesUrl}/${id}`, { name }).pipe(
+      map((r) => {
+        if (!r.success) throw new Error(r.message);
+        return r.data;
+      }),
+      catchError(mapHttpError)
+    );
+  }
+
+  deleteCategory(id: number): Observable<void> {
+    return this.http.delete<ApiSuccess<null>>(`${this.categoriesUrl}/${id}`).pipe(
+      map((r) => {
+        if (!r.success) throw new Error(r.message);
+      }),
+      catchError(mapHttpError)
+    );
+  }
+
   list(params: ProductListParams = {}): Observable<{ data: Product[]; meta: PaginationMeta }> {
     let httpParams = new HttpParams();
     if (params.page !== undefined) httpParams = httpParams.set('page', String(params.page));

@@ -10,12 +10,15 @@ import { productRouter } from './modules/product/product.route';
 import { categoryRouter } from './modules/category/category.route';
 import { orderRouter } from './modules/order/order.route';
 import { feedbackRouter } from './modules/feedback/feedback.route';
+import { feedbackTypeRouter } from './modules/feedback/feedback-type.route';
 import { dashboardRouter } from './modules/dashboard/dashboard.route';
 import { aiRouter } from './modules/ai/ai.route';
 import { storeSettingRoute } from './modules/store-setting/store-setting.route';
 
 import { errorMiddleware } from './middlewares/error.middleware';
+import { dbLoggerMiddleware } from './middlewares/logger.middleware';
 import { setupSwagger } from './config/swagger';
+import { systemLogRouter } from './modules/system-log/system-log.route';
 
 export const app = express();
 
@@ -37,6 +40,7 @@ app.use(
   })
 );
 app.use(express.json());
+app.use(dbLoggerMiddleware);
 
 setupSwagger(app);
 
@@ -62,8 +66,10 @@ app.use('/api/products', productRouter);
 app.use('/api/categories', categoryRouter);
 app.use('/api/orders', orderRouter);
 app.use('/api/feedbacks', feedbackRouter);
+app.use('/api/feedback-types', feedbackTypeRouter);
 app.use('/api/dashboard', dashboardRouter);
 app.use('/api/ai', aiRouter);
 app.use('/api/store-settings', storeSettingRoute);
+app.use('/api/system-logs', systemLogRouter);
 
 app.use(errorMiddleware);

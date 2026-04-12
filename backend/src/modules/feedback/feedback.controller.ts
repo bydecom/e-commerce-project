@@ -29,3 +29,33 @@ export async function listByProduct(req: Request, res: Response, next: NextFunct
     next(err);
   }
 }
+
+export async function createFeedback(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const { userId, orderId, productId, typeId, rating, comment } = req.body as {
+      userId?: number;
+      orderId?: number;
+      productId?: number;
+      typeId?: number;
+      rating?: number;
+      comment?: string;
+    };
+
+    if (!userId || !orderId || !productId || rating === undefined) {
+      throw httpError(400, 'userId, orderId, productId and rating are required');
+    }
+
+    const data = await feedbackService.createFeedback({
+      userId: Number(userId),
+      orderId: Number(orderId),
+      productId: Number(productId),
+      typeId: typeId ? Number(typeId) : undefined,
+      rating: Number(rating),
+      comment,
+    });
+
+    res.status(201).json(success(data, 'Feedback submitted successfully'));
+  } catch (err) {
+    next(err);
+  }
+}
