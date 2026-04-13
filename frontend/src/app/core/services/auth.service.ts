@@ -5,9 +5,16 @@ import { HttpClient } from '@angular/common/http';
 import { Observable, map } from 'rxjs';
 import { environment } from '../../../environments/environment';
 import type { User } from '../../shared/models/user.model';
+import type { ApiSuccess } from '../../shared/models/api-response.model';
 
 const TOKEN_KEY = 'access_token';
 const USER_KEY = 'current_user';
+
+/** Matches `POST /api/auth/register` response `data` after email verification flow. */
+export interface RegisterInitResult {
+  email: string;
+  message: string;
+}
 
 @Injectable({ providedIn: 'root' })
 export class AuthService {
@@ -15,7 +22,7 @@ export class AuthService {
   private readonly http = inject(HttpClient);
   private readonly router = inject(Router);
 
-  private readonly userSignal = signal<User | null>(null);
+  private readonly userSignal = signal<User | null>(this.readStoredSession());
 
   readonly currentUser = this.userSignal.asReadonly();
   readonly isAuthenticated = computed(() => this.userSignal() !== null);
@@ -23,7 +30,10 @@ export class AuthService {
 
   constructor() {
     afterNextRender(() => {
-      this.userSignal.set(this.readStoredUser());
+      const user = this.readStoredSession(); 
+      if (user) {
+        this.userSignal.set(user);
+      }
     });
   }
 
@@ -34,9 +44,42 @@ export class AuthService {
     return localStorage.getItem(TOKEN_KEY);
   }
 
+  register(name: string, email: string, password: string): Observable<RegisterInitResult> {
+    return this.http
+      .post<ApiSuccess<RegisterInitResult>>(`${environment.apiUrl}/api/auth/register`, {
+        name,
+        email,
+        password,
+      })
+      .pipe(
+        map((res) => {
+          if (!res.success || !res.data) {
+            throw new Error('Register failed');
+          }
+          return res.data;
+        })
+      );
+  }
+
+  resendVerification(email: string): Observable<{ email: string; message: string }> {
+    return this.http
+      .post<ApiSuccess<{ email: string; message: string }>>(
+        `${environment.apiUrl}/api/auth/resend-verification`,
+        { email }
+      )
+      .pipe(
+        map((res) => {
+          if (!res.success || !res.data) {
+            throw new Error('Resend failed');
+          }
+          return res.data;
+        })
+      );
+  }
+
   login(email: string, password: string): Observable<{ user: User; token: string }> {
     return this.http
-      .post<{ success: boolean; data: { user: User; token: string } }>(
+      .post<ApiSuccess<{ user: User; token: string }>>(
         `${environment.apiUrl}/api/auth/login`,
         { email, password }
       )
@@ -55,7 +98,27 @@ export class AuthService {
     this.persistSession(token, user);
   }
 
+  /**
+   * Calls `POST /api/auth/logout` to blacklist the JWT server-side, then clears client session.
+   * If there is no token (or outside browser), only clears local state.
+   */
   logout(): void {
+    if (!isPlatformBrowser(this.platformId)) {
+      this.userSignal.set(null);
+      return;
+    }
+    const token = localStorage.getItem(TOKEN_KEY);
+    if (!token) {
+      this.clearClientSession();
+      return;
+    }
+    this.http.post<ApiSuccess<null>>(`${environment.apiUrl}/api/auth/logout`, {}).subscribe({
+      next: () => this.clearClientSession(),
+      error: () => this.clearClientSession(),
+    });
+  }
+
+  private clearClientSession(): void {
     if (isPlatformBrowser(this.platformId)) {
       localStorage.removeItem(TOKEN_KEY);
       localStorage.removeItem(USER_KEY);
@@ -73,8 +136,16 @@ export class AuthService {
     this.userSignal.set(user);
   }
 
-  private readStoredUser(): User | null {
+  /**
+   * Restores session only when both token and user snapshot exist (avoids stale user after token removal).
+   */
+  private readStoredSession(): User | null {
     if (!isPlatformBrowser(this.platformId)) {
+      return null;
+    }
+    const token = localStorage.getItem(TOKEN_KEY);
+    if (!token) {
+      localStorage.removeItem(USER_KEY);
       return null;
     }
     const raw = localStorage.getItem(USER_KEY);
@@ -84,6 +155,7 @@ export class AuthService {
     try {
       return JSON.parse(raw) as User;
     } catch {
+      localStorage.removeItem(USER_KEY);
       return null;
     }
   }

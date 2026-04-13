@@ -19,6 +19,7 @@ import { errorMiddleware } from './middlewares/error.middleware';
 import { dbLoggerMiddleware } from './middlewares/logger.middleware';
 import { setupSwagger } from './config/swagger';
 import { systemLogRouter } from './modules/system-log/system-log.route';
+import { ensureRedisConnected } from './config/redis';
 
 export const app = express();
 
@@ -43,6 +44,12 @@ app.use(express.json());
 app.use(dbLoggerMiddleware);
 
 setupSwagger(app);
+
+// Best-effort Redis connect at boot (routes may also lazy-connect).
+ensureRedisConnected().catch((err) => {
+  // eslint-disable-next-line no-console
+  console.error('Redis connection failed:', err);
+});
 
 const success = (data: unknown, message = 'OK', meta: unknown = null) => ({
   success: true,

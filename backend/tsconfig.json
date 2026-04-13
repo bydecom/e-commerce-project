@@ -2,6 +2,7 @@
   "compilerOptions": {
     "target": "ES2022",
     "module": "commonjs",
+    "ignoreDeprecations": "6.0",
     "strict": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
@@ -11,5 +12,8 @@
     "resolveJsonModule": true,
     "types": ["node"]
   },
-  "include": ["index.ts", "src/**/*.ts", "prisma/**/*.ts"]
+  "include": ["index.ts", "src/**/*.ts", "src/**/*.d.ts", "prisma/**/*.ts"],
+  "ts-node": {
+    "files": true
+  }
 }
