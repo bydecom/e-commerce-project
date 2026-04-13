@@ -210,6 +210,18 @@ export const openApiSpec = {
         },
       },
     },
+    '/api/auth/me': {
+      get: {
+        tags: ['Auth'],
+        summary: 'Current user profile',
+        security: [{ bearerAuth: [] }],
+        responses: {
+          '200': { description: 'OK' },
+          '401': { description: 'Unauthorized' },
+          '404': { description: 'User not found' },
+        },
+      },
+    },
     '/api/auth/logout': {
       post: {
         tags: ['Auth'],
@@ -255,6 +267,7 @@ export const openApiSpec = {
       post: {
         tags: ['Products'],
         summary: 'Create product',
+        security: [{ bearerAuth: [] }],
         requestBody: {
           required: true,
           content: {
@@ -263,7 +276,12 @@ export const openApiSpec = {
             },
           },
         },
-        responses: { '201': { description: 'Created' }, '400': { description: 'Bad request' } },
+        responses: {
+          '201': { description: 'Created' },
+          '400': { description: 'Bad request' },
+          '401': { description: 'Unauthorized' },
+          '403': { description: 'Forbidden — ADMIN only' },
+        },
       },
     },
     '/api/products/{id}': {
@@ -276,6 +294,7 @@ export const openApiSpec = {
       put: {
         tags: ['Products'],
         summary: 'Update product',
+        security: [{ bearerAuth: [] }],
         parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'integer' } }],
         requestBody: {
           content: {
@@ -284,14 +303,22 @@ export const openApiSpec = {
             },
           },
         },
-        responses: { '200': { description: 'OK' }, '404': { description: 'Not found' } },
+        responses: {
+          '200': { description: 'OK' },
+          '401': { description: 'Unauthorized' },
+          '403': { description: 'Forbidden — ADMIN only' },
+          '404': { description: 'Not found' },
+        },
       },
       delete: {
         tags: ['Products'],
         summary: 'Delete product',
+        security: [{ bearerAuth: [] }],
         parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'integer' } }],
         responses: {
           '200': { description: 'OK' },
+          '401': { description: 'Unauthorized' },
+          '403': { description: 'Forbidden — ADMIN only' },
           '404': { description: 'Not found' },
           '409': { description: 'Conflict (referenced by orders)' },
         },
@@ -306,6 +333,7 @@ export const openApiSpec = {
       post: {
         tags: ['Categories'],
         summary: 'Create category',
+        security: [{ bearerAuth: [] }],
         requestBody: {
           required: true,
           content: {
@@ -317,6 +345,8 @@ export const openApiSpec = {
         responses: {
           '201': { description: 'Created' },
           '400': { description: 'Bad request' },
+          '401': { description: 'Unauthorized' },
+          '403': { description: 'Forbidden — ADMIN only' },
           '409': { description: 'Duplicate name' },
         },
       },
@@ -325,6 +355,7 @@ export const openApiSpec = {
       patch: {
         tags: ['Categories'],
         summary: 'Update category',
+        security: [{ bearerAuth: [] }],
         parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'integer' } }],
         requestBody: {
           required: true,
@@ -337,6 +368,8 @@ export const openApiSpec = {
         responses: {
           '200': { description: 'OK' },
           '400': { description: 'Bad request' },
+          '401': { description: 'Unauthorized' },
+          '403': { description: 'Forbidden — ADMIN only' },
           '404': { description: 'Not found' },
           '409': { description: 'Duplicate name' },
         },
@@ -344,9 +377,12 @@ export const openApiSpec = {
       delete: {
         tags: ['Categories'],
         summary: 'Delete category',
+        security: [{ bearerAuth: [] }],
         parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'integer' } }],
         responses: {
           '200': { description: 'Deleted' },
+          '401': { description: 'Unauthorized' },
+          '403': { description: 'Forbidden — ADMIN only' },
           '404': { description: 'Not found' },
           '409': { description: 'Category still has products' },
         },
@@ -356,7 +392,9 @@ export const openApiSpec = {
       post: {
         tags: ['Orders'],
         summary: 'Create a new order (User)',
-        description: 'Validates stock, calculates total and decrements product stock atomically.',
+        description:
+          'Validates stock, calculates total and decrements product stock atomically. `userId` is taken from the JWT.',
+        security: [{ bearerAuth: [] }],
         requestBody: {
           required: true,
           content: {
@@ -367,36 +405,42 @@ export const openApiSpec = {
         },
         responses: {
           '201': { description: 'Order created' },
-          '400': { description: 'Missing fields or invalid userId/productId/quantity' },
+          '400': { description: 'Missing fields or invalid productId/quantity' },
+          '401': { description: 'Unauthorized' },
           '422': { description: 'Product not available or insufficient stock' },
         },
       },
       get: {
         tags: ['Orders'],
         summary: 'List all orders — Admin',
+        security: [{ bearerAuth: [] }],
         parameters: [
           { name: 'page', in: 'query', schema: { type: 'integer', default: 1 } },
           { name: 'limit', in: 'query', schema: { type: 'integer', default: 20 } },
           { name: 'status', in: 'query', schema: { type: 'string', enum: ['PENDING', 'CONFIRMED', 'SHIPPING', 'DONE', 'CANCELLED'] } },
           { name: 'search', in: 'query', schema: { type: 'string' }, description: 'Search by customer name or email' },
         ],
-        responses: { '200': { description: 'OK' } },
+        responses: {
+          '200': { description: 'OK' },
+          '401': { description: 'Unauthorized' },
+          '403': { description: 'Forbidden — ADMIN only' },
+        },
       },
     },
     '/api/orders/me': {
       get: {
         tags: ['Orders'],
         summary: 'List orders of a user (User)',
-        description: 'userId will come from JWT once auth is implemented.',
+        description: '`userId` is taken from the JWT.',
+        security: [{ bearerAuth: [] }],
         parameters: [
-          { name: 'userId', in: 'query', required: true, schema: { type: 'integer' } },
           { name: 'page', in: 'query', schema: { type: 'integer', default: 1 } },
           { name: 'limit', in: 'query', schema: { type: 'integer', default: 20 } },
           { name: 'status', in: 'query', schema: { type: 'string', enum: ['PENDING', 'CONFIRMED', 'SHIPPING', 'DONE', 'CANCELLED'] } },
         ],
         responses: {
           '200': { description: 'OK' },
-          '400': { description: 'userId query is required' },
+          '401': { description: 'Unauthorized' },
         },
       },
     },
@@ -404,13 +448,11 @@ export const openApiSpec = {
       get: {
         tags: ['Orders'],
         summary: 'Get a specific order of a user (User)',
-        parameters: [
-          { name: 'id', in: 'path', required: true, schema: { type: 'integer' } },
-          { name: 'userId', in: 'query', required: true, schema: { type: 'integer' } },
-        ],
+        security: [{ bearerAuth: [] }],
+        parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'integer' } }],
         responses: {
           '200': { description: 'OK' },
-          '400': { description: 'userId query is required' },
+          '401': { description: 'Unauthorized' },
           '404': { description: 'Order not found' },
         },
       },
@@ -420,13 +462,11 @@ export const openApiSpec = {
         tags: ['Orders'],
         summary: 'Cancel a pending order (User)',
         description: 'Only PENDING orders can be cancelled. Stock is automatically restored.',
-        parameters: [
-          { name: 'id', in: 'path', required: true, schema: { type: 'integer' } },
-          { name: 'userId', in: 'query', required: true, schema: { type: 'integer' } },
-        ],
+        security: [{ bearerAuth: [] }],
+        parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'integer' } }],
         responses: {
           '200': { description: 'Cancelled — stock restored' },
-          '400': { description: 'userId query is required' },
+          '401': { description: 'Unauthorized' },
           '404': { description: 'Order not found' },
           '422': { description: 'Only pending orders can be cancelled' },
         },
@@ -436,14 +476,21 @@ export const openApiSpec = {
       get: {
         tags: ['Orders'],
         summary: 'Get any order by id — Admin',
+        security: [{ bearerAuth: [] }],
         parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'integer' } }],
-        responses: { '200': { description: 'OK' }, '404': { description: 'Not found' } },
+        responses: {
+          '200': { description: 'OK' },
+          '401': { description: 'Unauthorized' },
+          '403': { description: 'Forbidden — ADMIN only' },
+          '404': { description: 'Not found' },
+        },
       },
     },
     '/api/orders/{id}/status': {
       patch: {
         tags: ['Orders'],
         summary: 'Update order status — Admin',
+        security: [{ bearerAuth: [] }],
         description: 'Allowed transitions: PENDING→CONFIRMED|CANCELLED · CONFIRMED→SHIPPING · SHIPPING→DONE. Cancelling a PENDING order also restores stock.',
         parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'integer' } }],
         requestBody: {
@@ -457,6 +504,8 @@ export const openApiSpec = {
         responses: {
           '200': { description: 'Updated' },
           '400': { description: 'Invalid status' },
+          '401': { description: 'Unauthorized' },
+          '403': { description: 'Forbidden — ADMIN only' },
           '404': { description: 'Not found' },
           '422': { description: 'Invalid status transition' },
         },
@@ -466,6 +515,7 @@ export const openApiSpec = {
       get: {
         tags: ['Feedbacks'],
         summary: 'List all feedbacks (Admin)',
+        security: [{ bearerAuth: [] }],
         parameters: [
           { name: 'page', in: 'query', schema: { type: 'integer', default: 1 } },
           { name: 'limit', in: 'query', schema: { type: 'integer', default: 20 } },
@@ -474,12 +524,18 @@ export const openApiSpec = {
           { name: 'rating', in: 'query', schema: { type: 'integer', minimum: 1, maximum: 5 } },
           { name: 'typeId', in: 'query', schema: { type: 'integer' } },
         ],
-        responses: { '200': { description: 'OK' } },
+        responses: {
+          '200': { description: 'OK' },
+          '401': { description: 'Unauthorized' },
+          '403': { description: 'Forbidden — ADMIN only' },
+        },
       },
       post: {
         tags: ['Feedbacks'],
         summary: 'Submit a new feedback (User)',
-        description: 'Sentiment is auto-analyzed by Gemini AI based on the comment. If AI is unavailable, sentiment defaults to NEUTRAL.',
+        description:
+          'Sentiment is auto-analyzed by Gemini AI based on the comment. If AI is unavailable, sentiment defaults to NEUTRAL. `userId` is taken from the JWT.',
+        security: [{ bearerAuth: [] }],
         requestBody: {
           required: true,
           content: {
@@ -491,6 +547,7 @@ export const openApiSpec = {
         responses: {
           '201': { description: 'Feedback created' },
           '400': { description: 'Validation error (invalid rating, order not DONE, product not in order…)' },
+          '401': { description: 'Unauthorized' },
           '403': { description: 'Forbidden — order does not belong to this user' },
           '404': { description: 'Order or product not found' },
           '409': { description: 'Feedback already submitted for this product in this order' },
@@ -518,6 +575,7 @@ export const openApiSpec = {
       post: {
         tags: ['Feedback Types'],
         summary: 'Create a new feedback type (Admin)',
+        security: [{ bearerAuth: [] }],
         requestBody: {
           required: true,
           content: {
@@ -529,6 +587,8 @@ export const openApiSpec = {
         responses: {
           '201': { description: 'Created' },
           '400': { description: 'Name is required' },
+          '401': { description: 'Unauthorized' },
+          '403': { description: 'Forbidden — ADMIN only' },
           '409': { description: 'Duplicate name' },
         },
       },
@@ -537,6 +597,7 @@ export const openApiSpec = {
       patch: {
         tags: ['Feedback Types'],
         summary: 'Update a feedback type — name, description or isActive toggle (Admin)',
+        security: [{ bearerAuth: [] }],
         parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'integer' } }],
         requestBody: {
           required: true,
@@ -549,6 +610,8 @@ export const openApiSpec = {
         responses: {
           '200': { description: 'Updated' },
           '400': { description: 'Invalid id or empty name' },
+          '401': { description: 'Unauthorized' },
+          '403': { description: 'Forbidden — ADMIN only' },
           '404': { description: 'Not found' },
           '409': { description: 'Duplicate name or last active type' },
         },
@@ -563,6 +626,7 @@ export const openApiSpec = {
       put: {
         tags: ['Store settings'],
         summary: 'Update shop info (ADMIN)',
+        security: [{ bearerAuth: [] }],
         requestBody: {
           content: {
             'application/json': {
@@ -570,13 +634,18 @@ export const openApiSpec = {
             },
           },
         },
-        responses: { '200': { description: 'OK' }, '401': { description: 'Unauthorized' } },
+        responses: {
+          '200': { description: 'OK' },
+          '401': { description: 'Unauthorized' },
+          '403': { description: 'Forbidden — ADMIN only' },
+        },
       },
     },
     '/api/dashboard/export-pdf': {
       get: {
         tags: ['Dashboard'],
         summary: 'Export business performance PDF (revenue, orders, sentiment)',
+        security: [{ bearerAuth: [] }],
         parameters: [
           {
             name: 'type',
@@ -596,6 +665,8 @@ export const openApiSpec = {
             content: { 'application/pdf': { schema: { type: 'string', format: 'binary' } } },
           },
           '400': { description: 'Invalid filter parameters' },
+          '401': { description: 'Unauthorized' },
+          '403': { description: 'Forbidden — ADMIN only' },
         },
       },
     },
@@ -604,8 +675,11 @@ export const openApiSpec = {
         tags: ['Dashboard'],
         summary: 'Get all dashboard statistics (Metrics, Actions, Charts)',
         description: 'Returns a JSON containing all aggregated data needed to render the Admin Dashboard: key metrics, action-required items, and chart data.',
+        security: [{ bearerAuth: [] }],
         responses: {
           '200': { description: 'OK' },
+          '401': { description: 'Unauthorized' },
+          '403': { description: 'Forbidden — ADMIN only' },
         },
       },
     },
@@ -613,19 +687,25 @@ export const openApiSpec = {
       get: {
         tags: ['System logs'],
         summary: 'List recent system traffic logs',
+        security: [{ bearerAuth: [] }],
         parameters: [
           { name: 'limit', in: 'query', schema: { type: 'integer', default: 50, maximum: 200 } },
           { name: 'method', in: 'query', schema: { type: 'string' } },
           { name: 'status', in: 'query', schema: { type: 'integer' } },
           { name: 'url', in: 'query', schema: { type: 'string' } },
         ],
-        responses: { '200': { description: 'OK' } },
+        responses: {
+          '200': { description: 'OK' },
+          '401': { description: 'Unauthorized' },
+          '403': { description: 'Forbidden — ADMIN only' },
+        },
       },
     },
     '/api/system-logs/export-pdf': {
       get: {
         tags: ['System logs'],
         summary: 'Export system logs as PDF (time filter + same filters as list)',
+        security: [{ bearerAuth: [] }],
         parameters: [
           {
             name: 'filterType',
@@ -648,6 +728,8 @@ export const openApiSpec = {
             content: { 'application/pdf': { schema: { type: 'string', format: 'binary' } } },
           },
           '400': { description: 'Invalid filter' },
+          '401': { description: 'Unauthorized' },
+          '403': { description: 'Forbidden — ADMIN only' },
         },
       },
     },
@@ -830,9 +912,8 @@ export const openApiSpec = {
       },
       OrderCreate: {
         type: 'object',
-        required: ['userId', 'shippingAddress', 'items'],
+        required: ['shippingAddress', 'items'],
         properties: {
-          userId: { type: 'integer', example: 1, description: 'Will come from JWT once auth is implemented' },
           shippingAddress: { type: 'string', example: '101 Apple St, New York, NY' },
           items: {
             type: 'array',
@@ -861,9 +942,8 @@ export const openApiSpec = {
       },
       FeedbackCreate: {
         type: 'object',
-        required: ['userId', 'orderId', 'productId', 'rating'],
+        required: ['orderId', 'productId', 'rating'],
         properties: {
-          userId: { type: 'integer', example: 3, description: 'Will be taken from JWT token once auth is implemented' },
           orderId: { type: 'integer', example: 4 },
           productId: { type: 'integer', example: 6 },
           rating: { type: 'integer', minimum: 1, maximum: 5, example: 5 },

@@ -1,4 +1,4 @@
-import { Injectable, PLATFORM_ID, afterNextRender, computed, inject, signal } from '@angular/core';
+import { Injectable, PLATFORM_ID, computed, inject, signal } from '@angular/core';
 import { isPlatformBrowser } from '@angular/common';
 import { Router } from '@angular/router';
 import { HttpClient } from '@angular/common/http';
@@ -27,15 +27,6 @@ export class AuthService {
   readonly currentUser = this.userSignal.asReadonly();
   readonly isAuthenticated = computed(() => this.userSignal() !== null);
   readonly isAdmin = computed(() => this.userSignal()?.role === 'ADMIN');
-
-  constructor() {
-    afterNextRender(() => {
-      const user = this.readStoredSession(); 
-      if (user) {
-        this.userSignal.set(user);
-      }
-    });
-  }
 
   getToken(): string | null {
     if (!isPlatformBrowser(this.platformId)) {

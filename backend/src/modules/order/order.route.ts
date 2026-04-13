@@ -1,17 +1,15 @@
 import { Router } from 'express';
+import { authMiddleware } from '../../middlewares/auth.middleware';
+import { requireRole } from '../../middlewares/role.middleware';
 import * as orderController from './order.controller';
 
 export const orderRouter = Router();
 
-/** POST /orders — body: { userId, items, shippingAddress } (userId bắt buộc khi chưa có JWT). */
-orderRouter.post('/', orderController.createOrder);
+orderRouter.post('/', authMiddleware, orderController.createOrder);
+orderRouter.get('/me', authMiddleware, orderController.listMyOrders);
+orderRouter.get('/me/:id', authMiddleware, orderController.getMyOrder);
+orderRouter.patch('/me/:id/cancel', authMiddleware, orderController.cancelMyOrder);
 
-/** GET/PATCH /orders/me* — query userId bắt buộc khi chưa có JWT. */
-orderRouter.get('/me', orderController.listMyOrders);
-orderRouter.get('/me/:id', orderController.getMyOrder);
-orderRouter.patch('/me/:id/cancel', orderController.cancelMyOrder);
-
-/** Admin: GET /orders, GET /orders/:id, PATCH /orders/:id/status */
-orderRouter.get('/', orderController.listAdminOrders);
-orderRouter.get('/:id', orderController.getAdminOrder);
-orderRouter.patch('/:id/status', orderController.patchAdminStatus);
+orderRouter.get('/', authMiddleware, requireRole(['ADMIN']), orderController.listAdminOrders);
+orderRouter.get('/:id', authMiddleware, requireRole(['ADMIN']), orderController.getAdminOrder);
+orderRouter.patch('/:id/status', authMiddleware, requireRole(['ADMIN']), orderController.patchAdminStatus);

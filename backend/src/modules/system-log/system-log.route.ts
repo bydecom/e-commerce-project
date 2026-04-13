@@ -2,6 +2,8 @@ import { Router } from 'express';
 import type { Request, Response } from 'express';
 import type { Prisma } from '@prisma/client';
 import { prisma } from '../../db';
+import { authMiddleware } from '../../middlewares/auth.middleware';
+import { requireRole } from '../../middlewares/role.middleware';
 import { success } from '../../utils/response';
 import {
   buildSystemLogWhere,
@@ -18,7 +20,7 @@ export const systemLogRouter = Router();
  * GET /api/system-logs/export-pdf
  * Query: filterType (MONTH|QUARTER|YEAR|RANGE|ALL), month, quarter, year, startDate, endDate, method, statusGroup (success|client|server), status (exact), url
  */
-systemLogRouter.get('/export-pdf', async (req: Request, res: Response): Promise<void> => {
+systemLogRouter.get('/export-pdf', authMiddleware, requireRole(['ADMIN']), async (req: Request, res: Response): Promise<void> => {
   try {
     const q = req.query as unknown as SystemLogExportQuery;
     let range: ReturnType<typeof parseDateRange>;
@@ -54,7 +56,7 @@ systemLogRouter.get('/export-pdf', async (req: Request, res: Response): Promise<
  * GET /api/system-logs
  * Query: limit (default 50, max 200), method, statusGroup (success=200–399 incl. 304), client, server, status (exact), url
  */
-systemLogRouter.get('/', async (req: Request, res: Response): Promise<void> => {
+systemLogRouter.get('/', authMiddleware, requireRole(['ADMIN']), async (req: Request, res: Response): Promise<void> => {
   try {
     const limit = Math.min(Number(req.query['limit']) || 50, 200);
     const method = req.query['method'] as string | undefined;

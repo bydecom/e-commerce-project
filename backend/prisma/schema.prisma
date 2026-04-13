@@ -35,13 +35,14 @@ enum ProductStatus {
 }
 
 model User {
-  id        Int        @id @default(autoincrement()) 
-  email     String     @unique                      
+  id        Int        @id @default(autoincrement())
+  email     String     @unique
   password  String
   name      String?
   phone     String?
   address   String?
-  role      Role       @default(USER)             
+  role      Role       @default(USER)
+  createdAt DateTime   @default(now())
 
   orders    Order[]
   feedbacks Feedback[]

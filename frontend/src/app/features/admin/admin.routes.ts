@@ -32,6 +32,11 @@ export const ADMIN_ROUTES: Routes = [
           ),
       },
       {
+        path: 'users',
+        loadComponent: () =>
+          import('./users/user-list.component').then((m) => m.AdminUserListComponent),
+      },
+      {
         path: 'products/:id',
         loadComponent: () =>
           import('./products/product-form/product-form.component').then(

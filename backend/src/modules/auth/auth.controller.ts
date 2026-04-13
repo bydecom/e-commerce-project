@@ -73,6 +73,20 @@ export async function resendVerification(req: Request, res: Response, next: Next
   }
 }
 
+export async function me(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const auth = req.auth;
+    if (!auth) {
+      next(httpError(500, 'Auth context missing'));
+      return;
+    }
+    const data = await authService.getMe(auth.userId);
+    res.json(success(data));
+  } catch (err) {
+    next(err);
+  }
+}
+
 export async function logout(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
     const auth = req.auth;

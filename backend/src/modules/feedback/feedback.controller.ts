@@ -32,8 +32,12 @@ export async function listByProduct(req: Request, res: Response, next: NextFunct
 
 export async function createFeedback(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
-    const { userId, orderId, productId, typeId, rating, comment } = req.body as {
-      userId?: number;
+    const auth = req.auth;
+    if (!auth) {
+      res.status(401).json({ success: false, message: 'Unauthorized', errors: null });
+      return;
+    }
+    const { orderId, productId, typeId, rating, comment } = req.body as {
       orderId?: number;
       productId?: number;
       typeId?: number;
@@ -41,12 +45,12 @@ export async function createFeedback(req: Request, res: Response, next: NextFunc
       comment?: string;
     };
 
-    if (!userId || !orderId || !productId || rating === undefined) {
-      throw httpError(400, 'userId, orderId, productId and rating are required');
+    if (!orderId || !productId || rating === undefined) {
+      throw httpError(400, 'orderId, productId and rating are required');
     }
 
     const data = await feedbackService.createFeedback({
-      userId: Number(userId),
+      userId: auth.userId,
       orderId: Number(orderId),
       productId: Number(productId),
       typeId: typeId ? Number(typeId) : undefined,

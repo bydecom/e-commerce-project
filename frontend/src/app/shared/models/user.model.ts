@@ -7,4 +7,6 @@ export interface User {
   phone?: string | null;
   address?: string | null;
   role: Role;
+  /** ISO string from API when backend exposes `createdAt` */
+  createdAt?: string;
 }

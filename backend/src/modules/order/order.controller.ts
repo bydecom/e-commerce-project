@@ -8,22 +8,18 @@ function parseParamInt(param: string | string[] | undefined): number {
   return parseInt(String(s ?? ''), 10);
 }
 
-function parseUserIdQuery(req: Request): number | null {
-  const raw = req.query.userId;
-  const s = Array.isArray(raw) ? raw[0] : raw;
-  const n = parseInt(String(s ?? ''), 10);
-  return Number.isNaN(n) || n < 1 ? null : n;
-}
-
 export async function createOrder(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
+    const auth = req.auth;
+    if (!auth) {
+      res.status(401).json({ success: false, message: 'Unauthorized', errors: null });
+      return;
+    }
     const b = req.body as Record<string, unknown>;
-    const userId =
-      typeof b.userId === 'number' ? b.userId : parseInt(String(b.userId ?? ''), 10);
     const shippingAddress = typeof b.shippingAddress === 'string' ? b.shippingAddress : '';
     const items = Array.isArray(b.items) ? (b.items as Array<{ productId: number; quantity: number }>) : [];
 
-    const data = await orderService.createOrder({ userId, items, shippingAddress });
+    const data = await orderService.createOrder({ userId: auth.userId, items, shippingAddress });
     res.status(201).json(success(data, 'Created'));
   } catch (err) {
     next(err);
@@ -32,13 +28,13 @@ export async function createOrder(req: Request, res: Response, next: NextFunctio
 
 export async function listMyOrders(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
-    const userId = parseUserIdQuery(req);
-    if (userId === null) {
-      res.status(400).json({ success: false, message: 'userId query is required', errors: null });
+    const auth = req.auth;
+    if (!auth) {
+      res.status(401).json({ success: false, message: 'Unauthorized', errors: null });
       return;
     }
     const q = req.query as Record<string, string | undefined>;
-    const result = await orderService.listUserOrders(userId, q);
+    const result = await orderService.listUserOrders(auth.userId, q);
     res.json(success(result.data, 'OK', result.meta));
   } catch (err) {
     next(err);
@@ -47,9 +43,9 @@ export async function listMyOrders(req: Request, res: Response, next: NextFuncti
 
 export async function getMyOrder(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
-    const userId = parseUserIdQuery(req);
-    if (userId === null) {
-      res.status(400).json({ success: false, message: 'userId query is required', errors: null });
+    const auth = req.auth;
+    if (!auth) {
+      res.status(401).json({ success: false, message: 'Unauthorized', errors: null });
       return;
     }
     const id = parseParamInt(req.params.id);
@@ -57,7 +53,7 @@ export async function getMyOrder(req: Request, res: Response, next: NextFunction
       res.status(404).json({ success: false, message: 'Order not found', errors: null });
       return;
     }
-    const data = await orderService.getUserOrder(userId, id);
+    const data = await orderService.getUserOrder(auth.userId, id);
     res.json(success(data));
   } catch (err) {
     next(err);
@@ -66,9 +62,9 @@ export async function getMyOrder(req: Request, res: Response, next: NextFunction
 
 export async function cancelMyOrder(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
-    const userId = parseUserIdQuery(req);
-    if (userId === null) {
-      res.status(400).json({ success: false, message: 'userId query is required', errors: null });
+    const auth = req.auth;
+    if (!auth) {
+      res.status(401).json({ success: false, message: 'Unauthorized', errors: null });
       return;
     }
     const id = parseParamInt(req.params.id);
@@ -76,7 +72,7 @@ export async function cancelMyOrder(req: Request, res: Response, next: NextFunct
       res.status(404).json({ success: false, message: 'Order not found', errors: null });
       return;
     }
-    const data = await orderService.cancelUserOrder(userId, id);
+    const data = await orderService.cancelUserOrder(auth.userId, id);
     res.json(success(data, 'Cancelled'));
   } catch (err) {
     next(err);

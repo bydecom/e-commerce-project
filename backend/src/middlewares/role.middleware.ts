@@ -1,11 +1,21 @@
 import type { Request, Response, NextFunction } from 'express';
+import type { Role } from '@prisma/client';
 
-/** TODO: attach user role from JWT and compare */
-export function roleMiddleware(_role: 'ADMIN' | 'USER') {
-  return (_req: Request, _res: Response, next: NextFunction): void => {
+/**
+ * Requires `authMiddleware` to run first so `req.auth` is set.
+ * Returns an Express middleware that allows only the given roles.
+ */
+export function requireRole(allowed: Role[]) {
+  return (req: Request, res: Response, next: NextFunction): void => {
+    const auth = req.auth;
+    if (!auth) {
+      res.status(401).json({ success: false, message: 'Unauthorized', errors: null });
+      return;
+    }
+    if (!allowed.includes(auth.role)) {
+      res.status(403).json({ success: false, message: 'Forbidden', errors: null });
+      return;
+    }
     next();
   };
 }
-
-/** @deprecated Use `roleMiddleware` */
-export const requireRole = roleMiddleware;

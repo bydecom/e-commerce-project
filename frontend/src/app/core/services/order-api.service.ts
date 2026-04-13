@@ -12,7 +12,6 @@ function mapHttpError(err: HttpErrorResponse) {
 }
 
 export interface CreateOrderBody {
-  userId: number;
   items: Array<{ productId: number; quantity: number }>;
   shippingAddress: string;
 }
@@ -29,7 +28,7 @@ export class OrderApiService {
   private readonly http = inject(HttpClient);
   private readonly baseUrl = `${environment.apiUrl}/api/orders`;
 
-  /** POST /orders — không JWT: body phải có userId. */
+  /** POST /orders — JWT bắt buộc; `userId` lấy từ token. */
   create(body: CreateOrderBody): Observable<OrderDetail> {
     return this.http.post<ApiSuccess<OrderDetail>>(this.baseUrl, body).pipe(
       map((r) => {
@@ -40,12 +39,12 @@ export class OrderApiService {
     );
   }
 
-  /** GET /orders/me?userId= — không JWT: bắt buộc userId. */
-  listMine(userId: number, params: { page?: number; limit?: number; status?: OrderStatus } = {}): Observable<{
+  /** GET /orders/me — JWT bắt buộc. */
+  listMine(params: { page?: number; limit?: number; status?: OrderStatus } = {}): Observable<{
     data: OrderDetail[];
     meta: PaginationMeta;
   }> {
-    let httpParams = new HttpParams().set('userId', String(userId));
+    let httpParams = new HttpParams();
     if (params.page !== undefined) httpParams = httpParams.set('page', String(params.page));
     if (params.limit !== undefined) httpParams = httpParams.set('limit', String(params.limit));
     if (params.status) httpParams = httpParams.set('status', params.status);
@@ -59,9 +58,8 @@ export class OrderApiService {
     );
   }
 
-  getMine(userId: number, orderId: number): Observable<OrderDetail> {
-    const params = new HttpParams().set('userId', String(userId));
-    return this.http.get<ApiSuccess<OrderDetail>>(`${this.baseUrl}/me/${orderId}`, { params }).pipe(
+  getMine(orderId: number): Observable<OrderDetail> {
+    return this.http.get<ApiSuccess<OrderDetail>>(`${this.baseUrl}/me/${orderId}`).pipe(
       map((r) => {
         if (!r.success) throw new Error(r.message);
         return r.data;
@@ -70,10 +68,9 @@ export class OrderApiService {
     );
   }
 
-  cancelMine(userId: number, orderId: number): Observable<OrderDetail> {
-    const params = new HttpParams().set('userId', String(userId));
+  cancelMine(orderId: number): Observable<OrderDetail> {
     return this.http
-      .patch<ApiSuccess<OrderDetail>>(`${this.baseUrl}/me/${orderId}/cancel`, {}, { params })
+      .patch<ApiSuccess<OrderDetail>>(`${this.baseUrl}/me/${orderId}/cancel`, {})
       .pipe(
         map((r) => {
           if (!r.success) throw new Error(r.message);

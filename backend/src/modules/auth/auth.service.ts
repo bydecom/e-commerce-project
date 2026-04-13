@@ -295,3 +295,12 @@ export async function resendVerification(input: { email: string }) {
 export async function logoutSession(jti: string, exp: number): Promise<void> {
   await blacklistJwt(jti, exp);
 }
+
+export async function getMe(userId: number) {
+  const u = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { id: true, name: true, email: true, role: true, phone: true, address: true, createdAt: true },
+  });
+  if (!u) throw httpError(404, 'User not found');
+  return u;
+}
