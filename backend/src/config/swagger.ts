@@ -237,12 +237,20 @@ export const openApiSpec = {
           { name: 'limit', in: 'query', schema: { type: 'integer', default: 12 } },
           { name: 'search', in: 'query', schema: { type: 'string' } },
           { name: 'categoryId', in: 'query', schema: { type: 'integer' } },
+          {
+            name: 'categoryIds',
+            in: 'query',
+            description: 'Repeat param or comma-separated — products in any of these categories',
+            schema: { type: 'array', items: { type: 'integer' } },
+            style: 'form',
+            explode: true,
+          },
           { name: 'minPrice', in: 'query', schema: { type: 'number' } },
           { name: 'maxPrice', in: 'query', schema: { type: 'number' } },
           {
             name: 'sort',
             in: 'query',
-            schema: { type: 'string', enum: ['price_asc', 'price_desc', 'newest'] },
+            schema: { type: 'string', enum: ['price_asc', 'price_desc', 'newest', 'oldest'] },
           },
           {
             name: 'status',

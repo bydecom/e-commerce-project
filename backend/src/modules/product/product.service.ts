@@ -27,13 +27,37 @@ const sortMap: Record<string, Prisma.ProductOrderByWithRelationInput> = {
   price_asc: { price: 'asc' },
   price_desc: { price: 'desc' },
   newest: { id: 'desc' },
+  oldest: { id: 'asc' },
 };
+
+/** `categoryIds=1&categoryIds=2` or `categoryIds=1,2`; merges with legacy `categoryId`. */
+function parseCategoryIds(query: {
+  categoryId?: string;
+  categoryIds?: string | string[];
+}): number[] | undefined {
+  const ids: number[] = [];
+  const raw = query.categoryIds;
+  if (raw !== undefined && raw !== '') {
+    const parts = Array.isArray(raw) ? raw : String(raw).split(',');
+    for (const p of parts) {
+      const n = parseInt(String(p).trim(), 10);
+      if (!Number.isNaN(n)) ids.push(n);
+    }
+  }
+  if (query.categoryId !== undefined && query.categoryId !== '') {
+    const n = parseInt(query.categoryId, 10);
+    if (!Number.isNaN(n)) ids.push(n);
+  }
+  const uniq = [...new Set(ids)];
+  return uniq.length ? uniq : undefined;
+}
 
 export async function listProducts(query: {
   page?: string;
   limit?: string;
   search?: string;
   categoryId?: string;
+  categoryIds?: string | string[];
   minPrice?: string;
   maxPrice?: string;
   sort?: string;
@@ -45,7 +69,7 @@ export async function listProducts(query: {
   });
 
   const search = query.search?.trim();
-  const categoryId = query.categoryId ? parseInt(query.categoryId, 10) : undefined;
+  const categoryIds = parseCategoryIds(query);
   const minPrice = query.minPrice !== undefined && query.minPrice !== '' ? Number(query.minPrice) : undefined;
   const maxPrice = query.maxPrice !== undefined && query.maxPrice !== '' ? Number(query.maxPrice) : undefined;
   const sortKey = query.sort && sortMap[query.sort] ? query.sort : 'newest';
@@ -72,7 +96,7 @@ export async function listProducts(query: {
           ],
         }
       : {}),
-    ...(categoryId !== undefined && !Number.isNaN(categoryId) ? { categoryId } : {}),
+    ...(categoryIds ? { categoryId: { in: categoryIds } } : {}),
     ...(priceFilter ? { price: priceFilter } : {}),
     ...(statusFilter ? { status: statusFilter } : {}),
   };

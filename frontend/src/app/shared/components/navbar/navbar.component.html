@@ -47,12 +47,15 @@
         <div class="flex flex-1 flex-col">
           <div class="flex rounded-sm bg-white p-1 shadow-sm">
             <input
-              type="text"
+              type="search"
+              [(ngModel)]="headerSearch"
+              (keyup.enter)="submitHeaderSearch()"
               class="flex-1 border-none bg-transparent px-3 py-1.5 text-[14px] text-gray-900 focus:outline-none"
               placeholder="Search products, brands, and shops..."
             />
             <button
               type="button"
+              (click)="submitHeaderSearch()"
               class="flex items-center justify-center rounded-sm bg-gray-700 px-6 py-1.5 text-white hover:bg-gray-600"
             >
               <svg
@@ -75,7 +78,7 @@
             @for (cat of searchSuggestions(); track cat.id) {
               <a
                 [routerLink]="['/products']"
-                [queryParams]="{ categoryId: cat.id }"
+                [queryParams]="categoryShortcutParams(cat.id)"
                 class="hover:text-white"
               >
                 {{ cat.name }}
