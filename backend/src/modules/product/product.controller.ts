@@ -11,8 +11,9 @@ function parseParamInt(param: string | string[] | undefined): number {
 
 export async function listProducts(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
-    const q = req.query as Record<string, string | undefined>;
-    const result = await productService.listProducts(q);
+    const result = await productService.listProducts(
+      req.query as Parameters<typeof productService.listProducts>[0]
+    );
     res.json(success(result.data, 'OK', result.meta));
   } catch (err) {
     next(err);

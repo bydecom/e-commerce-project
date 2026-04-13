@@ -21,10 +21,13 @@ export interface ProductListParams {
   page?: number;
   limit?: number;
   search?: string;
+  /** Single category (e.g. admin). Ignored when `categoryIds` is set. */
   categoryId?: number;
+  /** Multiple categories (OR filter). Sent as repeated `categoryIds` query params. */
+  categoryIds?: number[];
   minPrice?: number;
   maxPrice?: number;
-  sort?: 'price_asc' | 'price_desc' | 'newest';
+  sort?: 'price_asc' | 'price_desc' | 'newest' | 'oldest';
   status?: ProductStatus;
 }
 
@@ -78,7 +81,13 @@ export class ProductApiService {
     if (params.page !== undefined) httpParams = httpParams.set('page', String(params.page));
     if (params.limit !== undefined) httpParams = httpParams.set('limit', String(params.limit));
     if (params.search) httpParams = httpParams.set('search', params.search);
-    if (params.categoryId !== undefined) httpParams = httpParams.set('categoryId', String(params.categoryId));
+    if (params.categoryIds?.length) {
+      for (const id of params.categoryIds) {
+        httpParams = httpParams.append('categoryIds', String(id));
+      }
+    } else if (params.categoryId !== undefined) {
+      httpParams = httpParams.set('categoryId', String(params.categoryId));
+    }
     if (params.minPrice !== undefined) httpParams = httpParams.set('minPrice', String(params.minPrice));
     if (params.maxPrice !== undefined) httpParams = httpParams.set('maxPrice', String(params.maxPrice));
     if (params.sort) httpParams = httpParams.set('sort', params.sort);

@@ -1,44 +1,95 @@
 import { isPlatformBrowser } from '@angular/common';
-import { Component, PLATFORM_ID, inject } from '@angular/core';
-import { ActivatedRoute } from '@angular/router';
+import {
+  Component,
+  OnDestroy,
+  PLATFORM_ID,
+  inject,
+  signal,
+} from '@angular/core';
+import { ActivatedRoute, RouterLink } from '@angular/router';
+import { EMPTY, Subscription } from 'rxjs';
+import { switchMap } from 'rxjs/operators';
+import { CartService } from '../../../core/services/cart.service';
+import { ProductApiService } from '../../../core/services/product-api.service';
+import { CurrencyVndPipe } from '../../../shared/pipes/currency-vnd.pipe';
+import type { Product } from '../../../shared/models/product.model';
 
 @Component({
   selector: 'app-product-detail',
   standalone: true,
-  template: `
-    <div class="mx-auto max-w-4xl px-4 py-8">
-      <h1 class="text-2xl font-bold text-gray-900">Product</h1>
-      <p class="mt-2 text-gray-600">Product ID: {{ id }}</p>
-
-      <p class="mt-6">
-        <button
-          type="button"
-          class="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-800 hover:bg-gray-50"
-          (click)="scrollToReviews()"
-        >
-          View reviews
-        </button>
-      </p>
-
-      <p class="mt-8 text-gray-600">
-        Product images, price, description, and add to cart will appear here.
-      </p>
-
-      <section id="reviews" class="scroll-mt-24 border-t border-gray-200 pt-12">
-        <h2 class="text-xl font-semibold text-gray-900">Reviews</h2>
-        <p class="mt-2 text-gray-600">Customer reviews and ratings will be listed here.</p>
-      </section>
-    </div>
-  `,
+  imports: [RouterLink, CurrencyVndPipe],
+  templateUrl: './product-detail.component.html',
+  styleUrl: './product-detail.component.scss',
 })
-export class ProductDetailComponent {
-  private readonly platformId = inject(PLATFORM_ID);
+export class ProductDetailComponent implements OnDestroy {
   private readonly route = inject(ActivatedRoute);
+  private readonly api = inject(ProductApiService);
+  private readonly cart = inject(CartService);
+  private readonly platformId = inject(PLATFORM_ID);
 
-  readonly id = this.route.snapshot.paramMap.get('id');
+  readonly loading = signal(true);
+  readonly error = signal<string | null>(null);
+  readonly product = signal<Product | null>(null);
+  readonly cartHint = signal(false);
 
-  scrollToReviews(): void {
-    if (!isPlatformBrowser(this.platformId)) return;
-    document.getElementById('reviews')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  private sub: Subscription;
+  private hintTimer: ReturnType<typeof setTimeout> | null = null;
+
+  constructor() {
+    this.sub = this.route.paramMap
+      .pipe(
+        switchMap((pm) => {
+          const raw = pm.get('id');
+          const id = raw !== null ? parseInt(raw, 10) : NaN;
+          if (Number.isNaN(id)) {
+            this.loading.set(false);
+            this.error.set('Invalid product link.');
+            this.product.set(null);
+            return EMPTY;
+          }
+          this.loading.set(true);
+          this.error.set(null);
+          this.product.set(null);
+          return this.api.getById(id);
+        })
+      )
+      .subscribe({
+        next: (p) => {
+          this.product.set(p);
+          this.loading.set(false);
+          if (p.status !== 'AVAILABLE') {
+            this.error.set('This product is not available for purchase right now.');
+            this.product.set(null);
+          }
+        },
+        error: (e: Error) => {
+          this.error.set(e.message ?? 'Product not found');
+          this.loading.set(false);
+          this.product.set(null);
+        },
+      });
+  }
+
+  ngOnDestroy(): void {
+    this.sub.unsubscribe();
+    if (this.hintTimer) clearTimeout(this.hintTimer);
+  }
+
+  addToCart(p: Product): void {
+    if (p.stock <= 0) return;
+    this.cart.add({
+      productId: p.id,
+      quantity: 1,
+      unitPrice: p.price,
+      name: p.name,
+    });
+    this.cartHint.set(true);
+    if (this.hintTimer) clearTimeout(this.hintTimer);
+    if (isPlatformBrowser(this.platformId)) {
+      this.hintTimer = setTimeout(() => {
+        this.cartHint.set(false);
+        this.hintTimer = null;
+      }, 2500);
+    }
   }
 }
