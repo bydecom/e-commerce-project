@@ -3,7 +3,7 @@ import { FormsModule } from '@angular/forms';
 import { NavigationEnd, Router, RouterLink } from '@angular/router';
 import { filter, Subscription } from 'rxjs';
 import { AuthService } from '../../../core/services/auth.service';
-import { CartService } from '../../../core/services/cart.service';
+import { ServerCartService } from '../../../core/services/server-cart.service';
 import { StoreSettingService } from '../../../core/services/store-setting.service';
 import { ProductApiService, type CategoryDto } from '../../../core/services/product-api.service';
 import { ShopBrowseDraftService } from '../../../core/services/shop-browse-draft.service';
@@ -17,14 +17,14 @@ import { ShopBrowseDraftService } from '../../../core/services/shop-browse-draft
 })
 export class NavbarComponent implements OnInit, OnDestroy {
   private readonly authService = inject(AuthService);
-  private readonly cartService = inject(CartService);
+  private readonly serverCart = inject(ServerCartService);
   private readonly storeSetting = inject(StoreSettingService);
   private readonly productApi = inject(ProductApiService);
   private readonly router = inject(Router);
   private readonly browseDraft = inject(ShopBrowseDraftService);
 
   readonly auth = this.authService;
-  readonly cart = this.cartService;
+  readonly cart = this.serverCart;
 
   readonly shopName = computed(() => this.storeSetting.setting()?.name ?? 'E‑Commerce');
   readonly logoUrl = computed(() => this.storeSetting.setting()?.logoUrl ?? null);
@@ -46,8 +46,16 @@ export class NavbarComponent implements OnInit, OnDestroy {
 
     this.navSub = this.router.events
       .pipe(filter((e): e is NavigationEnd => e instanceof NavigationEnd))
-      .subscribe(() => this.syncHeaderSearchFromUrl());
+      .subscribe(() => {
+        this.syncHeaderSearchFromUrl();
+        if (this.auth.isAuthenticated()) {
+          this.serverCart.refresh().subscribe();
+        }
+      });
     this.syncHeaderSearchFromUrl();
+    if (this.auth.isAuthenticated()) {
+      this.serverCart.refresh().subscribe();
+    }
   }
 
   ngOnDestroy(): void {

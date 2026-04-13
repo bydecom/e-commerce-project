@@ -20,6 +20,7 @@ import { dbLoggerMiddleware } from './middlewares/logger.middleware';
 import { setupSwagger } from './config/swagger';
 import { systemLogRouter } from './modules/system-log/system-log.route';
 import { ensureRedisConnected } from './config/redis';
+import { cartRouter } from './modules/cart/cart.route';
 
 export const app = express();
 
@@ -78,5 +79,6 @@ app.use('/api/dashboard', dashboardRouter);
 app.use('/api/ai', aiRouter);
 app.use('/api/store-settings', storeSettingRoute);
 app.use('/api/system-logs', systemLogRouter);
+app.use('/api/cart', cartRouter);
 
 app.use(errorMiddleware);

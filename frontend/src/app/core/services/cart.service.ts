@@ -16,9 +16,8 @@ export class CartService {
   private readonly linesSignal = signal<CartLine[]>([]);
 
   readonly lines = this.linesSignal.asReadonly();
-  readonly itemCount = computed(() =>
-    this.linesSignal().reduce((sum, l) => sum + l.quantity, 0)
-  );
+  /** Number of distinct products (cart lines), used by navbar badge. */
+  readonly itemCount = computed(() => this.linesSignal().length);
   readonly subtotal = computed(() =>
     this.linesSignal().reduce((sum, l) => sum + l.quantity * l.unitPrice, 0)
   );

@@ -16,6 +16,7 @@ export const openApiSpec = {
     { name: 'Products' },
     { name: 'Categories' },
     { name: 'Store settings' },
+    { name: 'Cart' },
     { name: 'Orders' },
     { name: 'Feedbacks' },
     { name: 'Feedback Types' },
@@ -393,6 +394,92 @@ export const openApiSpec = {
           '403': { description: 'Forbidden — ADMIN only' },
           '404': { description: 'Not found' },
           '409': { description: 'Category still has products' },
+        },
+      },
+    },
+    '/api/cart': {
+      get: {
+        tags: ['Cart'],
+        summary: 'Get current user cart (Redis)',
+        security: [{ bearerAuth: [] }],
+        responses: {
+          '200': {
+            description: 'OK',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/SuccessResponse_CartView' },
+              },
+            },
+          },
+          '401': { description: 'Unauthorized' },
+        },
+      },
+    },
+    '/api/cart/pricing': {
+      get: {
+        tags: ['Cart'],
+        summary: 'Get cart with DB prices + total (no N+1)',
+        security: [{ bearerAuth: [] }],
+        responses: {
+          '200': {
+            description: 'OK',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/SuccessResponse_CartPricing' },
+              },
+            },
+          },
+          '401': { description: 'Unauthorized' },
+        },
+      },
+    },
+    '/api/cart/items/{productId}': {
+      put: {
+        tags: ['Cart'],
+        summary: 'Add to cart (increment if exists)',
+        security: [{ bearerAuth: [] }],
+        parameters: [{ name: 'productId', in: 'path', required: true, schema: { type: 'integer' } }],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: { $ref: '#/components/schemas/CartItemPutRequest' },
+              examples: {
+                example: { value: { quantity: 1, name: 'Apple iPhone 15' } },
+              },
+            },
+          },
+        },
+        responses: {
+          '200': {
+            description: 'OK',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/SuccessResponse_CartItem' },
+              },
+            },
+          },
+          '400': { description: 'Invalid input' },
+          '401': { description: 'Unauthorized' },
+          '409': { description: 'Concurrent update, retry' },
+        },
+      },
+      delete: {
+        tags: ['Cart'],
+        summary: 'Remove 1 item from cart by productId',
+        security: [{ bearerAuth: [] }],
+        parameters: [{ name: 'productId', in: 'path', required: true, schema: { type: 'integer' } }],
+        responses: {
+          '200': {
+            description: 'OK',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/SuccessResponse_CartRemove' },
+              },
+            },
+          },
+          '400': { description: 'Invalid productId' },
+          '401': { description: 'Unauthorized' },
         },
       },
     },
@@ -984,6 +1071,96 @@ export const openApiSpec = {
           email: { type: 'string', nullable: true },
           logoUrl: { type: 'string', nullable: true },
           description: { type: 'string', nullable: true },
+        },
+      },
+      CartLine: {
+        type: 'object',
+        required: ['productId', 'quantity', 'name'],
+        properties: {
+          productId: { type: 'integer', example: 1 },
+          quantity: { type: 'integer', example: 2, minimum: 1 },
+          name: { type: 'string', example: 'Apple iPhone 15' },
+        },
+      },
+      CartLinePriced: {
+        type: 'object',
+        required: ['productId', 'quantity', 'name', 'unitPrice', 'lineTotal'],
+        properties: {
+          productId: { type: 'integer', example: 1 },
+          quantity: { type: 'integer', example: 2, minimum: 1 },
+          name: { type: 'string', example: 'Apple iPhone 15' },
+          unitPrice: { type: 'number', example: 199000 },
+          lineTotal: { type: 'number', example: 398000 },
+        },
+      },
+      CartItemPutRequest: {
+        type: 'object',
+        required: ['quantity', 'name'],
+        properties: {
+          quantity: { type: 'integer', minimum: 1, example: 1 },
+          name: { type: 'string', example: 'Apple iPhone 15' },
+        },
+      },
+      CartViewData: {
+        type: 'object',
+        required: ['items'],
+        properties: {
+          items: { type: 'array', items: { $ref: '#/components/schemas/CartLine' } },
+        },
+      },
+      CartPricingData: {
+        type: 'object',
+        required: ['items', 'total'],
+        properties: {
+          items: { type: 'array', items: { $ref: '#/components/schemas/CartLinePriced' } },
+          total: { type: 'number', example: 597000 },
+        },
+      },
+      SuccessResponse_CartView: {
+        type: 'object',
+        required: ['success', 'message', 'data', 'meta'],
+        properties: {
+          success: { type: 'boolean', example: true },
+          message: { type: 'string', example: 'OK' },
+          data: { $ref: '#/components/schemas/CartViewData' },
+          meta: { nullable: true, example: null },
+        },
+      },
+      SuccessResponse_CartPricing: {
+        type: 'object',
+        required: ['success', 'message', 'data', 'meta'],
+        properties: {
+          success: { type: 'boolean', example: true },
+          message: { type: 'string', example: 'OK' },
+          data: { $ref: '#/components/schemas/CartPricingData' },
+          meta: { nullable: true, example: null },
+        },
+      },
+      SuccessResponse_CartItem: {
+        type: 'object',
+        required: ['success', 'message', 'data', 'meta'],
+        properties: {
+          success: { type: 'boolean', example: true },
+          message: { type: 'string', example: 'OK' },
+          data: { $ref: '#/components/schemas/CartLine' },
+          meta: { nullable: true, example: null },
+        },
+      },
+      CartRemoveData: {
+        type: 'object',
+        required: ['removed'],
+        properties: {
+          removed: { type: 'boolean', example: true, description: 'true if an item was removed; false if it did not exist' },
+        },
+      },
+      SuccessResponse_CartRemove: {
+        type: 'object',
+        required: ['success', 'message', 'data', 'meta'],
+        properties: {
+          success: { type: 'boolean', example: true },
+          message: { type: 'string', example: 'OK' },
+          data: { $ref: '#/components/schemas/CartRemoveData' },
+          meta: { nullable: true, example: null },
         },
       },
     },
