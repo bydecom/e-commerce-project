@@ -66,8 +66,17 @@ function newToken(): string {
 }
 
 function verifyLink(token: string): string {
-  const base = (process.env.API_BASE_URL || '').trim();
-  if (!base) throw httpError(500, 'API_BASE_URL is not configured');
+  const fromEnv = (process.env.API_BASE_URL || '').trim();
+  const port = process.env.PORT || '3000';
+  const devFallback = `http://localhost:${port}`;
+  const base =
+    fromEnv || (process.env.NODE_ENV !== 'production' ? devFallback : '');
+  if (!base) {
+    throw httpError(
+      500,
+      'API_BASE_URL is not configured (set in .env — see backend/.env.example)'
+    );
+  }
   const url = new URL('/api/auth/verify-email', base);
   url.searchParams.set('token', token);
   return url.toString();

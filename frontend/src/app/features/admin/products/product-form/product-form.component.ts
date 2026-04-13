@@ -80,7 +80,7 @@ import type { ProductStatus } from '../../../../shared/models/product.model';
                     <button
                       type="button"
                       (click)="enhanceDescription()"
-                      [disabled]="enhancingDescription() || !form.controls.name.value?.trim()"
+                      [disabled]="enhancingDescription() || !form.controls.name.value.trim()"
                       class="flex items-center gap-1.5 rounded-lg border border-indigo-200 bg-indigo-50 px-3 py-1.5 text-xs font-bold text-indigo-700 transition-colors hover:bg-indigo-100 disabled:opacity-50"
                     >
                       @if (enhancingDescription()) {
@@ -144,9 +144,9 @@ import type { ProductStatus } from '../../../../shared/models/product.model';
                   <div
                     class="flex h-24 w-24 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-dashed border-gray-300 bg-gray-50"
                   >
-                    @if (form.controls.imageUrl.value?.trim()) {
+                    @if (form.controls.imageUrl.value.trim()) {
                       <img
-                        [src]="form.controls.imageUrl.value!.trim()"
+                        [src]="form.controls.imageUrl.value.trim()"
                         alt="Preview"
                         class="h-full w-full object-cover"
                       />
@@ -333,7 +333,7 @@ export class AdminProductFormComponent implements OnInit {
   }
 
   enhanceDescription(): void {
-    const name = this.form.controls.name.value?.trim();
+    const name = this.form.controls.name.value.trim();
     if (!name) {
       this.form.controls.name.markAsTouched();
       this.toast.show('Enter a product name first.', 'error');
