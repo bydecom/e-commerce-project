@@ -1,6 +1,6 @@
 import { ApplicationConfig } from '@angular/core';
 import { provideRouter, withEnabledBlockingInitialNavigation, withInMemoryScrolling } from '@angular/router';
-import { provideHttpClient, withInterceptors } from '@angular/common/http';
+import { provideHttpClient, withFetch, withInterceptors } from '@angular/common/http';
 import { provideClientHydration } from '@angular/platform-browser';
 
 import { routes } from './app.routes';
@@ -17,7 +17,7 @@ export const appConfig: ApplicationConfig = {
         anchorScrolling: 'enabled',
       })
     ),
-    provideHttpClient(withInterceptors([authInterceptor, errorInterceptor])),
+    provideHttpClient(withFetch(), withInterceptors([authInterceptor, errorInterceptor])),
     provideClientHydration(),
   ],
 };
