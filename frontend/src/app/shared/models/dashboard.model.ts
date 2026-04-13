@@ -6,6 +6,9 @@ export interface DashboardKeyMetrics {
   totalOrders: number;
   activeProducts: number;
   totalCustomers: number;
+  avgOrderValue: number;
+  repeatCustomers: number;
+  totalBuyers: number;
 }
 
 export interface DashboardPendingOrder {
@@ -53,10 +56,22 @@ export interface DashboardRevenuePoint {
   revenue: number;
 }
 
+/** Count of feedback rows per star rating (1–5). */
+export interface DashboardRatingDistribution {
+  1: number;
+  2: number;
+  3: number;
+  4: number;
+  5: number;
+}
+
 export interface DashboardCharts {
   sentiment: DashboardSentimentDistribution;
+  ratingDistribution: DashboardRatingDistribution;
   orderStatus: DashboardOrderStatusItem[];
   revenueLast7Days: DashboardRevenuePoint[];
+  topProducts: { name: string; qty: number }[];
+  categoryBreakdown: { name: string; count: number }[];
 }
 
 export interface DashboardSummary {

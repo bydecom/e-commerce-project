@@ -11,3 +11,10 @@ aiRouter.post(
   requireRole(['ADMIN']),
   aiController.postEnhanceProductDescription
 );
+
+aiRouter.get(
+  '/mini-advice',
+  authMiddleware,
+  requireRole(['ADMIN']),
+  aiController.getMiniAdvice
+);

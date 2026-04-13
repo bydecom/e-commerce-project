@@ -49,7 +49,7 @@ async function main() {
       address: '123 Nguyen Hue Boulevard, District 1, Ho Chi Minh City',
       phone: '1800-555-0199',
       email: 'support@technova.demo',
-      logoUrl: '',
+      logoUrl: 'https://i.postimg.cc/nLLk9Cfh/Gemini-Generated-Image-t4b4bet4b4bet4b4-Photoroom.png',
       description: 'Your destination for premium technology and electronics.',
     },
   });

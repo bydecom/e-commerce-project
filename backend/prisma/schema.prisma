@@ -145,3 +145,11 @@ model SystemLog {
   createdAt    DateTime @default(now())
 }
 
+/// Cached AI mini-advice for admin dashboard; one row per calendar day (UTC).
+model DashboardDailyInsight {
+  id        Int      @id @default(autoincrement())
+  date      DateTime @unique @db.Date
+  bullets   String[]
+  createdAt DateTime @default(now())
+}
+

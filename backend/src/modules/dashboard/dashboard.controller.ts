@@ -146,12 +146,63 @@ function vnd(n: number): string {
   return n.toLocaleString('en-US') + ' VND';
 }
 
+/** Metric card: either one `value` line or `amount` + `currency` (stops VND wrapping in narrow PDF columns). */
+type MetricCardDef = {
+  label: string;
+  color: string;
+  sub: string;
+  value?: string;
+  amount?: string;
+  currency?: string;
+};
+
 function stars(rating: number): string {
   return `${Math.min(5, Math.max(0, Math.round(rating)))}/5`;
 }
 
 function truncate(s: string, max: number): string {
   return s.length <= max ? s : s.slice(0, max - 3) + '...';
+}
+
+function drawMetricCard(
+  doc: PDFKitDoc,
+  m: MetricCardDef,
+  cx: number,
+  curY: number,
+  cardW: number,
+  metricCardH: number
+): void {
+  const innerW = cardW - 16;
+  drawCard(doc, cx, curY, cardW, metricCardH);
+  doc
+    .fillColor(m.color)
+    .fontSize(9)
+    .font('Helvetica-Bold')
+    .text(m.label.toUpperCase(), cx + 8, curY + 8, { width: innerW });
+  if (m.amount != null && m.currency != null) {
+    const len = m.amount.length;
+    const amtSize = len > 14 ? 10.5 : len > 11 ? 11.5 : 13;
+    doc
+      .fillColor(COLOR.text)
+      .fontSize(amtSize)
+      .font('Helvetica-Bold')
+      .text(m.amount, cx + 8, curY + 22, { width: innerW, lineBreak: false });
+    doc
+      .fillColor(COLOR.muted)
+      .fontSize(8)
+      .font('Helvetica-Bold')
+      .text(m.currency, cx + 8, curY + 38, { width: innerW });
+  } else if (m.value != null) {
+    doc
+      .fillColor(COLOR.text)
+      .fontSize(15)
+      .font('Helvetica-Bold')
+      .text(m.value, cx + 8, curY + 22, { width: innerW });
+  }
+  const sub = (m.sub ?? '').trim();
+  if (sub) {
+    doc.fillColor(COLOR.light).fontSize(7.5).font('Helvetica').text(sub, cx + 8, curY + 42, { width: innerW });
+  }
 }
 
 /** Draws a shaded table header row and returns the new curY. */
@@ -211,58 +262,69 @@ export async function exportPdf(req: Request, res: Response, next: NextFunction)
 
     let curY = 84;
 
-    // ── SECTION 1: KEY METRICS ────────────────────────────────────────────────
-    curY = ensureSpace(doc, curY, 102);
+    // ── SECTION 1: KEY METRICS (2×3) ─────────────────────────────────────────
+    const metricRows: MetricCardDef[][] = [
+      [
+        {
+          label: 'Total Revenue',
+          sub: '',
+          color: COLOR.green,
+          amount: summary.keyMetrics.totalRevenue.toLocaleString('en-US'),
+          currency: 'VND',
+        },
+        {
+          label: 'Total Orders',
+          value: summary.keyMetrics.totalOrders.toLocaleString(),
+          sub: '',
+          color: COLOR.blue,
+        },
+        {
+          label: 'Active Products',
+          value: summary.keyMetrics.activeProducts.toLocaleString(),
+          sub: '',
+          color: COLOR.emerald,
+        },
+      ],
+      [
+        {
+          label: 'Customers',
+          value: summary.keyMetrics.totalCustomers.toLocaleString(),
+          sub: '',
+          color: COLOR.violet,
+        },
+        {
+          label: 'Avg Order Value',
+          sub: '',
+          color: COLOR.blue,
+          amount: summary.keyMetrics.avgOrderValue.toLocaleString('en-US'),
+          currency: 'VND',
+        },
+        {
+          label: 'Repeat Customers',
+          value: `${summary.keyMetrics.repeatCustomers} / ${summary.keyMetrics.totalBuyers}`,
+          sub: 'Buyers with 2+ DONE orders',
+          color: COLOR.orange,
+        },
+      ],
+    ];
+    const flatMetrics = metricRows.flat();
+    const hasMetricSubs = flatMetrics.some((m) => (m.sub ?? '').trim().length > 0);
+    const hasStackedCurrency = flatMetrics.some((m) => m.amount != null && m.currency != null);
+    const metricCardH = hasMetricSubs ? 60 : hasStackedCurrency ? 52 : 46;
+    curY = ensureSpace(doc, curY, 22 + 6 + 2 * (metricCardH + 8) + 14);
     curY = sectionTitle(doc, '1. Key Metrics', curY);
     curY += 6;
 
-    const metricCards = [
-      {
-        label: 'Total Revenue',
-        value: vnd(summary.keyMetrics.totalRevenue),
-        sub: 'Completed (DONE) orders',
-        color: COLOR.green,
-      },
-      {
-        label: 'Total Orders',
-        value: summary.keyMetrics.totalOrders.toLocaleString(),
-        sub: 'All statuses',
-        color: COLOR.blue,
-      },
-      {
-        label: 'Active Products',
-        value: summary.keyMetrics.activeProducts.toLocaleString(),
-        sub: 'AVAILABLE status',
-        color: COLOR.emerald,
-      },
-      {
-        label: 'Customers',
-        value: summary.keyMetrics.totalCustomers.toLocaleString(),
-        sub: 'USER role accounts',
-        color: COLOR.violet,
-      },
-    ];
-    const cardW = Math.floor((CONTENT_W - 12) / 4);
-    metricCards.forEach((m, i) => {
-      const cx = MARGIN + i * (cardW + 4);
-      drawCard(doc, cx, curY, cardW, 60);
-      doc
-        .fillColor(m.color)
-        .fontSize(9)
-        .font('Helvetica-Bold')
-        .text(m.label.toUpperCase(), cx + 8, curY + 8, { width: cardW - 16 });
-      doc
-        .fillColor(COLOR.text)
-        .fontSize(15)
-        .font('Helvetica-Bold')
-        .text(m.value, cx + 8, curY + 22, { width: cardW - 16 });
-      doc
-        .fillColor(COLOR.light)
-        .fontSize(7.5)
-        .font('Helvetica')
-        .text(m.sub, cx + 8, curY + 42, { width: cardW - 16 });
-    });
-    curY += 74;
+    const cardW3 = Math.floor((CONTENT_W - 8) / 3);
+    for (const row of metricRows) {
+      curY = ensureSpace(doc, curY, metricCardH + 8);
+      row.forEach((m, i) => {
+        const cx = MARGIN + i * (cardW3 + 4);
+        drawMetricCard(doc, m, cx, curY, cardW3, metricCardH);
+      });
+      curY += metricCardH + 8;
+    }
+    curY += 6;
 
     // ── SECTION 2: REVENUE LAST 7 DAYS ───────────────────────────────────────
     const CHART_H = 70;
@@ -311,7 +373,47 @@ export async function exportPdf(req: Request, res: Response, next: NextFunction)
     curY += 14;
     curY += 18;
 
-    // ── SECTION 4: REVIEW SENTIMENT ───────────────────────────────────────────
+    // ── SECTION 4: TOP 5 SELLING PRODUCTS ─────────────────────────────────────
+    const topItems = summary.charts.topProducts;
+    const maxQty = Math.max(...topItems.map((p) => p.qty), 1);
+    const topCardH = topItems.length === 0 ? 42 : 10 + topItems.length * 18 + 14;
+    curY = ensureSpace(doc, curY, 22 + 4 + topCardH + 14);
+    curY = sectionTitle(doc, '4. Top 5 Selling Products', curY);
+    curY += 4;
+    drawCard(doc, MARGIN, curY, CONTENT_W, topCardH);
+    curY += 10;
+    if (topItems.length === 0) {
+      doc.fillColor(COLOR.light).fontSize(9).font('Helvetica').text('No data', MARGIN + 8, curY + 2);
+      curY += 22;
+    } else {
+      topItems.forEach((p, i) => {
+        barRow(doc, `${i + 1}. ${truncate(p.name, 20)}`, p.qty, maxQty, curY, COLOR.indigo);
+        curY += 18;
+      });
+    }
+    curY += 14;
+
+    // ── SECTION 5: CATEGORY BREAKDOWN ───────────────────────────────────────────
+    const catItems = summary.charts.categoryBreakdown;
+    const maxCat = Math.max(...catItems.map((c) => c.count), 1);
+    const catCardH = catItems.length === 0 ? 42 : 10 + catItems.length * 18 + 14;
+    curY = ensureSpace(doc, curY, 22 + 4 + catCardH + 14);
+    curY = sectionTitle(doc, '5. Category Breakdown', curY);
+    curY += 4;
+    drawCard(doc, MARGIN, curY, CONTENT_W, catCardH);
+    curY += 10;
+    if (catItems.length === 0) {
+      doc.fillColor(COLOR.light).fontSize(9).font('Helvetica').text('No categories', MARGIN + 8, curY + 2);
+      curY += 22;
+    } else {
+      catItems.forEach((c) => {
+        barRow(doc, truncate(c.name, 20), c.count, maxCat, curY, COLOR.emerald);
+        curY += 18;
+      });
+    }
+    curY += 14;
+
+    // ── SECTION 6: REVIEW SENTIMENT ───────────────────────────────────────────
     const { POSITIVE, NEUTRAL, NEGATIVE } = summary.charts.sentiment;
     const sentimentTotal = POSITIVE + NEUTRAL + NEGATIVE || 1;
     const sentItems = [
@@ -321,7 +423,7 @@ export async function exportPdf(req: Request, res: Response, next: NextFunction)
     ];
     const sentCardH = 10 + sentItems.length * 18 + 14;
     curY = ensureSpace(doc, curY, 22 + 8 + sentCardH + 14);
-    curY = sectionTitle(doc, '4. Review Sentiment', curY);
+    curY = sectionTitle(doc, '6. Review Sentiment', curY);
     curY += 8;
     drawCard(doc, MARGIN, curY, CONTENT_W, sentCardH);
     curY += 10;
@@ -345,9 +447,29 @@ export async function exportPdf(req: Request, res: Response, next: NextFunction)
     curY += 14;
     curY += 18;
 
-    // ── SECTION 5: ACTION REQUIRED ────────────────────────────────────────────
+    // ── SECTION 7: RATING DISTRIBUTION (1–5 stars) ────────────────────────────
+    const rd = summary.charts.ratingDistribution;
+    const ratingRows = [5, 4, 3, 2, 1].map((stars) => ({
+      label: `${stars}★`,
+      count: rd[stars as keyof typeof rd] ?? 0,
+    }));
+    const maxRatingCount = Math.max(...ratingRows.map((r) => r.count), 1);
+    const ratingCardH = 10 + ratingRows.length * 18 + 14;
+    curY = ensureSpace(doc, curY, 22 + 4 + ratingCardH + 14);
+    curY = sectionTitle(doc, '7. Rating Distribution', curY);
+    curY += 4;
+    drawCard(doc, MARGIN, curY, CONTENT_W, ratingCardH);
+    curY += 10;
+    ratingRows.forEach((row) => {
+      barRow(doc, row.label, row.count, maxRatingCount, curY, COLOR.amber);
+      curY += 18;
+    });
+    curY += 14;
+    curY += 18;
+
+    // ── SECTION 8: ACTION REQUIRED ────────────────────────────────────────────
     curY = ensureSpace(doc, curY, 22 + 8);
-    curY = sectionTitle(doc, '5. Action Required', curY);
+    curY = sectionTitle(doc, '8. Action Required', curY);
     curY += 8;
 
     // 5a. Pending Orders
@@ -468,10 +590,10 @@ export async function exportPdf(req: Request, res: Response, next: NextFunction)
     }
     curY += 20;
 
-    // ── SECTION 6: EXPORT PERIOD SUMMARY ─────────────────────────────────────
+    // ── SECTION 9: EXPORT PERIOD SUMMARY ─────────────────────────────────────
     const PERIOD_CARD_H = 62;
     curY = ensureSpace(doc, curY, 22 + 4 + PERIOD_CARD_H + 30);
-    curY = sectionTitle(doc, '6. Export Period Summary', curY);
+    curY = sectionTitle(doc, '9. Export Period Summary', curY);
     curY += 4;
     drawCard(doc, MARGIN, curY, CONTENT_W, PERIOD_CARD_H);
     const summaryItems = [

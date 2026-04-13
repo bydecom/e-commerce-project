@@ -119,6 +119,11 @@ export async function getDashboardSummary() {
     sentimentGroup,
     orderStatusGroup,
     recentDoneOrders,
+    ratingGroup,
+    doneOrders,
+    orderCountPerUser,
+    topProductsRaw,
+    categoryBreakdown,
   ] = await Promise.all([
     prisma.order.aggregate({ where: { status: 'DONE' }, _sum: { total: true } }),
     prisma.order.count(),
@@ -149,6 +154,27 @@ export async function getDashboardSummary() {
       where: { status: 'DONE', createdAt: { gte: sevenDaysAgo } },
       select: { total: true, createdAt: true },
     }),
+    prisma.feedback.groupBy({ by: ['rating'], _count: { _all: true } }),
+
+    prisma.order.findMany({ where: { status: 'DONE' }, select: { total: true } }),
+    prisma.order.groupBy({
+      by: ['userId'],
+      where: { status: 'DONE' },
+      _count: { id: true },
+    }),
+    prisma.orderItem.groupBy({
+      by: ['productId'],
+      _sum: { quantity: true },
+      orderBy: { _sum: { quantity: 'desc' } },
+      take: 5,
+    }),
+    prisma.category.findMany({
+      select: {
+        name: true,
+        _count: { select: { products: true } },
+      },
+      orderBy: { products: { _count: 'desc' } },
+    }),
   ]);
 
   const revenueByDate: Record<string, number> = {};
@@ -157,12 +183,36 @@ export async function getDashboardSummary() {
     revenueByDate[d] = (revenueByDate[d] || 0) + o.total;
   });
 
+  const avgOrderValue =
+    doneOrders.length > 0
+      ? Math.round(doneOrders.reduce((s, o) => s + o.total, 0) / doneOrders.length)
+      : 0;
+  const repeatCustomers = orderCountPerUser.filter((u) => u._count.id > 1).length;
+  const totalBuyers = orderCountPerUser.length;
+
+  const productIds = topProductsRaw.map((x) => x.productId);
+  const productsForTop =
+    productIds.length > 0
+      ? await prisma.product.findMany({
+          where: { id: { in: productIds } },
+          select: { id: true, name: true },
+        })
+      : [];
+  const nameById = new Map(productsForTop.map((p) => [p.id, p.name]));
+  const topProducts = topProductsRaw.map((item) => ({
+    name: nameById.get(item.productId) ?? 'Unknown',
+    qty: item._sum.quantity ?? 0,
+  }));
+
   return {
     keyMetrics: {
       totalRevenue: revenueResult._sum.total || 0,
       totalOrders,
       activeProducts,
       totalCustomers,
+      avgOrderValue,
+      repeatCustomers,
+      totalBuyers,
     },
     actionRequired: { pendingOrders, negativeFeedbacks, lowStockProducts },
     charts: {
@@ -171,8 +221,54 @@ export async function getDashboardSummary() {
         NEUTRAL: sentimentGroup.find((s) => s.sentiment === 'NEUTRAL')?._count._all || 0,
         NEGATIVE: sentimentGroup.find((s) => s.sentiment === 'NEGATIVE')?._count._all || 0,
       },
+      ratingDistribution: {
+        1: ratingGroup.find((r) => r.rating === 1)?._count._all || 0,
+        2: ratingGroup.find((r) => r.rating === 2)?._count._all || 0,
+        3: ratingGroup.find((r) => r.rating === 3)?._count._all || 0,
+        4: ratingGroup.find((r) => r.rating === 4)?._count._all || 0,
+        5: ratingGroup.find((r) => r.rating === 5)?._count._all || 0,
+      },
       orderStatus: orderStatusGroup.map((g) => ({ status: g.status, count: g._count._all })),
       revenueLast7Days: Object.entries(revenueByDate).map(([date, revenue]) => ({ date, revenue })),
+      topProducts,
+      categoryBreakdown: categoryBreakdown.map((c) => ({
+        name: c.name,
+        count: c._count.products,
+      })),
     },
+  };
+}
+
+export interface WeeklyStatsComparison {
+  thisWeek: { revenue: number; orders: number };
+  lastWeek: { revenue: number; orders: number };
+}
+
+/** 7 ngày gần nhất so với 7 ngày trước đó (đơn DONE cho doanh thu). */
+export async function getWeeklyStatsComparison(): Promise<WeeklyStatsComparison> {
+  const now = new Date();
+  const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+  const fourteenDaysAgo = new Date(now.getTime() - 14 * 24 * 60 * 60 * 1000);
+
+  const [thisWeekRev, thisWeekOrders, lastWeekRev, lastWeekOrders] = await Promise.all([
+    prisma.order.aggregate({
+      where: { status: 'DONE', createdAt: { gte: sevenDaysAgo, lte: now } },
+      _sum: { total: true },
+    }),
+    prisma.order.count({
+      where: { createdAt: { gte: sevenDaysAgo, lte: now } },
+    }),
+    prisma.order.aggregate({
+      where: { status: 'DONE', createdAt: { gte: fourteenDaysAgo, lt: sevenDaysAgo } },
+      _sum: { total: true },
+    }),
+    prisma.order.count({
+      where: { createdAt: { gte: fourteenDaysAgo, lt: sevenDaysAgo } },
+    }),
+  ]);
+
+  return {
+    thisWeek: { revenue: thisWeekRev._sum.total || 0, orders: thisWeekOrders },
+    lastWeek: { revenue: lastWeekRev._sum.total || 0, orders: lastWeekOrders },
   };
 }

@@ -1,6 +1,7 @@
 import type { NextFunction, Request, Response } from 'express';
 import { success } from '../../utils/response';
 import { httpError } from '../../utils/http-error';
+import { getOrCreateTodayMiniAdvice } from './daily-advice/mini-advice.service';
 import { enhanceProductDescription } from './product/product-description-enhancer';
 
 export async function postEnhanceProductDescription(
@@ -19,6 +20,24 @@ export async function postEnhanceProductDescription(
           : String(description).trim();
     const text = await enhanceProductDescription(name.trim(), current);
     res.json(success({ description: text }, 'Description generated'));
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function getMiniAdvice(
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> {
+  try {
+    const q = req.query['regenerate'];
+    const forceRegenerate =
+      q === '1' || q === 'true' || (Array.isArray(q) && (q[0] === '1' || q[0] === 'true'));
+    const bullets = await getOrCreateTodayMiniAdvice(forceRegenerate);
+    res.setHeader('Cache-Control', 'private, no-store, no-cache, must-revalidate');
+    res.setHeader('Pragma', 'no-cache');
+    res.json(success({ bullets }, 'Mini advice'));
   } catch (err) {
     next(err);
   }
