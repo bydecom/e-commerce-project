@@ -1,7 +1,6 @@
 import { HttpClient } from '@angular/common/http';
 import { NgClass } from '@angular/common';
 import { Component, OnInit, inject, signal } from '@angular/core';
-import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import { catchError, map, of, tap } from 'rxjs';
 import { environment } from '../../../environments/environment';
@@ -31,23 +30,17 @@ type CacheEntry = { data: CartPricingData; ts: number };
 @Component({
   selector: 'app-checkout',
   standalone: true,
-  imports: [RouterLink, FormsModule, NgClass, CurrencyVndPipe],
+  imports: [RouterLink, NgClass, CurrencyVndPipe],
   template: `
     <div class="relative isolate">
       <div class="pointer-events-none absolute inset-x-0 -top-16 -z-10 h-72 bg-gradient-to-b from-indigo-50 via-white to-transparent">
       </div>
 
       <div class="mx-auto w-full max-w-6xl px-4 py-8">
-        <div class="flex flex-col gap-6 md:flex-row md:items-start md:justify-between">
-          <div class="min-w-0">
-            <a routerLink="/cart" class="text-sm font-medium text-indigo-700 hover:underline">← Back to cart</a>
-            <h1 class="mt-2 text-2xl font-extrabold tracking-tight text-gray-900">Order verification</h1>
-            <p class="mt-1 text-sm text-gray-600">
-              Review your items, confirm delivery details, then continue to payment.
-            </p>
-          </div>
-
-          <div class="hidden md:block"></div>
+        <div class="min-w-0">
+          <a routerLink="/cart" class="text-sm font-medium text-indigo-700 hover:underline">← Back to cart</a>
+          <h1 class="mt-2 text-2xl font-extrabold tracking-tight text-gray-900">Order verification</h1>
+          <p class="mt-1 text-sm text-gray-600">Review your items, confirm delivery details, then continue to payment.</p>
         </div>
 
         @if (loading()) {
@@ -121,11 +114,10 @@ type CacheEntry = { data: CartPricingData; ts: number };
                     </div>
                     <div class="min-w-0 flex-1">
                       <h2 class="text-sm font-bold uppercase tracking-wide text-gray-900">Shipping address</h2>
-                        @if (user()?.address) {
-                          <p class="mt-2 text-sm text-gray-700">{{ user()?.address }}</p>
-                        } @else {
-                          <p class="mt-2 text-sm italic text-gray-500">No address found on profile.</p>
-                        }
+
+                      <label class="mt-2 block text-xs font-semibold text-gray-600">Address</label>
+                      <p class="mt-2 truncate text-sm font-medium text-gray-700">{{ shippingAddress || '—' }}</p>
+                      <p class="mt-1 text-xs text-gray-500">Update your address in profile if needed.</p>
                     </div>
                   </div>
                 </div>
@@ -219,9 +211,7 @@ type CacheEntry = { data: CartPricingData; ts: number };
                   Confirm & Pay
                 </button>
 
-                <p class="mt-2 text-xs text-gray-500">
-                  Payment will be connected to a sandbox later.
-                </p>
+                <p class="mt-2 text-xs text-gray-500">Payment will be connected to a sandbox later.</p>
               </div>
             </div>
           </div>
@@ -268,15 +258,32 @@ export class CheckoutComponent implements OnInit {
       return;
     }
     if (!this.shippingAddress.trim()) {
-      this.toast.show('Please enter your shipping address.', 'error');
+      this.toast.show('Please update your shipping address in your profile before paying.', 'error');
       return;
     }
 
     this.paying.set(true);
-    setTimeout(() => {
-      this.paying.set(false);
-      this.toast.show('Mock payment: sandbox integration will be added later.', 'success');
-    }, 650);
+    const returnUrl = `${window.location.origin}/checkout/result`;
+    this.http
+      .post<ApiSuccess<{ paymentUrl: string }>>(`${environment.apiUrl}/api/payments/vnpay/create`, {
+        shippingAddress: this.shippingAddress.trim(),
+        returnUrl,
+      })
+      .pipe(
+        map((r) => {
+          if (!r.success) throw new Error(r.message);
+          return r.data.paymentUrl;
+        }),
+        tap((paymentUrl) => {
+          window.location.href = paymentUrl;
+        }),
+        catchError((e: Error) => {
+          this.toast.show(e.message ?? 'Failed to start payment', 'error');
+          this.paying.set(false);
+          return of(null);
+        })
+      )
+      .subscribe();
   }
 
   private load(): void {

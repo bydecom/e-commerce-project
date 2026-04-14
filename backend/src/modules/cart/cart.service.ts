@@ -162,6 +162,13 @@ export async function removeItem(input: { userId: number; productId: number }): 
   return { removed: removedCount > 0 };
 }
 
+export async function clearCart(userId: number): Promise<void> {
+  if (!Number.isFinite(userId) || userId <= 0) throw httpError(400, 'Invalid user');
+  await ensureRedisConnected();
+  const redis = redisClient();
+  await redis.del(cartKey(userId));
+}
+
 export async function getCartWithPricing(userId: number): Promise<{ items: CartPricedItem[]; total: number }> {
   const items = await getCart(userId);
   if (items.length === 0) return { items: [], total: 0 };

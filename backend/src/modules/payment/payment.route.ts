@@ -1,8 +1,9 @@
 import { Router } from 'express';
 import { authMiddleware } from '../../middlewares/auth.middleware';
-import * as paymentController from './stripe.controller';
+import * as vnpayController from './vnpay.controller';
 
 export const paymentRouter = Router();
 
-paymentRouter.post('/stripe/payment-intent', authMiddleware, paymentController.createStripePaymentIntent);
+paymentRouter.post('/vnpay/create', authMiddleware, vnpayController.createPayment);
+paymentRouter.get('/vnpay/verify', vnpayController.verifyReturn);
 
