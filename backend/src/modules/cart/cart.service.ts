@@ -32,6 +32,8 @@ function parseQty(raw: unknown): number {
   return Number.isFinite(n) ? n : NaN;
 }
 
+type CartWriteMode = 'inc' | 'set';
+
 function safeParseStored(raw: string): StoredCartItem | null {
   try {
     const v = JSON.parse(raw) as Partial<StoredCartItem>;
@@ -63,11 +65,22 @@ async function withWatchRetry<T>(fn: () => Promise<T>): Promise<T> {
   throw httpError(409, 'Cart was updated concurrently. Please retry.');
 }
 
-export async function addOrIncrementItem(input: {
+async function getSellableStock(productId: number): Promise<number> {
+  const p = await prisma.product.findUnique({
+    where: { id: productId },
+    select: { stock: true, status: true },
+  });
+  if (!p) throw httpError(404, 'Product not found');
+  if (p.status !== 'AVAILABLE') throw httpError(409, 'Product is not available');
+  return p.stock;
+}
+
+export async function upsertItemWithStock(input: {
   userId: number;
   productId: number;
   quantity: number;
   name: string;
+  mode: CartWriteMode;
 }): Promise<CartItem> {
   const userId = input.userId;
   const productId = parseProductId(input.productId);
@@ -76,8 +89,9 @@ export async function addOrIncrementItem(input: {
 
   if (!Number.isFinite(userId) || userId <= 0) throw httpError(400, 'Invalid user');
   if (!Number.isFinite(productId) || productId <= 0) throw httpError(400, 'Invalid productId');
-  if (!Number.isFinite(quantity) || quantity <= 0) throw httpError(400, 'quantity must be a positive integer');
+  if (!Number.isFinite(quantity) || quantity < 0) throw httpError(400, 'quantity must be a non-negative integer');
   if (!name) throw httpError(400, 'name is required');
+  if (input.mode !== 'inc' && input.mode !== 'set') throw httpError(400, 'Invalid mode');
 
   await ensureRedisConnected();
   const redis = redisClient();
@@ -88,17 +102,30 @@ export async function addOrIncrementItem(input: {
     await redis.watch(key);
     const existingRaw = await redis.hGet(key, field);
     const existing = existingRaw ? safeParseStored(existingRaw) : null;
-    const nextQty = (existing?.quantity ?? 0) + quantity;
+    const desiredQty = input.mode === 'set' ? quantity : (existing?.quantity ?? 0) + quantity;
     const nextName = name || existing?.name || '';
 
+    const stock = await getSellableStock(productId);
+    if (desiredQty > stock) {
+      throw httpError(422, 'Insufficient stock', {
+        productId,
+        availableStock: stock,
+        requestedQuantity: desiredQty,
+      });
+    }
+
     const tx = redis.multi();
-    tx.hSet(key, field, JSON.stringify({ quantity: nextQty, name: nextName }));
+    if (desiredQty <= 0) {
+      tx.hDel(key, field);
+    } else {
+      tx.hSet(key, field, JSON.stringify({ quantity: desiredQty, name: nextName }));
+    }
     const res = await tx.exec();
     if (res === null) {
       // Transaction aborted due to WATCH change.
       throw new Error('WATCH conflict');
     }
-    return { productId, quantity: nextQty, name: nextName };
+    return { productId, quantity: desiredQty, name: nextName };
   });
 }
 

@@ -24,12 +24,15 @@ export async function putCartItem(req: Request, res: Response, next: NextFunctio
     const b = req.body as Record<string, unknown>;
     const quantity = typeof b.quantity === 'number' ? b.quantity : parseInt(String(b.quantity ?? ''), 10);
     const name = typeof b.name === 'string' ? b.name : '';
+    const modeRaw = typeof b.mode === 'string' ? b.mode : 'inc';
+    const mode = modeRaw === 'set' ? 'set' : 'inc';
 
-    const item = await cartService.addOrIncrementItem({
+    const item = await cartService.upsertItemWithStock({
       userId: auth.userId,
       productId,
       quantity,
       name,
+      mode,
     });
 
     res.status(200).json(success(item, 'OK'));

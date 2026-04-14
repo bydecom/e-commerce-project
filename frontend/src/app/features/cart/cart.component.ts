@@ -1,7 +1,7 @@
 import { Component, OnDestroy, OnInit, inject, signal } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { RouterLink } from '@angular/router';
-import { Subject, Subscription, catchError, concatMap, debounceTime, map, of, switchMap, tap } from 'rxjs';
+import { Subject, Subscription, catchError, debounceTime, map, of, switchMap, tap } from 'rxjs';
 import { CurrencyVndPipe } from '../../shared/pipes/currency-vnd.pipe';
 import { environment } from '../../../environments/environment';
 import type { ApiSuccess } from '../../shared/models/api-response.model';
@@ -53,34 +53,42 @@ type CartPricingData = {
               </div>
 
               <div class="flex items-center justify-between gap-3 sm:justify-end">
-                <div
-                  class="inline-flex overflow-hidden rounded-lg border border-gray-300 bg-white shadow-sm"
-                  role="group"
-                  [attr.aria-label]="'Quantity for ' + line.name"
-                >
-                  <button
-                    type="button"
-                    class="min-w-[2.75rem] px-3 py-2 text-lg font-semibold leading-none text-gray-800 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40"
-                    (click)="adjustLineQuantity(line, -1)"
-                    [disabled]="line.quantity <= 1"
-                    aria-label="Decrease quantity"
+                <div class="flex flex-col items-end gap-1">
+                  <div
+                    class="inline-flex overflow-hidden rounded-lg border border-gray-300 bg-white shadow-sm"
+                    role="group"
+                    [attr.aria-label]="'Quantity for ' + line.name"
                   >
-                    −
-                  </button>
-                  <span
-                    class="flex min-w-[2.75rem] items-center justify-center border-x border-gray-300 px-3 py-2 text-base font-semibold tabular-nums text-gray-900"
-                    aria-live="polite"
-                  >
-                    {{ line.quantity }}
-                  </span>
-                  <button
-                    type="button"
-                    class="min-w-[2.75rem] px-3 py-2 text-lg font-semibold leading-none text-gray-800 transition hover:bg-gray-50"
-                    (click)="adjustLineQuantity(line, 1)"
-                    aria-label="Increase quantity"
-                  >
-                    +
-                  </button>
+                    <button
+                      type="button"
+                      class="min-w-[2.75rem] px-3 py-2 text-lg font-semibold leading-none text-gray-800 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40"
+                      (click)="adjustLineQuantity(line, -1)"
+                      [disabled]="line.quantity <= 1"
+                      aria-label="Decrease quantity"
+                    >
+                      −
+                    </button>
+                    <span
+                      class="flex min-w-[2.75rem] items-center justify-center border-x border-gray-300 px-3 py-2 text-base font-semibold tabular-nums text-gray-900"
+                      aria-live="polite"
+                    >
+                      {{ line.quantity }}
+                    </span>
+                    <button
+                      type="button"
+                      class="min-w-[2.75rem] px-3 py-2 text-lg font-semibold leading-none text-gray-800 transition hover:bg-gray-50"
+                      (click)="adjustLineQuantity(line, 1)"
+                      aria-label="Increase quantity"
+                    >
+                      +
+                    </button>
+                  </div>
+
+                  @if (lineErrors()[line.productId]) {
+                    <p class="text-xs font-medium text-amber-700">
+                      {{ lineErrors()[line.productId] }}
+                    </p>
+                  }
                 </div>
 
                 <div class="w-28 text-right font-semibold text-gray-900">
@@ -118,6 +126,7 @@ export class CartComponent implements OnInit, OnDestroy {
 
   readonly loading = signal(true);
   readonly error = signal<string | null>(null);
+  readonly lineErrors = signal<Record<number, string | undefined>>({});
   readonly items = signal<CartLinePriced[]>([]);
   readonly total = signal(0);
 
@@ -135,8 +144,29 @@ export class CartComponent implements OnInit, OnDestroy {
             this.syncQuantity(c).pipe(
               switchMap(() => this.fetchPricing$()),
               tap((data) => this.applyPricing(data)),
-              catchError((e: Error) => {
-                this.error.set(e.message ?? 'Failed to update cart');
+              catchError((e: unknown) => {
+                const anyErr = e as any;
+                const status = typeof anyErr?.status === 'number' ? anyErr.status : undefined;
+                const apiMessage =
+                  typeof anyErr?.error?.message === 'string' ? anyErr.error.message : undefined;
+                const availableStock =
+                  typeof anyErr?.error?.errors?.availableStock === 'number'
+                    ? anyErr.error.errors.availableStock
+                    : undefined;
+
+                if (status === 422 && typeof availableStock === 'number') {
+                  // Per-line error so multiple items don't overwrite each other.
+                  const msg = `Bạn chỉ có thể đặt tối đa ${availableStock} sản phẩm.`;
+                  this.lineErrors.set({ ...this.lineErrors(), [c.productId]: msg });
+                  return of(null);
+                }
+
+                const msg = apiMessage ?? anyErr?.message ?? 'Failed to update cart';
+                this.error.set(msg);
+                // Variant A (Reject): keep the user's chosen quantity in UI so they can adjust it.
+                // Do NOT reload pricing here, otherwise the UI "auto decrements" back to server state.
+                // For other errors, best-effort reload to resync.
+                this.loadPricing();
                 return of(null);
               })
             )
@@ -152,6 +182,11 @@ export class CartComponent implements OnInit, OnDestroy {
 
   adjustLineQuantity(line: CartLinePriced, delta: number): void {
     const quantity = Math.max(0, line.quantity + delta);
+
+    // Clear per-line error when user is adjusting.
+    const nextLineErrors = { ...this.lineErrors() };
+    delete nextLineErrors[line.productId];
+    this.lineErrors.set(nextLineErrors);
 
     // Update UI immediately; server will be synced + re-priced after debounce.
     this.items.set(
@@ -213,16 +248,17 @@ export class CartComponent implements OnInit, OnDestroy {
   }
 
   private syncQuantity(input: { productId: number; name: string; quantity: number }) {
-    // Backend API currently supports "increment". To support arbitrary quantity edits,
-    // we implement "set quantity" by delete-then-add (best-effort, user-scoped key).
-    const del$ = this.http.delete<ApiSuccess<{ removed: boolean }>>(
-      `${environment.apiUrl}/api/cart/items/${input.productId}`
-    );
+    if (input.quantity <= 0) {
+      return this.http
+        .delete<ApiSuccess<{ removed: boolean }>>(`${environment.apiUrl}/api/cart/items/${input.productId}`)
+        .pipe(map(() => undefined));
+    }
+
     const put$ = this.http.put<ApiSuccess<CartLinePriced>>(
       `${environment.apiUrl}/api/cart/items/${input.productId}`,
-      { quantity: input.quantity, name: input.name }
+      { quantity: input.quantity, name: input.name, mode: 'set' }
     );
-    return del$.pipe(concatMap(() => put$), map(() => undefined));
+    return put$.pipe(map(() => undefined));
   }
 
   private applyPricing(data: CartPricingData | null): void {
