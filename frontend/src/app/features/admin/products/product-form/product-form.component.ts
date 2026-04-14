@@ -212,9 +212,10 @@ import type { ProductStatus } from '../../../../shared/models/product.model';
                     Stock Quantity <span class="text-red-500">*</span>
                   </label>
                   <input
-                    type="text"
-                    inputmode="numeric"
-                    [value]="stockDisplay"
+                    type="number"
+                    min="0"
+                    step="1"
+                    [value]="stockFocused && form.controls.stock.value === 0 ? '' : form.controls.stock.value"
                     (input)="onStockInput($any($event.target).value)"
                     (focus)="onStockFocus()"
                     (blur)="onStockBlur()"
@@ -279,7 +280,7 @@ export class AdminProductFormComponent implements OnInit {
   private readonly aiUrl = `${environment.apiUrl}/api/ai/enhance-product-description`;
 
   readonly isNew = signal(true);
-  readonly loading = signal(false);
+  readonly loading = signal(false); 
   readonly loadError = signal<string | null>(null);
   readonly saving = signal(false);
   readonly enhancingDescription = signal(false);
@@ -289,11 +290,8 @@ export class AdminProductFormComponent implements OnInit {
 
   /** Giá hiển thị dạng 1,000,000 (nhưng form lưu number). */
   priceDisplay = '';
-  /** Stock hiển thị (form lưu number). */
-  stockDisplay = '';
-
   private priceFocused = false;
-  private stockFocused = false;
+  stockFocused = false;
 
   readonly form = this.fb.nonNullable.group({
     name: ['', [Validators.required]],
@@ -324,7 +322,7 @@ export class AdminProductFormComponent implements OnInit {
 
     // Khởi tạo hiển thị theo form value (chưa focus thì luôn show 0)
     this.priceDisplay = this.formatVnd(this.form.controls.price.value);
-    this.stockDisplay = this.formatInt(this.form.controls.stock.value);
+    // stock hiển thị trực tiếp qua [value], không format
 
     if (!this.isNew() && this.productId !== null) {
       this.loading.set(true);
@@ -340,7 +338,6 @@ export class AdminProductFormComponent implements OnInit {
             status: p.status,
           });
           this.priceDisplay = this.formatVnd(p.price);
-          this.stockDisplay = this.formatInt(p.stock);
           this.loading.set(false);
         },
         error: (e: Error) => {
@@ -357,24 +354,45 @@ export class AdminProductFormComponent implements OnInit {
   }
 
   onPriceInput(raw: string): void {
-    // Giá: cho phép user nhập dấu "," (ngăn cách hàng nghìn) và dấu "." (thập phân).
-    // Nếu có ".", coi là số thập phân => KHÔNG auto-format thêm dấu "," để tránh đổi ý người dùng.
-    const hasDot = raw.includes('.');
-    if (hasDot) {
-      // giữ digits và 1 dấu "."
-      const cleaned = raw
-        .replace(/,/g, '')
-        .replace(/[^\d.]/g, '')
-        .replace(/(\..*)\./g, '$1'); // chỉ cho 1 dấu .
+    const input = (raw ?? '').trim();
+    const dotCount = (input.match(/\./g) ?? []).length;
+    const hasComma = input.includes(',');
 
-      const n = cleaned === '' || cleaned === '.' ? 0 : Number(cleaned);
-      this.form.controls.price.setValue(Number.isFinite(n) && n >= 0 ? n : 0, { emitEvent: false });
-      this.priceDisplay = cleaned;
+    // Rule: 2+ dấu "." hoặc trộn "." với "," => invalid, clear ngay
+    if (dotCount >= 2 || (dotCount === 1 && hasComma)) {
+      this.form.controls.price.setValue(0, { emitEvent: false });
+      this.priceDisplay = '';
       return;
     }
 
-    // Không có "." => coi là số nguyên VND, auto-format dấu "," ngay khi gõ
-    const digits = raw.replace(/[^\d]/g, '');
+    // Rule: có đúng 1 dấu "." => format phần integer bằng ",", giữ phần decimal nguyên
+    if (dotCount === 1) {
+      // strict: chỉ cho digits và đúng 1 dấu "."
+      if (!/^\d*\.\d*$/.test(input)) {
+        this.form.controls.price.setValue(0, { emitEvent: false });
+        this.priceDisplay = '';
+        return;
+      }
+
+      const [intPartRaw, decPart] = input.split('.');
+      const intDigits = intPartRaw === '' ? '0' : String(Number(intPartRaw)); // normalize leading zeros
+      const intFormatted = this.formatVnd(Number(intDigits));
+      const display = `${intFormatted}.${decPart}`;
+
+      const n = Number(`${intDigits}.${decPart}`);
+      this.form.controls.price.setValue(Number.isFinite(n) && n >= 0 ? n : 0, { emitEvent: false });
+      this.priceDisplay = display;
+      return;
+    }
+
+    // Rule: không có "." => format bình thường với ","
+    if (input !== '' && !/^[\d,]*$/.test(input)) {
+      this.form.controls.price.setValue(0, { emitEvent: false });
+      this.priceDisplay = '';
+      return;
+    }
+
+    const digits = input.replace(/,/g, '');
     const n = digits ? Number(digits) : 0;
     this.form.controls.price.setValue(Number.isFinite(n) && n >= 0 ? n : 0, { emitEvent: false });
     this.priceDisplay = digits ? this.formatVnd(n) : '';
@@ -401,7 +419,6 @@ export class AdminProductFormComponent implements OnInit {
 
   onStockFocus(): void {
     this.stockFocused = true;
-    if ((this.form.controls.stock.value ?? 0) === 0) this.stockDisplay = '';
   }
 
   onStockInput(raw: string): void {
@@ -410,21 +427,12 @@ export class AdminProductFormComponent implements OnInit {
     const n = digits ? Number(digits) : 0;
     const safe = Number.isFinite(n) ? Math.max(0, Math.floor(n)) : 0;
     this.form.controls.stock.setValue(safe, { emitEvent: false });
-    // Stock: KHÔNG format dấu ",".
-    this.stockDisplay = digits ? String(safe) : '';
   }
 
   onStockBlur(): void {
     this.stockFocused = false;
     const safe = Math.max(0, Math.floor(Number(this.form.controls.stock.value) || 0));
     this.form.controls.stock.setValue(safe, { emitEvent: false });
-    this.stockDisplay = this.formatInt(safe);
-  }
-
-  private formatInt(value: number): string {
-    const n = Number(value);
-    const safe = Number.isFinite(n) && n > 0 ? Math.floor(n) : 0;
-    return String(safe);
   }
 
   enhanceDescription(): void {

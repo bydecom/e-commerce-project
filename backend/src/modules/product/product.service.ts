@@ -302,7 +302,8 @@ export async function searchSmartHybrid(keyword: string, limit = 5): Promise<Sma
 
   const qUnaccent = toTitleUnaccent(q);
   const candidateSize = Math.max(limit * 10, 50);
-
+  const MIN_SCORE_THRESHOLD = 0.7;
+  const K = 50;
   // 1) PREFIX (ưu tiên cao nhất)
   const prefixPromise = prisma.product.findMany({
     where: {
@@ -346,23 +347,25 @@ export async function searchSmartHybrid(keyword: string, limit = 5): Promise<Sma
     vectorPromise,
   ]);
 
-  // Distinct + giữ thứ tự ưu tiên: prefix -> trigram -> vector
-  const orderedIds: number[] = [];
-  const seen = new Set<number>();
-  const pushAll = (items: { id: number }[]) => {
-    for (const it of items) {
-      if (!seen.has(it.id)) {
-        seen.add(it.id);
-        orderedIds.push(it.id);
-      }
-    }
+  const filteredVectorResults = vectorResults.filter((v) => v.score >= MIN_SCORE_THRESHOLD);
+
+  // RRF: trộn điểm theo thứ hạng của từng nguồn (prefix/trigram/vector)
+  const rrfScores = new Map<number, number>();
+  const addRankScores = (items: { id: number }[]) => {
+    items.forEach((item, index) => {
+      const current = rrfScores.get(item.id) || 0;
+      rrfScores.set(item.id, current + 1 / (K + index + 1));
+    });
   };
 
-  pushAll(prefixResults);
-  pushAll(trigramResults);
-  pushAll(vectorResults);
+  addRankScores(prefixResults);
+  addRankScores(trigramResults);
+  addRankScores(filteredVectorResults);
 
-  const topIds = orderedIds.slice(0, limit);
+  const topIds = [...rrfScores.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, limit)
+    .map(([id]) => id);
   if (!topIds.length) return [];
 
   const rows = await prisma.product.findMany({

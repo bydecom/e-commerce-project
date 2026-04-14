@@ -93,7 +93,7 @@ export async function deleteProductVector(productId: number): Promise<void> {
  * Tìm kiếm vector trong Qdrant theo keyword.
  * Trả về [] nếu Qdrant chưa chạy, collection chưa tồn tại, hoặc Gemini chưa cấu hình.
  */
-export async function searchVectors(keyword: string, limit: number): Promise<{ id: number }[]> {
+export async function searchVectors(keyword: string, limit: number): Promise<{ id: number; score: number }[]> {
   try {
     const vector = await generateEmbedding(keyword, 'RETRIEVAL_QUERY');
     if (!vector.length) return [];
@@ -102,12 +102,13 @@ export async function searchVectors(keyword: string, limit: number): Promise<{ i
     const results = await qdrant.search(COLLECTION_NAME, {
       vector,
       limit,
+      score_threshold: 0.65,
       with_payload: false,
     });
 
     return results
       .filter((r) => typeof r.id === 'number')
-      .map((r) => ({ id: r.id as number }));
+      .map((r) => ({ id: r.id as number, score: r.score }));
   } catch {
     return [];
   }
