@@ -41,3 +41,36 @@ export async function updateRole(req: Request, res: Response, next: NextFunction
     next(err);
   }
 }
+
+export async function getMe(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const auth = req.auth;
+    if (!auth) {
+      res.status(401).json({ success: false, message: 'Unauthorized', errors: null });
+      return;
+    }
+    const me = await userService.getMe(auth.userId);
+    res.json(success(me));
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function updateMe(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const auth = req.auth;
+    if (!auth) {
+      res.status(401).json({ success: false, message: 'Unauthorized', errors: null });
+      return;
+    }
+    const body = req.body as Record<string, unknown>;
+    const updated = await userService.updateMe(auth.userId, {
+      name: typeof body['name'] === 'string' ? body['name'] : null,
+      phone: typeof body['phone'] === 'string' ? body['phone'] : null,
+      address: typeof body['address'] === 'string' ? body['address'] : null,
+    });
+    res.json(success(updated, 'Updated'));
+  } catch (err) {
+    next(err);
+  }
+}

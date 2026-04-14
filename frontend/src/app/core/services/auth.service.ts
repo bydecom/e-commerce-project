@@ -89,6 +89,21 @@ export class AuthService {
     this.persistSession(token, user);
   }
 
+  /** Cập nhật snapshot user sau khi chỉnh profile. */
+  updateCurrentUser(next: User): void {
+    if (!isPlatformBrowser(this.platformId)) {
+      this.userSignal.set(next);
+      return;
+    }
+    const token = localStorage.getItem(TOKEN_KEY);
+    if (!token) {
+      this.userSignal.set(next);
+      return;
+    }
+    localStorage.setItem(USER_KEY, JSON.stringify(next));
+    this.userSignal.set(next);
+  }
+
   /**
    * Calls `POST /api/auth/logout` to blacklist the JWT server-side, then clears client session.
    * If there is no token (or outside browser), only clears local state.

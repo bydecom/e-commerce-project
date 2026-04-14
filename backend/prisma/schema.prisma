@@ -71,6 +71,7 @@ model Product {
   feedbacks      Feedback[]
 
   @@index([title_unaccent], name: "product_title_btree_idx")
+  @@index([status, title_unaccent], name: "product_status_title_btree_idx")
   @@index([title_unaccent(ops: raw("gin_trgm_ops"))], type: Gin, name: "product_title_gin_idx")
 }
 
@@ -113,7 +114,7 @@ model Feedback {
   product     Product         @relation(fields: [productId], references: [id])
   order       Order           @relation(fields: [orderId], references: [id])
   type        FeedbackType    @relation(fields: [typeId], references: [id])
-  @@unique([orderId, productId]) 
+  @@unique([orderId, productId, userId]) 
 }
 
 model FeedbackType {

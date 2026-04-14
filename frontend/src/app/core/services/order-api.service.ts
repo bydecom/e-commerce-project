@@ -58,6 +58,17 @@ export class OrderApiService {
     );
   }
 
+  /** GET /orders/me — alias cho UI Order History (JWT bắt buộc). */
+  getMyOrders(): Observable<OrderDetail[]> {
+    return this.http.get<ApiSuccess<OrderDetail[]>>(`${this.baseUrl}/me`).pipe(
+      map((r) => {
+        if (!r.success) throw new Error(r.message);
+        return r.data;
+      }),
+      catchError(mapHttpError)
+    );
+  }
+
   getMine(orderId: number): Observable<OrderDetail> {
     return this.http.get<ApiSuccess<OrderDetail>>(`${this.baseUrl}/me/${orderId}`).pipe(
       map((r) => {

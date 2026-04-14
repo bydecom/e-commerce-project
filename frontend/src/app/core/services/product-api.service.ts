@@ -3,6 +3,7 @@ import { Injectable, inject } from '@angular/core';
 import { catchError, map, throwError, type Observable } from 'rxjs';
 import { environment } from '../../../environments/environment';
 import type { ApiSuccess, PaginationMeta } from '../../shared/models/api-response.model';
+import type { Feedback } from '../../shared/models/feedback.model';
 import type { Product, ProductStatus } from '../../shared/models/product.model';
 
 export interface CategoryDto {
@@ -225,6 +226,21 @@ export class ProductApiService {
         }),
         catchError(mapHttpError)
       );
+  }
+
+  createFeedback(body: {
+    orderId: number;
+    productId: number;
+    rating: number;
+    comment?: string;
+  }): Observable<Feedback> {
+    return this.http.post<ApiSuccess<Feedback>>(this.feedbackUrl, body).pipe(
+      map((r) => {
+        if (!r.success) throw new Error(r.message);
+        return r.data;
+      }),
+      catchError(mapHttpError)
+    );
   }
 
   create(body: {
