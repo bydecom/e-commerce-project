@@ -9,7 +9,7 @@ import { parsePagination } from '../../utils/pagination';
 import { httpError } from '../../utils/http-error';
 
 const orderItemInclude = {
-  product: { select: { id: true, name: true } },
+  product: { select: { id: true, name: true, imageUrl: true } },
 } as const;
 
 const orderListInclude = {
@@ -17,21 +17,28 @@ const orderListInclude = {
   user: { select: { id: true, email: true, name: true } },
 } as const;
 
-function mapItem(row: {
+function mapItem(
+  row: {
   productId: number;
   quantity: number;
   unitPrice: number;
-  product: { id: number; name: string };
-}) {
+  product: { id: number; name: string; imageUrl: string | null };
+},
+  reviewedSet: Set<string>
+) {
+  const key = `${row.productId}`;
   return {
     productId: row.productId,
     name: row.product.name,
     quantity: row.quantity,
     unitPrice: row.unitPrice,
+    imageUrl: row.product.imageUrl,
+    isReviewed: reviewedSet.has(key),
   };
 }
 
-function mapOrderFull(order: {
+function mapOrderFull(
+  order: {
   id: number;
   userId: number;
   status: OrderStatus;
@@ -43,17 +50,20 @@ function mapOrderFull(order: {
     productId: number;
     quantity: number;
     unitPrice: number;
-    product: { id: number; name: string };
+    product: { id: number; name: string; imageUrl: string | null };
   }>;
   user: { id: number; email: string; name: string | null };
-}) {
+},
+  reviewedProductIds: Set<number>
+) {
+  const reviewedSet = new Set([...reviewedProductIds].map((id) => `${id}`));
   return {
     id: order.id,
     userId: order.userId,
     status: order.status,
     total: order.total,
     shippingAddress: order.shippingAddress,
-    items: order.items.map(mapItem),
+    items: order.items.map((it) => mapItem(it, reviewedSet)),
     createdAt: order.createdAt.toISOString(),
     updatedAt: order.updatedAt.toISOString(),
     user: {
@@ -62,6 +72,26 @@ function mapOrderFull(order: {
       name: order.user.name,
     },
   };
+}
+
+async function getReviewedProductIdsForOrder(userId: number, orderId: number): Promise<Set<number>> {
+  const rows = await prisma.feedback.findMany({
+    where: { userId, orderId },
+    select: { productId: true },
+  });
+  return new Set(rows.map((r) => r.productId));
+}
+
+async function getReviewedPairsForOrders(
+  userId: number,
+  orderIds: number[]
+): Promise<Set<string>> {
+  if (orderIds.length === 0) return new Set();
+  const rows = await prisma.feedback.findMany({
+    where: { userId, orderId: { in: orderIds } },
+    select: { orderId: true, productId: true },
+  });
+  return new Set(rows.map((r) => `${r.orderId}:${r.productId}`));
 }
 
 function mergeItems(
@@ -139,7 +169,8 @@ export async function createOrder(body: {
       });
     }
 
-    return mapOrderFull(order);
+    // New orders are not reviewed yet.
+    return mapOrderFull(order, new Set());
   });
 }
 
@@ -175,8 +206,21 @@ export async function listUserOrders(
     }),
   ]);
 
+  const reviewedPairs = await getReviewedPairsForOrders(
+    userId,
+    rows.map((o) => o.id)
+  );
+
   return {
-    data: rows.map((o) => mapOrderFull(o)),
+    data: rows.map((o) => {
+      const reviewedProductIds = new Set<number>();
+      for (const it of o.items) {
+        if (reviewedPairs.has(`${o.id}:${it.productId}`)) {
+          reviewedProductIds.add(it.productId);
+        }
+      }
+      return mapOrderFull(o, reviewedProductIds);
+    }),
     meta: {
       page,
       limit,
@@ -192,7 +236,8 @@ export async function getUserOrder(userId: number, orderId: number) {
     include: orderListInclude,
   });
   if (!order) throw httpError(404, 'Order not found');
-  return mapOrderFull(order);
+  const reviewedProductIds = await getReviewedProductIdsForOrder(userId, orderId);
+  return mapOrderFull(order, reviewedProductIds);
 }
 
 async function restoreStockForOrder(tx: DbTx, orderId: number) {
@@ -218,7 +263,8 @@ export async function cancelUserOrder(userId: number, orderId: number) {
       data: { status: 'CANCELLED' },
       include: orderListInclude,
     });
-    return mapOrderFull(updated);
+    const reviewedProductIds = await getReviewedProductIdsForOrder(userId, orderId);
+    return mapOrderFull(updated, reviewedProductIds);
   });
 }
 
@@ -283,7 +329,8 @@ export async function getAdminOrder(orderId: number) {
     include: orderListInclude,
   });
   if (!order) throw httpError(404, 'Order not found');
-  return mapOrderFull(order);
+  // Admin view: no userId context => do not mark reviewed.
+  return mapOrderFull(order, new Set());
 }
 
 const allowedNext: Record<OrderStatus, OrderStatus[]> = {
@@ -313,6 +360,7 @@ export async function updateOrderStatus(orderId: number, nextStatus: OrderStatus
       data: { status: nextStatus },
       include: orderListInclude,
     });
-    return mapOrderFull(updated);
+    // Admin update: no userId context => do not mark reviewed.
+    return mapOrderFull(updated, new Set());
   });
 }

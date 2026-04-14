@@ -10,3 +10,6 @@ userRouter.patch('/me', authMiddleware, userController.updateMe);
 
 userRouter.get('/', authMiddleware, requireRole(['ADMIN']), userController.listUsers);
 userRouter.patch('/:id/role', authMiddleware, requireRole(['ADMIN']), userController.updateRole);
+
+userRouter.get('/me', authMiddleware, requireRole(['USER', 'ADMIN']), userController.getMe);
+userRouter.put('/me', authMiddleware, requireRole(['USER', 'ADMIN']), userController.updateMe);

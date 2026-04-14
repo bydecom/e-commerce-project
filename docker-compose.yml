@@ -63,6 +63,22 @@ services:
       - portainer_data:/data
     restart: unless-stopped
 
+  rabbitmq:
+    image: rabbitmq:3-management-alpine
+    container_name: ecommerce_rabbitmq
+    environment:
+      RABBITMQ_DEFAULT_USER: admin
+      RABBITMQ_DEFAULT_PASS: secret123
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
   qdrant:
     image: qdrant/qdrant:latest
     container_name: ecommerce_qdrant
@@ -77,4 +93,5 @@ volumes:
   postgres_data:
   redis_data:
   portainer_data:
+  rabbitmq_data:
   qdrant_data:

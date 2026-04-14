@@ -12,6 +12,16 @@ const userListSelect = {
   createdAt: true,
 } as const;
 
+const userMeSelect = {
+  id: true,
+  email: true,
+  name: true,
+  phone: true,
+  address: true,
+  role: true,
+  createdAt: true,
+} as const;
+
 export async function listUsers(params: { page: number; limit: number; search?: string }) {
   const page = Math.max(1, params.page);
   const limit = Math.min(100, Math.max(1, params.limit));
@@ -78,33 +88,37 @@ export async function getMe(userId: number) {
   if (!Number.isFinite(id) || id < 1) {
     throw httpError(401, 'Unauthorized');
   }
-  const me = await prisma.user.findUnique({ where: { id }, select: userListSelect });
-  if (!me) {
+  const user = await prisma.user.findUnique({
+    where: { id },
+    select: userMeSelect,
+  });
+  if (!user) {
     throw httpError(404, 'User not found');
   }
-  return me;
+  return user;
 }
 
 export async function updateMe(
   userId: number,
-  data: { name: string | null; phone: string | null; address: string | null }
+  patch: { name?: string | null; phone?: string | null; address?: string | null }
 ) {
   const id = Math.floor(Number(userId));
   if (!Number.isFinite(id) || id < 1) {
     throw httpError(401, 'Unauthorized');
   }
 
-  const name = (data.name ?? '').trim();
-  const phone = (data.phone ?? '').trim();
-  const address = (data.address ?? '').trim();
+  const existing = await prisma.user.findUnique({ where: { id }, select: { id: true } });
+  if (!existing) {
+    throw httpError(404, 'User not found');
+  }
 
   return prisma.user.update({
     where: { id },
     data: {
-      name: name.length > 0 ? name : null,
-      phone: phone.length > 0 ? phone : null,
-      address: address.length > 0 ? address : null,
+      ...(patch.name !== undefined ? { name: patch.name } : {}),
+      ...(patch.phone !== undefined ? { phone: patch.phone } : {}),
+      ...(patch.address !== undefined ? { address: patch.address } : {}),
     },
-    select: userListSelect,
+    select: userMeSelect,
   });
 }
