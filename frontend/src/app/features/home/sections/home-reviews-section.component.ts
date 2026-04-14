@@ -43,13 +43,13 @@ type ReviewItem = LandingPageData['recentFeedbacks'][number];
 
             <div class="mt-6 flex items-end justify-between gap-3 border-t border-gray-50 pt-4">
               <div class="min-w-0">
-                <p class="truncate font-bold text-gray-900">{{ fb.user?.name || 'Anonymous Buyer' }}</p>
+                <p class="truncate font-bold text-gray-900">{{ fb.user.name || 'Anonymous Buyer' }}</p>
                 <p class="mt-0.5 truncate text-[11px] font-medium uppercase tracking-wider text-gray-400">
-                  Reviewed: <span class="text-indigo-600">{{ fb.product?.name }}</span>
+                  Reviewed: <span class="text-indigo-600">{{ fb.product.name }}</span>
                 </p>
               </div>
               <a
-                [routerLink]="['/products', fb.product?.id]"
+                [routerLink]="['/products', fb.product.id]"
                 class="group flex shrink-0 items-center gap-1 text-xs font-semibold text-indigo-600 hover:text-indigo-800"
               >
                 View

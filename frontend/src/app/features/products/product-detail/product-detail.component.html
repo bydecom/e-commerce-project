@@ -285,11 +285,11 @@
                     <div
                       class="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-indigo-100 text-lg font-bold text-indigo-600 uppercase"
                     >
-                      {{ (f.user?.name || 'K')[0] }}
+                      {{ (f.user.name || 'K')[0] }}
                     </div>
 
                     <div class="flex flex-col">
-                      <p class="text-base font-bold text-gray-900">{{ f.user?.name || 'Customer' }}</p>
+                      <p class="text-base font-bold text-gray-900">{{ f.user.name || 'Customer' }}</p>
 
                       <div class="mt-1 flex items-center gap-0.5 text-amber-400">
                         @for (s of [1,2,3,4,5]; track s) {
