@@ -41,6 +41,8 @@ export class ProductDetailComponent implements OnDestroy {
   readonly product = signal<Product | null>(null);
   readonly cartHint = signal(false);
   readonly cartError = signal<string | null>(null);
+  /** Quantity to add on the next "Add to cart" action (clamped to stock). */
+  readonly addQuantity = signal(1);
 
   private sub: Subscription;
   private hintTimer: ReturnType<typeof setTimeout> | null = null;
@@ -66,6 +68,7 @@ export class ProductDetailComponent implements OnDestroy {
       .subscribe({
         next: (p) => {
           this.product.set(p);
+          this.addQuantity.set(1);
           this.loading.set(false);
           if (p.status !== 'AVAILABLE') {
             this.error.set('This product is not available for purchase right now.');
@@ -85,8 +88,22 @@ export class ProductDetailComponent implements OnDestroy {
     if (this.hintTimer) clearTimeout(this.hintTimer);
   }
 
+  decrementAddQuantity(p: Product): void {
+    if (p.stock <= 0) return;
+    const next = Math.max(1, this.addQuantity() - 1);
+    this.addQuantity.set(next);
+  }
+
+  incrementAddQuantity(p: Product): void {
+    if (p.stock <= 0) return;
+    const next = Math.min(p.stock, this.addQuantity() + 1);
+    this.addQuantity.set(next);
+  }
+
   addToCart(p: Product): void {
     if (p.stock <= 0) return;
+
+    const qty = Math.min(p.stock, Math.max(1, this.addQuantity()));
 
     // Server cart is now the source of truth for `/cart`.
     // If user is not logged in, redirect to login (backend requires JWT).
@@ -98,7 +115,7 @@ export class ProductDetailComponent implements OnDestroy {
     this.cartError.set(null);
     this.http
       .put<ApiSuccess<unknown>>(`${environment.apiUrl}/api/cart/items/${p.id}`, {
-        quantity: 1,
+        quantity: qty,
         name: p.name,
       })
       .subscribe({
@@ -106,10 +123,11 @@ export class ProductDetailComponent implements OnDestroy {
           // Keep local cart in sync with existing navbar badge for now.
           this.cart.add({
             productId: p.id,
-            quantity: 1,
+            quantity: qty,
             unitPrice: p.price,
             name: p.name,
           });
+          this.addQuantity.set(1);
           this.serverCart.refresh().subscribe();
           this.cartHint.set(true);
           if (this.hintTimer) clearTimeout(this.hintTimer);

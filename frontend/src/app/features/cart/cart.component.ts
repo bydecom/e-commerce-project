@@ -1,6 +1,5 @@
 import { Component, OnDestroy, OnInit, inject, signal } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
-import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import { Subject, Subscription, catchError, concatMap, debounceTime, map, of, switchMap, tap } from 'rxjs';
 import { CurrencyVndPipe } from '../../shared/pipes/currency-vnd.pipe';
@@ -24,7 +23,7 @@ type CartPricingData = {
 @Component({
   selector: 'app-cart',
   standalone: true,
-  imports: [RouterLink, CurrencyVndPipe, FormsModule],
+  imports: [RouterLink, CurrencyVndPipe],
   template: `
     <div class="mx-auto max-w-3xl px-4 py-8">
       <h1 class="text-2xl font-bold text-gray-900">Cart</h1>
@@ -54,17 +53,34 @@ type CartPricingData = {
               </div>
 
               <div class="flex items-center justify-between gap-3 sm:justify-end">
-                <div class="flex items-center gap-2">
-                  <label class="text-sm text-gray-600" [attr.for]="'qty-' + line.productId">Qty</label>
-                  <input
-                    class="w-20 rounded-md border border-gray-300 px-2 py-1 text-sm"
-                    type="number"
-                    min="0"
-                    step="1"
-                    [id]="'qty-' + line.productId"
-                    [ngModel]="line.quantity"
-                    (ngModelChange)="onQuantityInput(line, $event)"
-                  />
+                <div
+                  class="inline-flex overflow-hidden rounded-lg border border-gray-300 bg-white shadow-sm"
+                  role="group"
+                  [attr.aria-label]="'Quantity for ' + line.name"
+                >
+                  <button
+                    type="button"
+                    class="min-w-[2.75rem] px-3 py-2 text-lg font-semibold leading-none text-gray-800 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40"
+                    (click)="adjustLineQuantity(line, -1)"
+                    [disabled]="line.quantity <= 1"
+                    aria-label="Decrease quantity"
+                  >
+                    −
+                  </button>
+                  <span
+                    class="flex min-w-[2.75rem] items-center justify-center border-x border-gray-300 px-3 py-2 text-base font-semibold tabular-nums text-gray-900"
+                    aria-live="polite"
+                  >
+                    {{ line.quantity }}
+                  </span>
+                  <button
+                    type="button"
+                    class="min-w-[2.75rem] px-3 py-2 text-lg font-semibold leading-none text-gray-800 transition hover:bg-gray-50"
+                    (click)="adjustLineQuantity(line, 1)"
+                    aria-label="Increase quantity"
+                  >
+                    +
+                  </button>
                 </div>
 
                 <div class="w-28 text-right font-semibold text-gray-900">
@@ -134,9 +150,8 @@ export class CartComponent implements OnInit, OnDestroy {
     this.sub.unsubscribe();
   }
 
-  onQuantityInput(line: CartLinePriced, raw: unknown): void {
-    const n = typeof raw === 'number' ? raw : parseInt(String(raw ?? ''), 10);
-    const quantity = Number.isFinite(n) ? Math.max(0, Math.floor(n)) : line.quantity;
+  adjustLineQuantity(line: CartLinePriced, delta: number): void {
+    const quantity = Math.max(0, line.quantity + delta);
 
     // Update UI immediately; server will be synced + re-priced after debounce.
     this.items.set(
@@ -203,9 +218,6 @@ export class CartComponent implements OnInit, OnDestroy {
     const del$ = this.http.delete<ApiSuccess<{ removed: boolean }>>(
       `${environment.apiUrl}/api/cart/items/${input.productId}`
     );
-    if (input.quantity <= 0) {
-      return del$.pipe(map(() => undefined));
-    }
     const put$ = this.http.put<ApiSuccess<CartLinePriced>>(
       `${environment.apiUrl}/api/cart/items/${input.productId}`,
       { quantity: input.quantity, name: input.name }
