@@ -79,6 +79,13 @@ export async function addOrIncrementItem(input: {
   if (!Number.isFinite(quantity) || quantity <= 0) throw httpError(400, 'quantity must be a positive integer');
   if (!name) throw httpError(400, 'name is required');
 
+  const productInfo = await prisma.product.findUnique({
+    where: { id: productId },
+    select: { stock: true, status: true },
+  });
+  if (!productInfo) throw httpError(404, 'Product not found');
+  if (productInfo.status !== 'AVAILABLE') throw httpError(400, 'Product is no longer available');
+
   await ensureRedisConnected();
   const redis = redisClient();
   const key = cartKey(userId);
@@ -88,7 +95,15 @@ export async function addOrIncrementItem(input: {
     await redis.watch(key);
     const existingRaw = await redis.hGet(key, field);
     const existing = existingRaw ? safeParseStored(existingRaw) : null;
-    const nextQty = (existing?.quantity ?? 0) + quantity;
+    const currentQtyInCart = existing?.quantity ?? 0;
+    const nextQty = currentQtyInCart + quantity;
+    if (nextQty > productInfo.stock) {
+      await redis.unwatch();
+      throw httpError(
+        400,
+        `Cannot add to cart. You already have ${currentQtyInCart} items in cart, but only ${productInfo.stock} are left in stock.`
+      );
+    }
     const nextName = name || existing?.name || '';
 
     const tx = redis.multi();

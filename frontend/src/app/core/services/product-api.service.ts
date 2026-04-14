@@ -33,8 +33,15 @@ export interface LandingPageData {
     rating: number;
     comment: string;
     user: { name: string | null };
-    product: { name: string };
+    product: { id: number; name: string };
   }[];
+}
+
+export interface ProductFeedbackDto {
+  id: number;
+  rating: number;
+  comment: string | null;
+  user: { id: number; name: string | null };
 }
 
 function mapHttpError(err: HttpErrorResponse) {
@@ -62,6 +69,7 @@ export class ProductApiService {
   private readonly http = inject(HttpClient);
   private readonly productsUrl = `${environment.apiUrl}/api/products`;
   private readonly categoriesUrl = `${environment.apiUrl}/api/categories`;
+  private readonly feedbackUrl = `${environment.apiUrl}/api/feedbacks`;
 
   getCategories(): Observable<CategoryDto[]> {
     return this.http.get<ApiSuccess<CategoryDto[]>>(this.categoriesUrl).pipe(
@@ -146,6 +154,18 @@ export class ProductApiService {
       }),
       catchError(mapHttpError)
     );
+  }
+
+  listFeedbacksByProduct(productId: number): Observable<ProductFeedbackDto[]> {
+    return this.http
+      .get<ApiSuccess<ProductFeedbackDto[]>>(`${this.feedbackUrl}/product/${productId}`)
+      .pipe(
+        map((r) => {
+          if (!r.success) throw new Error(r.message);
+          return r.data;
+        }),
+        catchError(mapHttpError)
+      );
   }
 
   create(body: {
