@@ -182,7 +182,9 @@ export class EditProfileComponent implements OnInit {
         next: (updated) => {
           this.saving.set(false);
           this.me.set(updated);
-          this.auth.updateCurrentUserSnapshot(updated);
+          
+          this.auth.updateCurrentUser(updated); 
+          
           this.toast.show('Profile updated.', 'success');
           void this.router.navigate(['/profile']);
         },
@@ -193,4 +195,3 @@ export class EditProfileComponent implements OnInit {
       });
   }
 }
-

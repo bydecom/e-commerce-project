@@ -14,152 +14,157 @@ import type { OrderDetail } from '../../../shared/models/order.model';
   imports: [RouterLink, OrderStatusBadgeComponent, CurrencyVndPipe, DatePipe],
   template: `
     <div class="mx-auto max-w-5xl px-4 py-10 sm:px-6">
-      <div class="mb-8">
-        <h1 class="text-2xl font-bold text-gray-900">My Orders</h1>
-        <p class="text-sm text-gray-500">Check the status of your recent orders.</p>
+      <div class="mb-10 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <h1 class="text-3xl font-extrabold tracking-tight text-gray-900">Đơn hàng của tôi</h1>
+          <p class="mt-2 text-sm text-gray-500">Quản lý và đánh giá các sản phẩm bạn đã mua.</p>
+        </div>
       </div>
 
       @if (loading()) {
         <div class="space-y-4">
           @for (i of [1, 2, 3]; track i) {
-            <div class="h-24 w-full animate-pulse rounded-xl bg-gray-100"></div>
+            <div class="h-32 w-full animate-pulse rounded-2xl bg-gray-100"></div>
           }
         </div>
       } @else if (orders().length === 0) {
-        <div class="rounded-2xl border-2 border-dashed border-gray-200 py-20 text-center">
-          <p class="text-gray-500">You haven't placed any orders yet.</p>
-          <a
-            routerLink="/products"
-            class="mt-4 inline-block text-sm font-bold text-indigo-600 hover:underline"
-            >Start shopping &rarr;</a
+        <div
+          class="flex flex-col items-center justify-center rounded-3xl border border-dashed border-gray-300 bg-gray-50 py-24 text-center"
+        >
+          <p class="text-gray-500">Bạn chưa có đơn hàng nào.</p>
+          <a routerLink="/products" class="mt-4 font-bold text-indigo-600 hover:underline"
+            >Mua sắm ngay &rarr;</a
           >
         </div>
       } @else {
-        <div class="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
-          <table class="w-full text-left text-sm">
-            <thead class="bg-gray-50 text-xs font-semibold uppercase text-gray-500">
-              <tr>
-                <th class="px-6 py-4">Order ID</th>
-                <th class="px-6 py-4">Date</th>
-                <th class="px-6 py-4">Total</th>
-                <th class="px-6 py-4">Status</th>
-                <th class="px-6 py-4">Feedback</th>
-                <th class="px-6 py-4"></th>
-              </tr>
-            </thead>
-            <tbody class="divide-y divide-gray-200">
-              @for (o of orders(); track o.id) {
-                <tr class="hover:bg-gray-50">
-                  <td class="px-6 py-4 font-medium text-gray-900">#{{ o.id }}</td>
-                  <td class="px-6 py-4 text-gray-500">{{ o.createdAt | date: 'mediumDate' }}</td>
-                  <td class="px-6 py-4 font-bold text-gray-900">{{ o.total | currencyVnd }}</td>
-                  <td class="px-6 py-4">
+        <div class="space-y-6">
+          @for (o of orders(); track o.id) {
+            <div
+              class="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm transition-all hover:shadow-md"
+            >
+              <div
+                class="flex flex-col border-b border-gray-100 bg-gray-50/50 p-5 sm:flex-row sm:items-center"
+              >
+                <div
+                  class="relative h-20 w-20 flex-shrink-0 overflow-hidden rounded-xl border border-gray-200 bg-white"
+                >
+                  <img
+                    [src]="o.items[0]?.imageUrl || 'https://via.placeholder.com/160x160?text=Product'"
+                    class="h-full w-full object-cover"
+                    alt="Order Thumbnail"
+                  />
+                  @if (o.items.length > 1) {
+                    <div
+                      class="absolute bottom-0 right-0 bg-black/60 px-1.5 py-0.5 text-[10px] font-bold text-white"
+                    >
+                      +{{ o.items.length - 1 }}
+                    </div>
+                  }
+                </div>
+
+                <div
+                  class="mt-4 flex flex-1 flex-col gap-4 sm:ml-6 sm:mt-0 sm:flex-row sm:items-center sm:justify-between"
+                >
+                  <div class="grid grid-cols-2 gap-4 md:grid-cols-3">
+                    <div>
+                      <p class="text-[10px] font-bold uppercase tracking-widest text-gray-400">Mã đơn hàng</p>
+                      <p class="mt-1 font-bold text-gray-900">#{{ o.id }}</p>
+                    </div>
+                    <div>
+                      <p class="text-[10px] font-bold uppercase tracking-widest text-gray-400">Ngày đặt</p>
+                      <p class="mt-1 text-sm text-gray-700">{{ o.createdAt | date: 'dd/MM/yyyy' }}</p>
+                    </div>
+                    <div>
+                      <p class="text-[10px] font-bold uppercase tracking-widest text-gray-400">Tổng tiền</p>
+                      <p class="mt-1 font-extrabold text-indigo-600">{{ o.total | currencyVnd }}</p>
+                    </div>
+                  </div>
+
+                  <div class="flex items-center gap-3">
                     <app-order-status-badge [status]="o.status" />
-                  </td>
-                  <td class="px-6 py-4">
-                    @if (o.status === 'DONE') {
+
+                    @if (o.status === 'DONE' && !isOrderFullyReviewed(o)) {
                       <button
                         type="button"
                         (click)="toggleFeedback(o.id)"
-                        class="text-sm font-semibold text-indigo-600 hover:text-indigo-900"
+                        class="rounded-lg bg-indigo-50 px-4 py-2 text-xs font-bold text-indigo-700 transition hover:bg-indigo-100"
                       >
-                        {{ expandedOrderId() === o.id ? 'Hide' : 'Leave a review' }}
+                        {{ expandedOrderId() === o.id ? 'Đóng' : 'Đánh giá' }}
                       </button>
-                    } @else {
-                      <span class="text-xs text-gray-400">—</span>
                     }
-                  </td>
-                  <td class="px-6 py-4 text-right">
                     <a
                       [routerLink]="['/orders', o.id]"
-                      class="font-semibold text-indigo-600 hover:text-indigo-900"
-                      >View Details</a
+                      class="text-xs font-bold text-gray-500 hover:text-gray-900"
+                      >Chi tiết</a
                     >
-                  </td>
-                </tr>
+                  </div>
+                </div>
+              </div>
 
-                @if (expandedOrderId() === o.id) {
-                  <tr class="bg-gray-50/40">
-                    <td colspan="6" class="px-6 py-5">
-                      <div class="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
-                        <div class="mb-4">
-                          <h3 class="text-sm font-bold text-gray-900">Rate your items</h3>
-                          <p class="mt-1 text-xs text-gray-500">
-                            Choose a star rating and optionally leave a comment for each product.
-                          </p>
+              @if (expandedOrderId() === o.id) {
+                <div class="bg-indigo-50/20 p-6">
+                  <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
+                    @for (it of o.items; track it.productId) {
+                      <div class="flex flex-col gap-4 rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
+                        <div class="flex items-center gap-3">
+                          <img
+                            [src]="it.imageUrl || 'https://via.placeholder.com/96x96?text=Product'"
+                            class="h-12 w-12 rounded-lg object-cover"
+                          />
+                          <div class="min-w-0">
+                            <p class="truncate text-sm font-bold text-gray-900">{{ it.name }}</p>
+                            <p class="text-xs text-gray-500">Số lượng: {{ it.quantity }}</p>
+                          </div>
                         </div>
 
-                        <div class="space-y-4">
-                          @for (it of o.items; track it.productId) {
-                            <div class="rounded-lg border border-gray-200 p-4">
-                              <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                                <div class="min-w-0">
-                                  <p class="font-semibold text-gray-900">{{ it.name }}</p>
-                                  <p class="mt-1 text-xs text-gray-500">
-                                    Unit price: {{ it.unitPrice | currencyVnd }} · Qty: {{ it.quantity }}
-                                  </p>
-                                </div>
+                        @if (it.isReviewed || isSubmitted(o.id, it.productId)) {
+                          <div
+                            class="flex items-center gap-2 rounded-lg bg-emerald-50 px-3 py-2 text-xs font-bold text-emerald-700"
+                          >
+                            <svg class="h-4 w-4" fill="currentColor" viewBox="0 0 20 20">
+                              <path
+                                d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"
+                              />
+                            </svg>
+                            Đã gửi đánh giá
+                          </div>
+                        } @else {
+                          <div class="flex items-center gap-1">
+                            @for (s of [1, 2, 3, 4, 5]; track s) {
+                              <button
+                                type="button"
+                                (click)="setStars(o.id, it.productId, s)"
+                                class="text-2xl transition-transform hover:scale-110"
+                                [class]="getStars(o.id, it.productId) >= s ? 'text-amber-400' : 'text-gray-200'"
+                              >
+                                ★
+                              </button>
+                            }
+                          </div>
 
-                                <div class="flex items-center gap-1">
-                                  @for (s of [1, 2, 3, 4, 5]; track s) {
-                                    <button
-                                      type="button"
-                                      (click)="setStars(o.id, it.productId, s)"
-                                      [disabled]="isSubmitted(o.id, it.productId)"
-                                      class="h-9 w-9 rounded-md border text-sm font-extrabold transition disabled:opacity-60"
-                                      [class]="
-                                        getStars(o.id, it.productId) >= s
-                                          ? 'border-amber-300 bg-amber-50 text-amber-700'
-                                          : 'border-gray-200 bg-white text-gray-300 hover:bg-gray-50'
-                                      "
-                                      [attr.aria-label]="'Set rating to ' + s + ' stars'"
-                                    >
-                                      ★
-                                    </button>
-                                  }
-                                </div>
-                              </div>
+                          <textarea
+                            [value]="getComment(o.id, it.productId)"
+                            (input)="setComment(o.id, it.productId, $event)"
+                            placeholder="Chia sẻ cảm nhận về sản phẩm..."
+                            class="w-full rounded-lg border-gray-200 bg-gray-50 p-2 text-xs focus:ring-indigo-500"
+                          ></textarea>
 
-                              <div class="mt-3">
-                                <textarea
-                                  rows="2"
-                                  class="block w-full rounded-lg border-0 px-3 py-2 text-sm text-gray-900 ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600"
-                                  [value]="getComment(o.id, it.productId)"
-                                  (input)="setComment(o.id, it.productId, $event)"
-                                  [disabled]="isSubmitted(o.id, it.productId)"
-                                  placeholder="Write a comment (optional)"
-                                ></textarea>
-                              </div>
-
-                              <div class="mt-3 flex items-center justify-end gap-2">
-                                <button
-                                  type="button"
-                                  (click)="submitFeedback(o.id, it.productId)"
-                                  [disabled]="isSubmitting(o.id, it.productId) || getStars(o.id, it.productId) < 1"
-                                  class="inline-flex items-center justify-center rounded-lg bg-gray-900 px-4 py-2 text-sm font-bold text-white hover:bg-gray-800 disabled:opacity-50"
-                                >
-                                  @if (isSubmitting(o.id, it.productId)) {
-                                    <span
-                                      class="mr-2 inline-block h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white"
-                                    ></span>
-                                  }
-                                  @if (isSubmitted(o.id, it.productId)) {
-                                    Submitted
-                                  } @else {
-                                    Submit
-                                  }
-                                </button>
-                              </div>
-                            </div>
-                          }
-                        </div>
+                          <button
+                            type="button"
+                            (click)="submitFeedback(o.id, it.productId)"
+                            [disabled]="isSubmitting(o.id, it.productId) || getStars(o.id, it.productId) < 1"
+                            class="w-full rounded-lg bg-gray-900 py-2 text-xs font-bold text-white transition hover:bg-gray-800 disabled:opacity-50"
+                          >
+                            Gửi đánh giá
+                          </button>
+                        }
                       </div>
-                    </td>
-                  </tr>
-                }
+                    }
+                  </div>
+                </div>
               }
-            </tbody>
-          </table>
+            </div>
+          }
         </div>
       }
     </div>
@@ -187,6 +192,10 @@ export class OrderListComponent implements OnInit {
       },
       error: () => this.loading.set(false),
     });
+  }
+
+  isOrderFullyReviewed(order: OrderDetail): boolean {
+    return order.items.every((it) => Boolean(it.isReviewed) || this.isSubmitted(order.id, it.productId));
   }
 
   toggleFeedback(orderId: number): void {
@@ -258,9 +267,8 @@ export class OrderListComponent implements OnInit {
   private closeIfAllSubmitted(orderId: number): void {
     const o = this.orders().find((x) => x.id === orderId);
     if (!o) return;
-    const allDone = o.items.every((it) => this.isSubmitted(orderId, it.productId));
-    if (allDone) {
-      this.expandedOrderId.set(null);
+    if (this.isOrderFullyReviewed(o)) {
+      setTimeout(() => this.expandedOrderId.set(null), 1500);
     }
   }
 }

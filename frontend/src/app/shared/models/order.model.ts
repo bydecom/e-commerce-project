@@ -5,6 +5,8 @@ export interface OrderItemLine {
   name: string;
   quantity: number;
   unitPrice: number;
+  imageUrl?: string | null;
+  isReviewed?: boolean;
 }
 
 export interface OrderDetail {
