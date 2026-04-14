@@ -30,6 +30,7 @@ interface BrowseRouteState {
   cats: number[];
   dateSort: ShopDateSort;
   priceSort: ShopPriceSort;
+  page: number;
 }
 
 @Component({
@@ -88,12 +89,14 @@ export class ProductListComponent implements OnInit, OnDestroy {
           cats: parseCatsQueryParam(pm.get('cats')),
           dateSort: normalizeDateSortParam(pm.get('dateSort')),
           priceSort: normalizePriceSortParam(pm.get('priceSort')),
+          page: Math.max(1, parseInt(pm.get('page') || '1', 10) || 1),
         })),
         distinctUntilChanged(
           (a, b) =>
             a.q === b.q &&
             a.dateSort === b.dateSort &&
             a.priceSort === b.priceSort &&
+            a.page === b.page &&
             a.cats.length === b.cats.length &&
             a.cats.every((id, i) => id === b.cats[i])
         )
@@ -105,7 +108,7 @@ export class ProductListComponent implements OnInit, OnDestroy {
         this.appliedDateSort = this.draftDateSort = state.dateSort;
         this.appliedPriceSort = this.draftPriceSort = state.priceSort;
         this.browseDraft.setFromRoute(state.cats, state.dateSort, state.priceSort);
-        this.page = 1;
+        this.page = state.page;
         this.load();
       });
   }
@@ -144,11 +147,11 @@ export class ProductListComponent implements OnInit, OnDestroy {
   }
 
   onPageChange(nextPage: number): void {
-    this.page = nextPage;
-    this.load();
-    if (!isPlatformBrowser(this.platformId)) return;
-    queueMicrotask(() => {
-      this.listTop?.nativeElement.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    // Navigate so router scroll restoration kicks in (configured in app.config.ts).
+    this.router.navigate([], {
+      relativeTo: this.route,
+      queryParams: { page: nextPage },
+      queryParamsHandling: 'merge',
     });
   }
 
@@ -163,6 +166,19 @@ export class ProductListComponent implements OnInit, OnDestroy {
         cats: null,
         dateSort: 'newest',
         priceSort: 'any',
+        page: null,
+      },
+    });
+  }
+
+  applyFilters(): void {
+    this.router.navigate(['/products'], {
+      queryParams: {
+        q: this.searchQuery() || null,
+        cats: this.draftCategoryIds().size ? [...this.draftCategoryIds()].join(',') : null,
+        dateSort: this.draftDateSort,
+        priceSort: this.draftPriceSort,
+        page: null,
       },
     });
   }

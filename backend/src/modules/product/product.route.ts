@@ -6,6 +6,7 @@ import * as productController from './product.controller';
 export const productRouter = Router();
 
 productRouter.get('/', productController.listProducts);
+productRouter.get('/landing', productController.getLandingPage);
 productRouter.get('/:id', productController.getProductById);
 productRouter.post('/', authMiddleware, requireRole(['ADMIN']), productController.createProduct);
 productRouter.put('/:id', authMiddleware, requireRole(['ADMIN']), productController.updateProduct);

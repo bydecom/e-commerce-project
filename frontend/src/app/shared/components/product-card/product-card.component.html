@@ -1,12 +1,12 @@
 <article
   class="group flex flex-col overflow-hidden rounded-2xl bg-white shadow-md ring-1 ring-stone-200/60 transition duration-200 hover:-translate-y-0.5 hover:shadow-xl hover:ring-emerald-200/80"
 >
-  <div class="relative aspect-square bg-gradient-to-br from-stone-100 to-stone-200">
+  <div class="relative h-40 w-full overflow-hidden bg-gradient-to-br from-stone-100 to-stone-200 sm:h-48 lg:h-52">
     @if (product.imageUrl) {
       <img
         [src]="product.imageUrl"
         [alt]="product.name"
-        class="h-full w-full object-cover transition duration-300 group-hover:scale-[1.02]"
+        class="h-full w-full object-contain p-2 transition duration-300 group-hover:scale-[1.02]"
       />
     } @else {
       <div class="flex h-full items-center justify-center text-sm text-stone-400">No photo yet</div>

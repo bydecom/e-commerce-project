@@ -11,6 +11,32 @@ export interface CategoryDto {
   _count?: { products: number };
 }
 
+export interface LandingProductDto {
+  id: number;
+  name: string;
+  price: number;
+  imageUrl: string | null;
+  soldQty: number;
+}
+
+export interface LandingCategoryDto {
+  id: number;
+  name: string;
+  products: Pick<Product, 'id' | 'name' | 'price' | 'imageUrl'>[];
+}
+
+export interface LandingPageData {
+  topSellers: LandingProductDto[];
+  categoriesWithProducts: LandingCategoryDto[];
+  recentFeedbacks: {
+    id: number;
+    rating: number;
+    comment: string;
+    user: { name: string | null };
+    product: { name: string };
+  }[];
+}
+
 function mapHttpError(err: HttpErrorResponse) {
   const body = err.error as { message?: string } | undefined;
   const msg = typeof body?.message === 'string' ? body.message : err.message;
@@ -39,6 +65,16 @@ export class ProductApiService {
 
   getCategories(): Observable<CategoryDto[]> {
     return this.http.get<ApiSuccess<CategoryDto[]>>(this.categoriesUrl).pipe(
+      map((r) => {
+        if (!r.success) throw new Error(r.message);
+        return r.data;
+      }),
+      catchError(mapHttpError)
+    );
+  }
+
+  getLandingPage(): Observable<LandingPageData> {
+    return this.http.get<ApiSuccess<LandingPageData>>(`${this.productsUrl}/landing`).pipe(
       map((r) => {
         if (!r.success) throw new Error(r.message);
         return r.data;

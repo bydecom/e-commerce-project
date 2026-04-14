@@ -226,3 +226,89 @@ export async function deleteProduct(id: number) {
     throw e;
   }
 }
+
+export type LandingProduct = Pick<Product, 'id' | 'name' | 'price' | 'imageUrl'> & { soldQty: number };
+
+export type LandingCategoryWithProducts = {
+  id: number;
+  name: string;
+  products: Pick<Product, 'id' | 'name' | 'price' | 'imageUrl'>[];
+};
+
+export type LandingFeedback = {
+  id: number;
+  rating: number;
+  comment: string;
+  user: { name: string | null };
+  product: { name: string };
+};
+
+export async function getLandingPageData(): Promise<{
+  topSellers: LandingProduct[];
+  categoriesWithProducts: LandingCategoryWithProducts[];
+  recentFeedbacks: LandingFeedback[];
+}> {
+  const [topRaw, categoriesWithProducts, recentFeedbacks] = await Promise.all([
+    prisma.orderItem.groupBy({
+      by: ['productId'],
+      where: {
+        order: { status: 'DONE' },
+        product: { status: 'AVAILABLE' },
+      },
+      _sum: { quantity: true },
+      orderBy: { _sum: { quantity: 'desc' } },
+      take: 5,
+    }),
+    prisma.category.findMany({
+      take: 3,
+      select: {
+        id: true,
+        name: true,
+        products: {
+          where: { status: 'AVAILABLE' },
+          take: 4,
+          select: { id: true, name: true, price: true, imageUrl: true },
+        },
+      },
+    }),
+    prisma.feedback.findMany({
+      where: { rating: { gte: 4 }, comment: { not: null } },
+      take: 3,
+      orderBy: { id: 'desc' },
+      select: {
+        id: true,
+        rating: true,
+        comment: true,
+        user: { select: { name: true } },
+        product: { select: { name: true } },
+      },
+    }),
+  ]);
+
+  const productIds = topRaw.map((x) => x.productId);
+  const products =
+    productIds.length > 0
+      ? await prisma.product.findMany({
+          where: { id: { in: productIds }, status: 'AVAILABLE' },
+          select: { id: true, name: true, price: true, imageUrl: true },
+        })
+      : [];
+  const byId = new Map(products.map((p) => [p.id, p]));
+
+  const topSellers: LandingProduct[] = topRaw
+    .map((x) => {
+      const p = byId.get(x.productId);
+      if (!p) return null;
+      return { ...p, soldQty: x._sum.quantity ?? 0 };
+    })
+    .filter((x): x is LandingProduct => x !== null);
+
+  return {
+    topSellers,
+    categoriesWithProducts,
+    recentFeedbacks: recentFeedbacks.map((f) => ({
+      ...f,
+      comment: f.comment ?? '',
+    })),
+  };
+}

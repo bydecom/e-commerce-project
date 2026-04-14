@@ -123,3 +123,12 @@ export async function deleteProduct(req: Request, res: Response, next: NextFunct
     next(err);
   }
 }
+
+export async function getLandingPage(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const data = await productService.getLandingPageData();
+    res.json(success(data, 'Landing page data retrieved successfully'));
+  } catch (err) {
+    next(err);
+  }
+}
