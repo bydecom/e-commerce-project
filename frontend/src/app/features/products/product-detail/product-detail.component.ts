@@ -13,7 +13,6 @@ import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { EMPTY, Subscription } from 'rxjs';
 import { switchMap } from 'rxjs/operators';
 import { FormsModule } from '@angular/forms';
-import { CartService } from '../../../core/services/cart.service';
 import { AuthService } from '../../../core/services/auth.service';
 import { ServerCartService } from '../../../core/services/server-cart.service';
 import { ProductApiService, type ProductFeedbackDto } from '../../../core/services/product-api.service';
@@ -32,7 +31,6 @@ import type { ApiSuccess } from '../../../shared/models/api-response.model';
 export class ProductDetailComponent implements OnInit, OnDestroy {
   private readonly route = inject(ActivatedRoute);
   private readonly api = inject(ProductApiService);
-  private readonly cart = inject(CartService);
   private readonly http = inject(HttpClient);
   private readonly auth = inject(AuthService);
   private readonly serverCart = inject(ServerCartService);
@@ -51,7 +49,7 @@ export class ProductDetailComponent implements OnInit, OnDestroy {
   readonly qtyInCart = computed(() => {
     const p = this.product();
     if (!p) return 0;
-    const item = this.cart.lines().find((i) => i.productId === p.id);
+    const item = this.serverCart.items().find((i) => i.productId === p.id);
     return item ? item.quantity : 0;
   });
 
@@ -169,13 +167,6 @@ export class ProductDetailComponent implements OnInit, OnDestroy {
       })
       .subscribe({
         next: () => {
-          // Keep local cart in sync with existing navbar badge for now.
-          this.cart.add({
-            productId: p.id,
-            quantity: qtyToAdd,
-            unitPrice: p.price,
-            name: p.name,
-          });
           this.serverCart.refresh().subscribe();
           this.cartHint.set(true);
           this.addingToCart.set(false);
