@@ -43,10 +43,13 @@
       </a>
 
       <div class="flex flex-1 flex-col">
-        <div class="flex rounded-sm bg-white p-1 shadow-sm">
+        <div class="relative flex rounded-sm bg-white p-1 shadow-sm">
           <input
             type="search"
-            [(ngModel)]="headerSearch"
+            [ngModel]="headerSearch"
+            (ngModelChange)="onSearchInput($event)"
+            (focus)="onFocus()"
+            (blur)="onBlur()"
             (keyup.enter)="submitHeaderSearch()"
             class="flex-1 border-none bg-transparent px-3 py-1.5 text-[14px] text-gray-900 focus:outline-none"
             placeholder="Search products, brands, and shops..."
@@ -56,22 +59,59 @@
             (click)="submitHeaderSearch()"
             class="flex items-center justify-center rounded-sm bg-gray-700 px-6 py-1.5 text-white hover:bg-gray-600"
           >
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke-width="2"
-              stroke="currentColor"
-              class="h-5 w-5"
-            >
-              <path
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z"
-              />
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="h-5 w-5">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" />
             </svg>
           </button>
+
+          @if (showDropdown && headerSearch.trim() !== '') {
+            <div class="absolute left-0 right-0 top-[110%] z-50 rounded-sm border border-gray-200 bg-white shadow-xl">
+
+              @if (isSearching()) {
+                <div class="flex items-center justify-center p-4 text-sm text-gray-500">
+                  <svg class="mr-2 h-5 w-5 animate-spin text-gray-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  </svg>
+                  Đang tìm kiếm...
+                </div>
+              } @else if (productResults().length > 0) {
+                <ul class="max-h-96 overflow-y-auto py-1">
+                  @for (prod of productResults(); track prod.id) {
+                    <li>
+                      <a [routerLink]="['/products', prod.id]" class="flex items-center gap-3 px-4 py-2 hover:bg-gray-50">
+                        <img
+                          [src]="prod.imageUrl || 'assets/placeholder.png'"
+                          class="h-10 w-10 flex-shrink-0 rounded border border-gray-100 object-cover"
+                          [alt]="prod.name"
+                        />
+                        <div class="flex min-w-0 flex-col">
+                          <span class="line-clamp-1 text-sm font-medium text-gray-800">{{ prod.name }}</span>
+                          <span class="text-xs font-semibold text-red-600">{{ prod.price | currencyVnd }}</span>
+                        </div>
+                      </a>
+                    </li>
+                  }
+                </ul>
+                <div class="border-t border-gray-100 bg-gray-50">
+                  <button
+                    type="button"
+                    (click)="submitHeaderSearch()"
+                    class="w-full px-4 py-2 text-sm font-medium text-blue-600 hover:text-blue-800"
+                  >
+                    Xem tất cả kết quả cho "{{ headerSearch }}"
+                  </button>
+                </div>
+              } @else {
+                <div class="p-4 text-center text-sm text-gray-500">
+                  Không tìm thấy sản phẩm nào phù hợp.
+                </div>
+              }
+
+            </div>
+          }
         </div>
+
         <div class="mt-1 flex flex-wrap gap-3 text-[12px] text-gray-400">
           @for (cat of searchSuggestions(); track cat.id) {
             <a
@@ -111,5 +151,5 @@
         </a>
       </div>
     </div>
-  </div>
+  </div> 
 </header>

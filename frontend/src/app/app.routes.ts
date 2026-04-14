@@ -63,18 +63,22 @@ export const routes: Routes = [
       {
         path: 'orders',
         canActivate: [authGuard],
-        loadComponent: () =>
-          import('./features/orders/order-list/order-list.component').then(
-            (m) => m.OrderListComponent
-          ),
-      },
-      {
-        path: 'orders/:id',
-        canActivate: [authGuard],
-        loadComponent: () =>
-          import('./features/orders/order-detail/order-detail.component').then(
-            (m) => m.OrderDetailComponent
-          ),
+        children: [
+          {
+            path: '',
+            loadComponent: () =>
+              import('./features/orders/order-list/order-list.component').then(
+                (m) => m.OrderListComponent
+              ),
+          },
+          {
+            path: ':id',
+            loadComponent: () =>
+              import('./features/orders/order-detail/order-detail.component').then(
+                (m) => m.OrderDetailComponent
+              ),
+          },
+        ],
       },
       {
         path: 'profile/edit',

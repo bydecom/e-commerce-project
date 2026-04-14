@@ -29,7 +29,7 @@ export class UserApiService {
   }
 
   updateMe(patch: { name?: string | null; phone?: string | null; address?: string | null }): Observable<User> {
-    return this.http.put<ApiSuccess<User>>(`${this.baseUrl}/me`, patch).pipe(
+    return this.http.patch<ApiSuccess<User>>(`${this.baseUrl}/me`, patch).pipe(
       map((r) => {
         if (!r.success) {
           throw new Error(r.message);

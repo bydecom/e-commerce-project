@@ -89,17 +89,19 @@ export class AuthService {
     this.persistSession(token, user);
   }
 
-  /** Updates local user snapshot without changing the auth token. */
-  updateCurrentUserSnapshot(user: User): void {
+  /** Cập nhật snapshot user sau khi chỉnh profile. */
+  updateCurrentUser(next: User): void {
     if (!isPlatformBrowser(this.platformId)) {
+      this.userSignal.set(next);
       return;
     }
     const token = localStorage.getItem(TOKEN_KEY);
     if (!token) {
+      this.userSignal.set(next);
       return;
     }
-    localStorage.setItem(USER_KEY, JSON.stringify(user));
-    this.userSignal.set(user);
+    localStorage.setItem(USER_KEY, JSON.stringify(next));
+    this.userSignal.set(next);
   }
 
   /**

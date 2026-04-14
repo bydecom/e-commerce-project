@@ -11,6 +11,18 @@ function parseParamInt(param: string | string[] | undefined): number {
 
 export async function listProducts(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
+    // User: luôn dùng smart hybrid để đảm bảo đồng nhất Navbar <-> Product list
+    const result = await productService.searchSmartHybridList(
+      req.query as Parameters<typeof productService.searchSmartHybridList>[0]
+    );
+    res.json(success(result.data, 'OK', result.meta));
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function listProductsAdmin(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
     const result = await productService.listProducts(
       req.query as Parameters<typeof productService.listProducts>[0]
     );
@@ -128,6 +140,34 @@ export async function getLandingPage(req: Request, res: Response, next: NextFunc
   try {
     const data = await productService.getLandingPageData();
     res.json(success(data, 'Landing page data retrieved successfully'));
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function searchSmart(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const keyword = typeof req.query.q === 'string' ? req.query.q.trim() : '';
+    const limit = typeof req.query.limit === 'string' ? Math.min(parseInt(req.query.limit, 10) || 5, 20) : 5;
+
+    if (!keyword) {
+      res.json(success([]));
+      return;
+    }
+
+    const data = await productService.searchSmartHybrid(keyword, limit);
+    res.json(success(data));
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function listSmart(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const result = await productService.searchSmartHybridList(
+      req.query as Parameters<typeof productService.searchSmartHybridList>[0]
+    );
+    res.json(success(result.data, 'OK', result.meta));
   } catch (err) {
     next(err);
   }

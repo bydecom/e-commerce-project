@@ -3,6 +3,7 @@ import { Injectable, inject } from '@angular/core';
 import { catchError, map, throwError, type Observable } from 'rxjs';
 import { environment } from '../../../environments/environment';
 import type { ApiSuccess, PaginationMeta } from '../../shared/models/api-response.model';
+import type { Feedback } from '../../shared/models/feedback.model';
 import type { Product, ProductStatus } from '../../shared/models/product.model';
 
 export interface CategoryDto {
@@ -37,6 +38,13 @@ export interface LandingPageData {
   }[];
 }
 
+export interface SmartProductResult {
+  id: number;
+  name: string;
+  price: number;
+  imageUrl: string | null;
+}
+
 export interface ProductFeedbackDto {
   id: number;
   rating: number;
@@ -62,6 +70,14 @@ export interface ProductListParams {
   maxPrice?: number;
   sort?: 'price_asc' | 'price_desc' | 'newest' | 'oldest';
   status?: ProductStatus;
+}
+
+export interface SmartListParams {
+  page?: number;
+  limit?: number;
+  q?: string;
+  /** Multiple categories (OR filter). Sent as repeated `categoryIds` query params. */
+  categoryIds?: number[];
 }
 
 @Injectable({ providedIn: 'root' })
@@ -146,6 +162,50 @@ export class ProductApiService {
     );
   }
 
+  /** Smart relevance list (prefix -> trigram -> vector). */
+  listSmart(params: SmartListParams = {}): Observable<{ data: Product[]; meta: PaginationMeta }> {
+    let httpParams = new HttpParams();
+    if (params.page !== undefined) httpParams = httpParams.set('page', String(params.page));
+    if (params.limit !== undefined) httpParams = httpParams.set('limit', String(params.limit));
+    if (params.q) httpParams = httpParams.set('q', params.q);
+    if (params.categoryIds?.length) {
+      for (const id of params.categoryIds) httpParams = httpParams.append('categoryIds', String(id));
+    }
+
+    return this.http.get<ApiSuccess<Product[]>>(`${this.productsUrl}/smart`, { params: httpParams }).pipe(
+      map((r) => {
+        if (!r.success || !r.meta) throw new Error(r.message);
+        return { data: r.data, meta: r.meta };
+      }),
+      catchError(mapHttpError)
+    );
+  }
+
+  /** Admin-only list endpoint (keeps old filters/sort/status). */
+  listAdmin(params: ProductListParams = {}): Observable<{ data: Product[]; meta: PaginationMeta }> {
+    let httpParams = new HttpParams();
+    if (params.page !== undefined) httpParams = httpParams.set('page', String(params.page));
+    if (params.limit !== undefined) httpParams = httpParams.set('limit', String(params.limit));
+    if (params.search) httpParams = httpParams.set('search', params.search);
+    if (params.categoryIds?.length) {
+      for (const id of params.categoryIds) httpParams = httpParams.append('categoryIds', String(id));
+    } else if (params.categoryId !== undefined) {
+      httpParams = httpParams.set('categoryId', String(params.categoryId));
+    }
+    if (params.minPrice !== undefined) httpParams = httpParams.set('minPrice', String(params.minPrice));
+    if (params.maxPrice !== undefined) httpParams = httpParams.set('maxPrice', String(params.maxPrice));
+    if (params.sort) httpParams = httpParams.set('sort', params.sort);
+    if (params.status) httpParams = httpParams.set('status', params.status);
+
+    return this.http.get<ApiSuccess<Product[]>>(`${this.productsUrl}/admin-list`, { params: httpParams }).pipe(
+      map((r) => {
+        if (!r.success || !r.meta) throw new Error(r.message);
+        return { data: r.data, meta: r.meta };
+      }),
+      catchError(mapHttpError)
+    );
+  }
+
   getById(id: number): Observable<Product> {
     return this.http.get<ApiSuccess<Product>>(`${this.productsUrl}/${id}`).pipe(
       map((r) => {
@@ -166,6 +226,21 @@ export class ProductApiService {
         }),
         catchError(mapHttpError)
       );
+  }
+
+  createFeedback(body: {
+    orderId: number;
+    productId: number;
+    rating: number;
+    comment?: string;
+  }): Observable<Feedback> {
+    return this.http.post<ApiSuccess<Feedback>>(this.feedbackUrl, body).pipe(
+      map((r) => {
+        if (!r.success) throw new Error(r.message);
+        return r.data;
+      }),
+      catchError(mapHttpError)
+    );
   }
 
   create(body: {
@@ -214,5 +289,18 @@ export class ProductApiService {
       }),
       catchError(mapHttpError)
     );
+  }
+
+  searchSmart(keyword: string, limit = 5): Observable<SmartProductResult[]> {
+    const params = new HttpParams().set('q', keyword).set('limit', String(limit));
+    return this.http
+      .get<ApiSuccess<SmartProductResult[]>>(`${this.productsUrl}/search`, { params })
+      .pipe(
+        map((r) => {
+          if (!r.success) throw new Error(r.message);
+          return r.data;
+        }),
+        catchError(mapHttpError)
+      );
   }
 }

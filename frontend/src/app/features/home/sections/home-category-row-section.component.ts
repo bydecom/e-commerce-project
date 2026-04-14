@@ -10,11 +10,11 @@ import type { Product } from '../../../shared/models/product.model';
   imports: [RouterLink, ProductCardComponent],
   template: `
     <section>
-      <div class="mb-8 flex items-center justify-between">
+      <div class="py-8 flex items-center justify-between">
         <h2 class="text-2xl font-bold text-gray-900">{{ category().name }}</h2>
         <a
           [routerLink]="['/products']"
-          [queryParams]="{ categoryId: category().id }"
+          [queryParams]="{ q: null, cats: category().id, priceSort: 'any', page: null }"
           class="group flex items-center gap-1 text-sm font-bold text-indigo-600"
         >
           Explore More

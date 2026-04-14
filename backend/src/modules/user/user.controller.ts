@@ -63,7 +63,6 @@ function normalizeOptionalString(v: unknown): string | null | undefined {
   const s = v.trim();
   return s.length === 0 ? null : s;
 }
-
 export async function updateMe(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
     const auth = req.auth;
@@ -71,7 +70,6 @@ export async function updateMe(req: Request, res: Response, next: NextFunction):
       res.status(401).json({ success: false, message: 'Unauthorized', errors: null });
       return;
     }
-
     const body = req.body as Record<string, unknown>;
     const name = normalizeOptionalString(body['name']);
     const phone = normalizeOptionalString(body['phone']);
@@ -91,7 +89,7 @@ export async function updateMe(req: Request, res: Response, next: NextFunction):
     }
 
     const updated = await userService.updateMe(auth.userId, { name, phone, address });
-    res.json(success(updated));
+    res.json(success(updated, 'Updated'));
   } catch (err) {
     next(err);
   }

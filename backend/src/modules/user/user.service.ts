@@ -7,6 +7,7 @@ const userListSelect = {
   email: true,
   name: true,
   phone: true,
+  address: true,
   role: true,
   createdAt: true,
 } as const;
@@ -83,8 +84,12 @@ export async function updateUserRole(targetId: number, newRole: Role) {
 }
 
 export async function getMe(userId: number) {
+  const id = Math.floor(Number(userId));
+  if (!Number.isFinite(id) || id < 1) {
+    throw httpError(401, 'Unauthorized');
+  }
   const user = await prisma.user.findUnique({
-    where: { id: userId },
+    where: { id },
     select: userMeSelect,
   });
   if (!user) {
@@ -97,12 +102,18 @@ export async function updateMe(
   userId: number,
   patch: { name?: string | null; phone?: string | null; address?: string | null }
 ) {
-  const existing = await prisma.user.findUnique({ where: { id: userId }, select: { id: true } });
+  const id = Math.floor(Number(userId));
+  if (!Number.isFinite(id) || id < 1) {
+    throw httpError(401, 'Unauthorized');
+  }
+
+  const existing = await prisma.user.findUnique({ where: { id }, select: { id: true } });
   if (!existing) {
     throw httpError(404, 'User not found');
   }
+
   return prisma.user.update({
-    where: { id: userId },
+    where: { id },
     data: {
       ...(patch.name !== undefined ? { name: patch.name } : {}),
       ...(patch.phone !== undefined ? { phone: patch.phone } : {}),

@@ -3,6 +3,7 @@ import { prisma } from '../../db';
 import { ensureRedisConnected, redisClient } from '../../config/redis';
 import { parsePagination } from '../../utils/pagination';
 import { httpError } from '../../utils/http-error';
+import * as aiService from '../ai/ai.service';
 
 function toTitleUnaccent(input: string): string {
   const n = input.normalize('NFD').replace(/\p{M}/gu, '');
@@ -161,6 +162,259 @@ export async function listProducts(query: {
   };
 }
 
+export type SmartSearchProduct = {
+  id: number;
+  name: string;
+  price: number;
+  imageUrl: string | null;
+};
+
+export async function searchSmartHybridList(query: {
+  page?: string;
+  limit?: string;
+  /** keyword from frontend `list({ search })` */
+  search?: string;
+  /** legacy keyword (kept for backward compatibility) */
+  q?: string;
+  categoryId?: string;
+  categoryIds?: string | string[];
+  minPrice?: string;
+  maxPrice?: string;
+  sort?: string;
+}) {
+  const { page, limit: limitStr, offset } = parsePagination({
+    page: query.page,
+    limit: query.limit ?? '12',
+  });
+  const limit = Number(limitStr);
+
+  const search = (query.search ?? query.q ?? '').trim();
+
+  const categoryIds = parseCategoryIds(query);
+  const minPrice = query.minPrice !== undefined && query.minPrice !== '' ? Number(query.minPrice) : undefined;
+  const maxPrice = query.maxPrice !== undefined && query.maxPrice !== '' ? Number(query.maxPrice) : undefined;
+
+  const priceFilter: Prisma.FloatFilter | undefined =
+    (minPrice !== undefined && !Number.isNaN(minPrice)) ||
+    (maxPrice !== undefined && !Number.isNaN(maxPrice))
+      ? {
+          ...(minPrice !== undefined && !Number.isNaN(minPrice) ? { gte: minPrice } : {}),
+          ...(maxPrice !== undefined && !Number.isNaN(maxPrice) ? { lte: maxPrice } : {}),
+        }
+      : undefined;
+
+  const baseWhere: Prisma.ProductWhereInput = {
+    status: 'AVAILABLE',
+    ...(categoryIds ? { categoryId: { in: categoryIds } } : {}),
+    ...(priceFilter ? { price: priceFilter } : {}),
+  };
+
+  // Không có keyword => trả list thường (giữ sort/filter/pagination)
+  if (!search) {
+    const sortKey = query.sort && sortMap[query.sort] ? query.sort : 'newest';
+    const [total, rows] = await prisma.$transaction([
+      prisma.product.count({ where: baseWhere }),
+      prisma.product.findMany({
+        where: baseWhere,
+        skip: offset,
+        take: limit,
+        orderBy: sortMap[sortKey],
+        include: { category: { select: { id: true, name: true } } },
+      }),
+    ]);
+
+    return {
+      data: rows.map((r) => mapProduct(r)) as unknown as SmartSearchProduct[],
+      meta: { page, limit: limitStr, total, totalPages: Math.max(1, Math.ceil(total / limit)) },
+    };
+  }
+
+  const qUnaccent = toTitleUnaccent(search);
+  const candidateSize = Math.max(limit * 50, 300);
+
+  const prefixPromise = prisma.product.findMany({
+    where: {
+      OR: [
+        { name: { startsWith: search, mode: 'insensitive' } },
+        { title_unaccent: { startsWith: qUnaccent, mode: 'insensitive' } },
+      ],
+      ...baseWhere,
+    },
+    select: { id: true },
+    take: candidateSize,
+    orderBy: { id: 'desc' },
+  });
+
+  const trigramPromise: Promise<{ id: number }[]> = prisma
+    .$queryRaw<{ id: number }[]>`
+      SELECT p."id"
+      FROM "Product" p
+      WHERE p."status" = 'AVAILABLE'
+        AND (${categoryIds ? Prisma.sql`p."categoryId" = ANY(${categoryIds}) AND` : Prisma.empty} TRUE)
+        AND (${priceFilter ? Prisma.sql`p."price" >= COALESCE(${minPrice}, p."price") AND p."price" <= COALESCE(${maxPrice}, p."price") AND` : Prisma.empty} TRUE)
+        AND (
+          similarity(p."name", ${search}) > 0.15
+          OR similarity(p."title_unaccent", ${qUnaccent}) > 0.15
+          OR p."name" % ${search}
+          OR p."title_unaccent" % ${qUnaccent}
+        )
+      ORDER BY
+        GREATEST(similarity(p."name", ${search}), similarity(p."title_unaccent", ${qUnaccent})) DESC,
+        p."id" DESC
+      LIMIT ${candidateSize};
+    `
+    .catch(() => []);
+
+  const vectorPromise = aiService.searchVectors(search, candidateSize);
+
+  const [prefixResults, trigramResults, vectorResults] = await Promise.all([
+    prefixPromise,
+    trigramPromise,
+    vectorPromise,
+  ]);
+
+  const orderedIds: number[] = [];
+  const seen = new Set<number>();
+  const pushAll = (items: { id: number }[]) => {
+    for (const it of items) {
+      if (!seen.has(it.id)) {
+        seen.add(it.id);
+        orderedIds.push(it.id);
+      }
+    }
+  };
+
+  pushAll(prefixResults);
+  pushAll(trigramResults);
+  pushAll(vectorResults);
+
+  // Filter lại theo baseWhere (vì vector có thể trả ID ngoài filter)
+  const rawRows = await prisma.product.findMany({
+    where: { id: { in: orderedIds }, ...baseWhere },
+    select: { id: true, name: true, price: true, imageUrl: true },
+  });
+
+  const byIdAll = new Map(rawRows.map((r) => [r.id, r]));
+  const relevanceOrderedRows = orderedIds
+    .map((id) => byIdAll.get(id))
+    .filter((r): r is SmartSearchProduct => r !== undefined);
+
+  // AI chọn ứng viên, User sắp xếp (nếu có yêu cầu sort)
+  let finalSortedRows = relevanceOrderedRows;
+  if (query.sort === 'price_desc') {
+    finalSortedRows = [...relevanceOrderedRows].sort((a, b) => b.price - a.price);
+  } else if (query.sort === 'price_asc') {
+    finalSortedRows = [...relevanceOrderedRows].sort((a, b) => a.price - b.price);
+  } else if (query.sort === 'oldest') {
+    finalSortedRows = [...relevanceOrderedRows].sort((a, b) => a.id - b.id);
+  } else if (query.sort === 'newest') {
+    finalSortedRows = [...relevanceOrderedRows].sort((a, b) => b.id - a.id);
+  }
+
+  const total = finalSortedRows.length;
+  const pageRows = finalSortedRows.slice(offset, offset + limit);
+
+  if (!pageRows.length) {
+    return {
+      data: [] as SmartSearchProduct[],
+      meta: { page, limit: limitStr, total, totalPages: Math.max(1, Math.ceil(total / limit)) },
+    };
+  }
+
+  const data = pageRows;
+
+  return {
+    data,
+    meta: { page, limit: limitStr, total, totalPages: Math.max(1, Math.ceil(total / limit)) },
+  };
+}
+
+/**
+ * Hybrid Search (RRF) dành riêng cho Navbar của User.
+ * Chạy song song Postgres full-text + Qdrant vector, trộn điểm theo RRF, trả về top `limit` kết quả.
+ * Nếu Qdrant chưa có dữ liệu hoặc không kết nối được, fallback hoàn toàn về kết quả Postgres.
+ */
+export async function searchSmartHybrid(keyword: string, limit = 5): Promise<SmartSearchProduct[]> {
+  const q = keyword.trim();
+  if (!q) return [];
+
+  const qUnaccent = toTitleUnaccent(q);
+  const candidateSize = Math.max(limit * 10, 50);
+  const MIN_SCORE_THRESHOLD = 0.7;
+  const K = 50;
+  // 1) PREFIX (ưu tiên cao nhất)
+  const prefixPromise = prisma.product.findMany({
+    where: {
+      OR: [
+        { name: { startsWith: q, mode: 'insensitive' } },
+        { title_unaccent: { startsWith: qUnaccent, mode: 'insensitive' } },
+      ],
+      status: 'AVAILABLE',
+    },
+    select: { id: true },
+    take: candidateSize,
+    orderBy: { id: 'desc' },
+  });
+
+  // 2) TRIGRAM (pg_trgm) — ưu tiên sau prefix
+  // Fallback: nếu DB chưa bật pg_trgm thì coi như rỗng.
+  const trigramPromise: Promise<{ id: number }[]> = prisma
+    .$queryRaw<{ id: number }[]>`
+      SELECT p."id"
+      FROM "Product" p
+      WHERE p."status" = 'AVAILABLE'
+        AND (
+          similarity(p."name", ${q}) > 0.15
+          OR similarity(p."title_unaccent", ${qUnaccent}) > 0.15
+          OR p."name" % ${q}
+          OR p."title_unaccent" % ${qUnaccent}
+        )
+      ORDER BY
+        GREATEST(similarity(p."name", ${q}), similarity(p."title_unaccent", ${qUnaccent})) DESC,
+        p."id" DESC
+      LIMIT ${candidateSize};
+    `
+    .catch(() => []);
+
+  // 3) VECTOR DB (Qdrant) — ưu tiên cuối
+  const vectorPromise = aiService.searchVectors(q, candidateSize);
+
+  const [prefixResults, trigramResults, vectorResults] = await Promise.all([
+    prefixPromise,
+    trigramPromise,
+    vectorPromise,
+  ]);
+
+  const filteredVectorResults = vectorResults.filter((v) => v.score >= MIN_SCORE_THRESHOLD);
+
+  // RRF: trộn điểm theo thứ hạng của từng nguồn (prefix/trigram/vector)
+  const rrfScores = new Map<number, number>();
+  const addRankScores = (items: { id: number }[]) => {
+    items.forEach((item, index) => {
+      const current = rrfScores.get(item.id) || 0;
+      rrfScores.set(item.id, current + 1 / (K + index + 1));
+    });
+  };
+
+  addRankScores(prefixResults);
+  addRankScores(trigramResults);
+  addRankScores(filteredVectorResults);
+
+  const topIds = [...rrfScores.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, limit)
+    .map(([id]) => id);
+  if (!topIds.length) return [];
+
+  const rows = await prisma.product.findMany({
+    where: { id: { in: topIds }, status: 'AVAILABLE' },
+    select: { id: true, name: true, price: true, imageUrl: true },
+  });
+
+  const byId = new Map(rows.map((r) => [r.id, r]));
+  return topIds.map((id) => byId.get(id)).filter((r): r is SmartSearchProduct => r !== undefined);
+}
+
 export async function getProductById(id: number) {
   await ensureRedisConnected();
   const redis = redisClient();
@@ -214,6 +468,21 @@ export async function createProduct(body: {
     },
     include: { category: { select: { id: true, name: true } } },
   });
+
+  // Auto-sync Qdrant khi sản phẩm AVAILABLE
+  if (p.status === 'AVAILABLE') {
+    aiService
+      .initQdrant()
+      .then(() =>
+        aiService.upsertProductVector({
+          id: p.id,
+          name: p.name,
+          description: p.description,
+          categoryName: p.category?.name ?? null,
+        })
+      )
+      .catch((err) => console.warn('[Qdrant] Sync on create failed:', err));
+  }
   return mapProduct(p);
 }
 
@@ -262,6 +531,27 @@ export async function updateProduct(
     },
     include: { category: { select: { id: true, name: true } } },
   });
+
+  // Auto-sync Qdrant theo thay đổi status
+  const prevStatus = existing.status as ProductStatus;
+  const nextStatus = p.status as ProductStatus;
+
+  if (nextStatus === 'AVAILABLE') {
+    aiService
+      .initQdrant()
+      .then(() =>
+        aiService.upsertProductVector({
+          id: p.id,
+          name: p.name,
+          description: p.description,
+          categoryName: p.category?.name ?? null,
+        })
+      )
+      .catch((err) => console.warn('[Qdrant] Sync on update failed:', err));
+  } else if (prevStatus === 'AVAILABLE') {
+    aiService.deleteProductVector(p.id).catch((err) => console.warn('[Qdrant] Delete on update failed:', err));
+  }
+
   const data = mapProduct(p);
 
   // Best-effort cache invalidation to avoid stale detail reads.
@@ -278,6 +568,10 @@ export async function updateProduct(
 export async function deleteProduct(id: number) {
   try {
     await prisma.product.delete({ where: { id } });
+
+    // Xóa Vector DB bên Qdrant
+    aiService.deleteProductVector(id).catch((err) => console.warn('[Qdrant] Delete on product delete failed:', err));
+
     // Best-effort cache invalidation.
     try {
       await ensureRedisConnected();

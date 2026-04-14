@@ -7,6 +7,9 @@ export const productRouter = Router();
 
 productRouter.get('/', productController.listProducts);
 productRouter.get('/landing', productController.getLandingPage);
+productRouter.get('/smart', productController.listSmart);
+productRouter.get('/search', productController.searchSmart);
+productRouter.get('/admin-list', authMiddleware, requireRole(['ADMIN']), productController.listProductsAdmin);
 productRouter.get('/:id', productController.getProductById);
 productRouter.post('/', authMiddleware, requireRole(['ADMIN']), productController.createProduct);
 productRouter.put('/:id', authMiddleware, requireRole(['ADMIN']), productController.updateProduct);
