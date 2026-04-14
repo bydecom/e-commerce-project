@@ -1,5 +1,6 @@
 import { PrismaClient } from '@prisma/client';
 import process from 'process';
+import { syncPostgresToQdrant } from '../src/scripts/sync-qdrant';
 
 const prisma = new PrismaClient();
 
@@ -7,20 +8,14 @@ function removeAccents(str: string) {
   return str.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
 }
 
-/** Random int in [min, max] inclusive */
 function ri(min: number, max: number) {
   return Math.floor(Math.random() * (max - min + 1)) + min;
 }
 
-/** Random element from array */
 function pick<T>(arr: T[]): T {
   return arr[Math.floor(Math.random() * arr.length)];
 }
 
-/**
- * Build a Date that is exactly `daysBack` days before now,
- * with a random hour so orders on the same day are spread out.
- */
 function daysAgo(daysBack: number): Date {
   const d = new Date();
   d.setDate(d.getDate() - daysBack);
@@ -99,47 +94,94 @@ async function main() {
   );
   console.log(`✅ Created ${customers.length} customers + 1 admin.`);
 
-  // ── 5. CATEGORIES & 30 PRODUCTS (prices in VND) ──────────────────────────────
-  const [catPhones, catLaptops, catAccessories] = await Promise.all([
-    prisma.category.create({ data: { name: 'Phones & tablets' } }),
-    prisma.category.create({ data: { name: 'Laptops & computers' } }),
-    prisma.category.create({ data: { name: 'Tech accessories' } }),
+  // ── 5. CATEGORIES — 6 independent, single-concept categories ────────────────
+  //
+  //  1. Smartphone   — điện thoại thông minh các thương hiệu
+  //  2. Laptop       — máy tính xách tay
+  //  3. Tablet       — máy tính bảng
+  //  4. Headphone    — tai nghe (không dây / có dây)
+  //  5. Smartwatch   — đồng hồ thông minh
+  //  6. Charger      — sạc dự phòng, củ sạc, dây sạc
+  //
+  const [
+    catSmartphone,
+    catLaptop,
+    catTablet,
+    catHeadphone,
+    catSmarwatch,
+    catCharger,
+  ] = await Promise.all([
+    prisma.category.create({ data: { name: 'Smartphone' } }),
+    prisma.category.create({ data: { name: 'Laptop' } }),
+    prisma.category.create({ data: { name: 'Tablet' } }),
+    prisma.category.create({ data: { name: 'Headphone' } }),
+    prisma.category.create({ data: { name: 'Smartwatch' } }),
+    prisma.category.create({ data: { name: 'Charger' } }),
   ]);
 
+  // ── 6. PRODUCTS — 50 products spread across 6 categories ────────────────────
   const rawProducts = [
-    // Phones & tablets
-    { name: 'iPhone 15 Pro Max 256GB',     price: 29_990_000, catId: catPhones.id,      stock: ri(5, 40),   desc: 'Titanium design, A17 Pro chip.' },
-    { name: 'Samsung Galaxy S24 Ultra',    price: 31_990_000, catId: catPhones.id,      stock: ri(5, 30),   desc: 'Galaxy AI at your fingertips.' },
-    { name: 'Google Pixel 8 Pro',          price: 23_990_000, catId: catPhones.id,      stock: ri(10, 50),  desc: "Google's best AI experience." },
-    { name: 'OnePlus 12 5G',              price: 18_990_000, catId: catPhones.id,      stock: ri(15, 60),  desc: 'Smooth Snapdragon 8 Gen 3 performance.' },
-    { name: 'Sony Xperia 1 V',            price: 34_990_000, catId: catPhones.id,      stock: ri(3, 15),   desc: 'Professional-grade camera quality.' },
-    { name: 'iPad Pro 12.9-inch M2',       price: 27_990_000, catId: catPhones.id,      stock: ri(8, 35),   desc: 'Outstanding performance, stunning display.' },
-    { name: 'Samsung Galaxy Tab S9 Ultra', price: 28_990_000, catId: catPhones.id,      stock: ri(5, 20),   desc: 'The new standard for premium tablets.' },
-    { name: 'iPad Air 5th Gen',           price: 15_990_000, catId: catPhones.id,      stock: ri(20, 70),  desc: 'Thin, light, and powerful.' },
-    { name: 'Xiaomi Pad 6',              price: 9_490_000,  catId: catPhones.id,      stock: 0,           desc: 'Built for work and entertainment.' },
-    { name: 'Microsoft Surface Pro 9',    price: 24_990_000, catId: catPhones.id,      stock: ri(5, 25),   desc: 'Flexible 2-in-1 laptop and tablet.' },
-    // Laptops & computers
-    { name: 'MacBook Pro 14-inch M3',     price: 39_990_000, catId: catLaptops.id,     stock: ri(5, 20),   desc: 'Breakthrough M3 chip power.' },
-    { name: 'Dell XPS 15',               price: 37_990_000, catId: catLaptops.id,     stock: ri(8, 30),   desc: 'OLED display, high performance.' },
-    { name: 'Lenovo ThinkPad X1 Carbon',  price: 35_990_000, catId: catLaptops.id,     stock: ri(10, 40),  desc: 'Ultra-thin, ultra-light, ultra-durable.' },
-    { name: 'ASUS ROG Zephyrus G14',      price: 42_990_000, catId: catLaptops.id,     stock: ri(5, 15),   desc: 'The best 14-inch gaming laptop.' },
-    { name: 'HP Spectre x360',           price: 32_990_000, catId: catLaptops.id,     stock: ri(10, 35),  desc: 'Premium design, versatile 2-in-1.' },
-    { name: 'Razer Blade 15',            price: 57_990_000, catId: catLaptops.id,     stock: ri(3, 12),   desc: 'The most compact 15.6-inch gaming laptop.' },
-    { name: 'Acer Predator Helios 300',  price: 29_990_000, catId: catLaptops.id,     stock: 0,           desc: 'Advanced cooling system.' },
-    { name: 'MSI Stealth 16 Studio',     price: 47_990_000, catId: catLaptops.id,     stock: ri(4, 10),   desc: 'Sharp looks, excellent performance.' },
-    { name: 'MacBook Air 15-inch M2',    price: 32_990_000, catId: catLaptops.id,     stock: ri(15, 50),  desc: 'Incredibly thin, surprisingly fast.' },
-    { name: 'LG Gram 17',               price: 37_990_000, catId: catLaptops.id,     stock: ri(5, 20),   desc: 'Ultra-light 17-inch laptop.' },
-    // Accessories
-    { name: 'Sony WH-1000XM5',           price: 8_490_000,  catId: catAccessories.id, stock: ri(20, 80),  desc: 'Industry-leading noise cancellation.' },
-    { name: 'AirPods Pro 2nd Gen',       price: 5_990_000,  catId: catAccessories.id, stock: ri(30, 90),  desc: 'Audio rebuilt from the ground up.' },
-    { name: 'Logitech MX Master 3S',     price: 2_390_000,  catId: catAccessories.id, stock: ri(40, 100), desc: 'The iconic mouse, upgraded.' },
-    { name: 'Keychron K8 Pro Wireless',  price: 2_590_000,  catId: catAccessories.id, stock: ri(25, 70),  desc: 'Wireless mechanical keyboard with QMK/VIA.' },
-    { name: 'Apple Watch Series 9',      price: 9_990_000,  catId: catAccessories.id, stock: 3,           desc: 'Smarter, brighter, and more capable.' },
-    { name: 'Garmin Fenix 7X Pro',       price: 22_990_000, catId: catAccessories.id, stock: ri(5, 15),   desc: 'Top-tier multi-sport GPS watch.' },
-    { name: 'Anker 737 Power Bank',      price: 3_590_000,  catId: catAccessories.id, stock: ri(50, 120), desc: 'Powerful two-way fast charging.' },
-    { name: 'Ugreen 100W GaN Charger',   price: 1_390_000,  catId: catAccessories.id, stock: 7,           desc: 'Fast-charge up to four devices at once.' },
-    { name: 'Samsung T7 Shield 2TB SSD', price: 3_990_000,  catId: catAccessories.id, stock: ri(20, 60),  desc: 'Rugged, fast portable storage.' },
-    { name: 'Elgato Stream Deck MK.2',   price: 3_490_000,  catId: catAccessories.id, stock: ri(15, 40),  desc: '15 customizable LCD keys for streamers.' },
+    // ── Smartphone (10) ──────────────────────────────────────────────────────
+    { name: 'iPhone 15 Pro Max 256GB',          price: 29_990_000, cat: catSmartphone, stock: ri(5,  40), desc: 'Titanium frame, A17 Pro chip, 48MP main camera.' },
+    { name: 'iPhone 15 128GB',                  price: 22_490_000, cat: catSmartphone, stock: ri(10, 60), desc: 'Dynamic Island, USB-C, all-day battery.' },
+    { name: 'Samsung Galaxy S24 Ultra 512GB',   price: 33_990_000, cat: catSmartphone, stock: ri(5,  25), desc: 'Built-in S Pen, 200MP camera, Galaxy AI.' },
+    { name: 'Samsung Galaxy A55 5G 256GB',      price: 9_990_000,  cat: catSmartphone, stock: ri(20, 80), desc: 'Slim design, 50MP OIS camera, IP67 rating.' },
+    { name: 'Google Pixel 8 Pro 128GB',         price: 23_990_000, cat: catSmartphone, stock: ri(8,  35), desc: 'Best computational photography on Android.' },
+    { name: 'OnePlus 12 5G 256GB',              price: 18_990_000, cat: catSmartphone, stock: ri(10, 45), desc: 'Snapdragon 8 Gen 3, 100W SuperVOOC charging.' },
+    { name: 'Xiaomi 14 Pro 512GB',              price: 26_990_000, cat: catSmartphone, stock: ri(5,  20), desc: 'Leica optics, Snapdragon 8 Gen 3, 120W charging.' },
+    { name: 'OPPO Find X7 Ultra 256GB',         price: 28_490_000, cat: catSmartphone, stock: ri(3,  15), desc: 'Dual periscope camera, Hasselblad color tuning.' },
+    { name: 'Vivo X100 Pro 256GB',              price: 25_990_000, cat: catSmartphone, stock: ri(5,  20), desc: 'ZEISS optics, 100W wireless flash charging.' },
+    { name: 'Realme GT 6 256GB',                price: 13_490_000, cat: catSmartphone, stock: 0,          desc: 'Snapdragon 8s Gen 3, 120Hz AMOLED, 120W turbo.' },
+
+    // ── Laptop (10) ───────────────────────────────────────────────────────────
+    { name: 'MacBook Pro 14-inch M3 Pro',       price: 44_990_000, cat: catLaptop, stock: ri(5,  20), desc: 'M3 Pro chip, 18GB RAM, Liquid Retina XDR display.' },
+    { name: 'MacBook Air 15-inch M2',           price: 32_990_000, cat: catLaptop, stock: ri(10, 40), desc: 'Fanless design, 18-hour battery, 1080p webcam.' },
+    { name: 'Dell XPS 15 9530',                 price: 38_990_000, cat: catLaptop, stock: ri(5,  25), desc: 'OLED 3.5K touch display, RTX 4060, 13th Gen Intel.' },
+    { name: 'Lenovo ThinkPad X1 Carbon Gen 12', price: 36_490_000, cat: catLaptop, stock: ri(8,  30), desc: 'Ultra-light 1.12 kg, vPro, MIL-SPEC certified.' },
+    { name: 'ASUS ROG Zephyrus G14 2024',       price: 43_990_000, cat: catLaptop, stock: ri(4,  15), desc: 'Ryzen 9 8945HS, RTX 4070, 120Hz OLED panel.' },
+    { name: 'HP Spectre x360 14',               price: 34_990_000, cat: catLaptop, stock: ri(8,  30), desc: '2-in-1 OLED, Intel Core Ultra 7, OLED pen display.' },
+    { name: 'Razer Blade 16 2024',              price: 59_990_000, cat: catLaptop, stock: ri(2,  10), desc: 'RTX 4090, dual-mode 240Hz OLED, per-key RGB.' },
+    { name: 'MSI Stealth 16 Studio A13V',       price: 49_990_000, cat: catLaptop, stock: ri(3,  12), desc: 'RTX 4070, QHD+ 240Hz, Intel Core i9 HX.' },
+    { name: 'Acer Swift 14 AI',                 price: 21_990_000, cat: catLaptop, stock: ri(10, 50), desc: 'Intel Core Ultra 5, NPU for AI tasks, OLED display.' },
+    { name: 'LG Gram 17 2024',                  price: 38_490_000, cat: catLaptop, stock: 0,          desc: 'Only 1.35 kg, 17-inch IPS, 22-hour battery life.' },
+
+    // ── Tablet (8) ────────────────────────────────────────────────────────────
+    { name: 'iPad Pro 13-inch M4 256GB WiFi',   price: 32_990_000, cat: catTablet, stock: ri(5,  20), desc: 'Ultra Retina XDR OLED, M4 chip, under 6mm thin.' },
+    { name: 'iPad Air 11-inch M2 128GB WiFi',   price: 17_990_000, cat: catTablet, stock: ri(15, 50), desc: 'Powerful M2 chip, supports Apple Pencil Pro.' },
+    { name: 'iPad mini 7th Gen 64GB WiFi',      price: 13_990_000, cat: catTablet, stock: ri(10, 40), desc: 'Compact 8.3-inch, A17 Pro, USB-C.' },
+    { name: 'Samsung Galaxy Tab S9 Ultra 256GB',price: 29_990_000, cat: catTablet, stock: ri(4,  18), desc: '14.6-inch AMOLED, S Pen included, IP68.' },
+    { name: 'Samsung Galaxy Tab S9 FE 128GB',   price: 10_490_000, cat: catTablet, stock: ri(15, 55), desc: 'Exynos 1380, 45W charging, IP68 durability.' },
+    { name: 'Xiaomi Pad 6S Pro 256GB',          price: 12_990_000, cat: catTablet, stock: ri(8,  30), desc: 'Snapdragon 8 Gen 2, 144Hz display, 10000mAh.' },
+    { name: 'Lenovo Tab P12 Pro 256GB',         price: 15_490_000, cat: catTablet, stock: ri(5,  20), desc: '12.6-inch AMOLED, Snapdragon 870, stylus support.' },
+    { name: 'Microsoft Surface Pro 10',         price: 27_990_000, cat: catTablet, stock: ri(4,  15), desc: 'Intel Core Ultra, detachable keyboard, 13-inch.' },
+
+    // ── Headphone (8) ─────────────────────────────────────────────────────────
+    { name: 'Sony WH-1000XM5',                  price: 8_490_000,  cat: catHeadphone, stock: ri(20, 80), desc: 'Industry-leading ANC, 30-hour battery, LDAC.' },
+    { name: 'Apple AirPods Pro 2nd Gen',        price: 5_990_000,  cat: catHeadphone, stock: ri(30, 90), desc: 'Adaptive Audio, H2 chip, MagSafe charging case.' },
+    { name: 'Bose QuietComfort Ultra',          price: 9_990_000,  cat: catHeadphone, stock: ri(10, 40), desc: 'Immersive audio, CustomTune ANC, 24-hour life.' },
+    { name: 'Samsung Galaxy Buds3 Pro',         price: 4_490_000,  cat: catHeadphone, stock: ri(15, 60), desc: 'Blade design, 360° audio, hi-fi 24-bit sound.' },
+    { name: 'Jabra Evolve2 85',                 price: 10_490_000, cat: catHeadphone, stock: ri(5,  25), desc: '10-mic ANC, UC certified, 37-hour battery.' },
+    { name: 'Sennheiser Momentum 4 Wireless',   price: 8_990_000,  cat: catHeadphone, stock: ri(8,  30), desc: 'Crystal-clear sound, 60-hour battery, ANC.' },
+    { name: 'Audio-Technica ATH-M50xBT2',       price: 3_990_000,  cat: catHeadphone, stock: ri(20, 70), desc: 'Studio-reference sound, 50-hour wireless battery.' },
+    { name: 'Nothing Ear 2',                    price: 2_990_000,  cat: catHeadphone, stock: 0,          desc: 'Transparent design, Hi-Res Audio, LHDC 5.0.' },
+
+    // ── Smartwatch (7) ────────────────────────────────────────────────────────
+    { name: 'Apple Watch Series 10 GPS 46mm',   price: 11_990_000, cat: catSmarwatch, stock: ri(10, 40), desc: 'Largest display ever, 30% thinner, sleep apnea detection.' },
+    { name: 'Apple Watch Ultra 2',              price: 22_990_000, cat: catSmarwatch, stock: ri(3,  12), desc: 'Titanium case, dual-frequency GPS, 60-hour battery.' },
+    { name: 'Samsung Galaxy Watch 7 44mm',      price: 8_990_000,  cat: catSmarwatch, stock: ri(10, 45), desc: 'Advanced BioActive sensor, AI health coaching.' },
+    { name: 'Garmin Fenix 8 Solar 47mm',        price: 24_990_000, cat: catSmarwatch, stock: ri(3,  12), desc: 'Solar charging, multi-band GPS, AMOLED display.' },
+    { name: 'Garmin Venu 3',                    price: 11_490_000, cat: catSmarwatch, stock: ri(8,  30), desc: 'AMOLED display, wheelchair activity tracking, Nap detection.' },
+    { name: 'Fitbit Sense 3',                   price: 5_990_000,  cat: catSmarwatch, stock: ri(15, 55), desc: 'ECG sensor, EDA scan, skin temperature, SpO2.' },
+    { name: 'Amazfit GTR 4',                    price: 3_490_000,  cat: catSmarwatch, stock: ri(20, 70), desc: '150+ sports modes, 14-day battery, dual-band GPS.' },
+
+    // ── Charger (7) ───────────────────────────────────────────────────────────
+    { name: 'Anker Prime 27650mAh Power Bank',  price: 4_990_000,  cat: catCharger, stock: ri(30, 80), desc: '250W output, charge 3 devices simultaneously.' },
+    { name: 'Anker 737 GaN Charger 120W',       price: 2_490_000,  cat: catCharger, stock: ri(30, 90), desc: '3-port GaN, charges laptop + phone + tablet at once.' },
+    { name: 'Ugreen Nexode 100W GaN Charger',   price: 1_390_000,  cat: catCharger, stock: 7,          desc: '4-port ultra-compact, universal compatibility.' },
+    { name: 'Baseus 65W USB-C GaN Charger',     price: 890_000,    cat: catCharger, stock: ri(40, 100), desc: 'Foldable pins, PD 3.0, supports MacBook Air.' },
+    { name: 'Apple MagSafe Charger 1m',         price: 990_000,    cat: catCharger, stock: ri(30, 80),  desc: 'Magnetic alignment, 15W fast wireless charging.' },
+    { name: 'Xiaomi 67W Turbo Charging Kit',    price: 690_000,    cat: catCharger, stock: ri(40, 100), desc: 'Includes turbo charger brick and USB-C cable.' },
+    { name: 'Samsung 25W Super Fast Charger',   price: 590_000,    cat: catCharger, stock: ri(50, 120), desc: 'USB-C PD, compatible with Galaxy S and Note series.' },
   ];
 
   await prisma.product.createMany({
@@ -151,29 +193,16 @@ async function main() {
       stock: p.stock,
       imageUrl: `https://via.placeholder.com/300x300/F3F4F6/333333/?text=Product+${i + 1}`,
       status: 'AVAILABLE' as const,
-      categoryId: p.catId,
+      categoryId: p.cat.id,
     })),
   });
 
   const allProducts = await prisma.product.findMany({ orderBy: { id: 'asc' } });
-  console.log(`✅ Created 3 categories and ${allProducts.length} products.`);
+  console.log(`✅ Created 6 categories and ${allProducts.length} products.`);
 
-  // ── 6. ORDERS — 120 orders, strictly oldest → newest ────────────────────────
-  //
-  // Strategy: assign each order a "daysBack" value from 59 down to 0,
-  // so when sorted by createdAt ASC the IDs are naturally chronological.
-  //
-  // Distribution of dates:
-  //   orders 0–29  : daysBack 59 → 30  (older history)
-  //   orders 30–89 : daysBack 29 → 7   (mid-range)
-  //   orders 90–119: daysBack 6  → 0   (last 7 days — ensures chart data)
-  //
-  // Within each bucket we step evenly so there are no duplicate days at the
-  // extremes, and each "slot" gets a random hour for variety.
-
+  // ── 7. ORDERS — 120 orders, strictly oldest → newest ────────────────────────
   type OrderStatus = 'DONE' | 'PENDING' | 'CONFIRMED' | 'SHIPPING' | 'CANCELLED';
 
-  // Weight: DONE 55 % | SHIPPING 15 % | CONFIRMED 12 % | PENDING 10 % | CANCELLED 8 %
   const statusPool: OrderStatus[] = [
     ...Array<OrderStatus>(55).fill('DONE'),
     ...Array<OrderStatus>(15).fill('SHIPPING'),
@@ -182,11 +211,10 @@ async function main() {
     ...Array<OrderStatus>(8).fill('CANCELLED'),
   ];
 
-  /** Linear map from order index to daysBack (largest first = oldest first). */
   function daysBackForIndex(i: number): number {
-    if (i < 30)  return 59 - Math.floor((i / 29) * 29);  // 59 → 30
-    if (i < 90)  return 29 - Math.floor(((i - 30) / 59) * 22); // 29 → 7
-    return 6 - Math.floor(((i - 90) / 29) * 6);           // 6 → 0
+    if (i < 30)  return 59 - Math.floor((i / 29) * 29);
+    if (i < 90)  return 29 - Math.floor(((i - 30) / 59) * 22);
+    return 6 - Math.floor(((i - 90) / 29) * 6);
   }
 
   for (let i = 0; i < 120; i++) {
@@ -216,7 +244,7 @@ async function main() {
   }
   console.log('✅ Created 120 orders in chronological order (oldest → newest).');
 
-  // ── 7. FEEDBACKS on DONE orders (~70 % coverage) ────────────────────────────
+  // ── 8. FEEDBACKS on DONE orders (~70 % coverage) ────────────────────────────
   const doneOrdersFromDb = await prisma.order.findMany({
     where: { status: 'DONE' },
     orderBy: { createdAt: 'asc' },
@@ -255,7 +283,6 @@ async function main() {
     'Terrible battery life, only lasts a few hours.',
   ];
 
-  // 60 % POSITIVE | 25 % NEUTRAL | 15 % NEGATIVE
   const sentimentPool = [
     ...Array<'POSITIVE'>(60).fill('POSITIVE'),
     ...Array<'NEUTRAL'>(25).fill('NEUTRAL'),
@@ -264,7 +291,7 @@ async function main() {
 
   let feedbackCount = 0;
   for (const order of doneOrdersFromDb) {
-    if (Math.random() > 0.70) continue; // ~70 % of DONE orders get reviewed
+    if (Math.random() > 0.70) continue;
     const itemsToReview = [...order.items].sort(() => 0.5 - Math.random()).slice(0, ri(1, 2));
     for (const item of itemsToReview) {
       const sentiment = pick(sentimentPool);
@@ -292,17 +319,21 @@ async function main() {
   }
   console.log(`✅ Created ${feedbackCount} feedbacks on DONE orders.`);
 
-  // ── 8. SUMMARY ──────────────────────────────────────────────────────────────
+  // ── 9. SUMMARY ──────────────────────────────────────────────────────────────
   const totalOrders  = await prisma.order.count();
   const totalRevenue = await prisma.order.aggregate({ where: { status: 'DONE' }, _sum: { total: true } });
   const totalFeedbacks = await prisma.feedback.count();
 
   console.log('\n🎉 SEED COMPLETE!');
   console.log(`   👤 Customers : ${customers.length} + 1 admin`);
-  console.log(`   📦 Products  : ${allProducts.length} (includes low-stock / out-of-stock items)`);
+  console.log(`   📦 Products  : ${allProducts.length} across 6 categories`);
   console.log(`   🛒 Orders    : ${totalOrders} (oldest → newest)`);
   console.log(`   💰 Revenue   : ${totalRevenue._sum.total?.toLocaleString('en-US')} VND (DONE)`);
   console.log(`   ⭐ Reviews   : ${totalFeedbacks} (60% positive / 25% neutral / 15% negative)`);
+
+  // ── 10. SYNC VECTORS TO QDRANT ───────────────────────────────────────────────
+  console.log('\n🤖 Bắt đầu đồng bộ vector AI sang Qdrant...');
+  await syncPostgresToQdrant();
 }
 
 main()

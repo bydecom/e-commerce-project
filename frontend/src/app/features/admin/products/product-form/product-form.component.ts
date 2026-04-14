@@ -193,10 +193,12 @@ import type { ProductStatus } from '../../../../shared/models/product.model';
                   </label>
                   <div class="relative mt-2 rounded-md shadow-sm">
                     <input
-                      type="number"
-                      formControlName="price"
-                      min="0"
-                      step="1000"
+                      type="text"
+                      inputmode="numeric"
+                      [value]="priceDisplay"
+                      (input)="onPriceInput($any($event.target).value)"
+                      (focus)="onPriceFocus()"
+                      (blur)="onPriceBlur()"
                       class="block w-full rounded-md border-0 py-1.5 pl-3 pr-12 text-gray-900 ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm sm:leading-6"
                     />
                     <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-3">
@@ -210,10 +212,12 @@ import type { ProductStatus } from '../../../../shared/models/product.model';
                     Stock Quantity <span class="text-red-500">*</span>
                   </label>
                   <input
-                    type="number"
-                    formControlName="stock"
-                    min="0"
-                    step="1"
+                    type="text"
+                    inputmode="numeric"
+                    [value]="stockDisplay"
+                    (input)="onStockInput($any($event.target).value)"
+                    (focus)="onStockFocus()"
+                    (blur)="onStockBlur()"
                     class="mt-2 block w-full rounded-md border-0 px-3 py-1.5 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm sm:leading-6"
                   />
                 </div>
@@ -283,11 +287,20 @@ export class AdminProductFormComponent implements OnInit {
 
   private productId: number | null = null;
 
+  /** Giá hiển thị dạng 1,000,000 (nhưng form lưu number). */
+  priceDisplay = '';
+  /** Stock hiển thị (form lưu number). */
+  stockDisplay = '';
+
+  private priceFocused = false;
+  private stockFocused = false;
+
   readonly form = this.fb.nonNullable.group({
     name: ['', [Validators.required]],
     description: [''],
     price: [0, [Validators.required, Validators.min(0)]],
-    stock: [0, [Validators.required, Validators.min(0)]],
+    // Stock: không quăng lỗi khi âm, sẽ tự clamp về 0.
+    stock: [0, [Validators.required]],
     imageUrl: [''],
     categoryId: this.fb.control<number | null>(null, [Validators.required]),
     status: this.fb.nonNullable.control<ProductStatus>('DRAFT', [Validators.required]),
@@ -309,6 +322,10 @@ export class AdminProductFormComponent implements OnInit {
       error: () => this.categories.set([]),
     });
 
+    // Khởi tạo hiển thị theo form value (chưa focus thì luôn show 0)
+    this.priceDisplay = this.formatVnd(this.form.controls.price.value);
+    this.stockDisplay = this.formatInt(this.form.controls.stock.value);
+
     if (!this.isNew() && this.productId !== null) {
       this.loading.set(true);
       this.api.getById(this.productId).subscribe({
@@ -322,6 +339,8 @@ export class AdminProductFormComponent implements OnInit {
             categoryId: p.categoryId,
             status: p.status,
           });
+          this.priceDisplay = this.formatVnd(p.price);
+          this.stockDisplay = this.formatInt(p.stock);
           this.loading.set(false);
         },
         error: (e: Error) => {
@@ -330,6 +349,82 @@ export class AdminProductFormComponent implements OnInit {
         },
       });
     }
+  }
+
+  onPriceFocus(): void {
+    this.priceFocused = true;
+    if ((this.form.controls.price.value ?? 0) === 0) this.priceDisplay = '';
+  }
+
+  onPriceInput(raw: string): void {
+    // Giá: cho phép user nhập dấu "," (ngăn cách hàng nghìn) và dấu "." (thập phân).
+    // Nếu có ".", coi là số thập phân => KHÔNG auto-format thêm dấu "," để tránh đổi ý người dùng.
+    const hasDot = raw.includes('.');
+    if (hasDot) {
+      // giữ digits và 1 dấu "."
+      const cleaned = raw
+        .replace(/,/g, '')
+        .replace(/[^\d.]/g, '')
+        .replace(/(\..*)\./g, '$1'); // chỉ cho 1 dấu .
+
+      const n = cleaned === '' || cleaned === '.' ? 0 : Number(cleaned);
+      this.form.controls.price.setValue(Number.isFinite(n) && n >= 0 ? n : 0, { emitEvent: false });
+      this.priceDisplay = cleaned;
+      return;
+    }
+
+    // Không có "." => coi là số nguyên VND, auto-format dấu "," ngay khi gõ
+    const digits = raw.replace(/[^\d]/g, '');
+    const n = digits ? Number(digits) : 0;
+    this.form.controls.price.setValue(Number.isFinite(n) && n >= 0 ? n : 0, { emitEvent: false });
+    this.priceDisplay = digits ? this.formatVnd(n) : '';
+  }
+
+  onPriceBlur(): void {
+    this.priceFocused = false;
+    const raw = (this.priceDisplay ?? '').trim();
+    if (raw.includes('.')) {
+      // giữ nguyên nếu user đang nhập thập phân; dọn trường hợp "." ở cuối
+      this.priceDisplay = raw.endsWith('.') ? raw.slice(0, -1) : raw;
+      const n = this.priceDisplay === '' ? 0 : Number(this.priceDisplay.replace(/,/g, ''));
+      this.form.controls.price.setValue(Number.isFinite(n) && n >= 0 ? n : 0, { emitEvent: false });
+      return;
+    }
+    this.priceDisplay = this.formatVnd(this.form.controls.price.value);
+  }
+
+  private formatVnd(value: number): string {
+    const n = Number(value);
+    const safe = Number.isFinite(n) && n > 0 ? Math.floor(n) : 0;
+    return new Intl.NumberFormat('en-US').format(safe);
+  }
+
+  onStockFocus(): void {
+    this.stockFocused = true;
+    if ((this.form.controls.stock.value ?? 0) === 0) this.stockDisplay = '';
+  }
+
+  onStockInput(raw: string): void {
+    // chỉ nhận số nguyên, âm -> 0
+    const digits = raw.replace(/[^\d]/g, '');
+    const n = digits ? Number(digits) : 0;
+    const safe = Number.isFinite(n) ? Math.max(0, Math.floor(n)) : 0;
+    this.form.controls.stock.setValue(safe, { emitEvent: false });
+    // Stock: KHÔNG format dấu ",".
+    this.stockDisplay = digits ? String(safe) : '';
+  }
+
+  onStockBlur(): void {
+    this.stockFocused = false;
+    const safe = Math.max(0, Math.floor(Number(this.form.controls.stock.value) || 0));
+    this.form.controls.stock.setValue(safe, { emitEvent: false });
+    this.stockDisplay = this.formatInt(safe);
+  }
+
+  private formatInt(value: number): string {
+    const n = Number(value);
+    const safe = Number.isFinite(n) && n > 0 ? Math.floor(n) : 0;
+    return String(safe);
   }
 
   enhanceDescription(): void {
@@ -379,6 +474,10 @@ export class AdminProductFormComponent implements OnInit {
     if (categoryId === null) return;
 
     const imageUrl = v.imageUrl.trim() === '' ? null : v.imageUrl.trim();
+    const stock = Math.max(0, Math.floor(Number(v.stock) || 0));
+    // Price có thể là số thập phân (nếu user nhập ".") => không tự ý làm tròn xuống.
+    const priceNum = Number(v.price);
+    const price = Number.isFinite(priceNum) ? Math.max(0, priceNum) : 0;
 
     this.saving.set(true);
 
@@ -387,8 +486,8 @@ export class AdminProductFormComponent implements OnInit {
         .create({
           name: v.name.trim(),
           description: v.description.trim() === '' ? null : v.description.trim(),
-          price: v.price,
-          stock: v.stock,
+          price,
+          stock,
           imageUrl,
           categoryId,
           status: v.status,
@@ -408,8 +507,8 @@ export class AdminProductFormComponent implements OnInit {
         .update(this.productId, {
           name: v.name.trim(),
           description: v.description.trim() === '' ? null : v.description.trim(),
-          price: v.price,
-          stock: v.stock,
+          price,
+          stock,
           imageUrl,
           categoryId,
           status: v.status,

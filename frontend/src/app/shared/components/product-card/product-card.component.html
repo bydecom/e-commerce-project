@@ -16,7 +16,9 @@
     @if (product.category; as cat) {
       <p class="text-xs font-medium uppercase tracking-wide text-emerald-700/90">{{ cat.name }}</p>
     }
-    <h3 class="mt-1 line-clamp-2 text-base font-semibold leading-snug text-stone-900">{{ product.name }}</h3>
+    <h3 class="mt-1 line-clamp-2 min-h-[2.75rem] text-base font-semibold leading-snug text-stone-900">
+      {{ product.name }}
+    </h3>
     <p class="mt-3 text-xl font-bold text-emerald-800">{{ product.price | currencyVnd }}</p>
     <a
       [routerLink]="['/products', product.id]"

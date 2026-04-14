@@ -318,7 +318,7 @@ export class AdminProductListComponent implements OnInit, OnDestroy {
     this.error.set(null);
 
     this.pendingSub = this.api
-      .list({
+      .listAdmin({
         page: this.page,
         limit: this.limit,
         search: this.appliedSearch || undefined,
