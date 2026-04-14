@@ -1,5 +1,6 @@
 import { Prisma, type Product, type ProductStatus } from '@prisma/client';
 import { prisma } from '../../db';
+import { ensureRedisConnected, redisClient } from '../../config/redis';
 import { parsePagination } from '../../utils/pagination';
 import { httpError } from '../../utils/http-error';
 
@@ -16,11 +17,48 @@ function mapProduct(p: Product & { category?: { id: number; name: string } }) {
     description: p.description,
     price: p.price,
     stock: p.stock,
+    // Frontend product detail needs a stable `quantity` field.
+    // We keep `stock` for backward compatibility and expose `quantity` as an alias.
+    quantity: p.stock,
     imageUrl: p.imageUrl,
     status: p.status,
     categoryId: p.categoryId,
     category: p.category ? { id: p.category.id, name: p.category.name } : undefined,
   };
+}
+
+function productDetailCacheKey(id: number): string {
+  return `product:detail:${id}`;
+}
+
+function productDetailCacheTtlSeconds(): number {
+  const raw = (process.env.PRODUCT_DETAIL_CACHE_TTL_SECONDS || '').trim();
+  const n = raw ? parseInt(raw, 10) : NaN;
+  if (!Number.isFinite(n) || n <= 0) return 60;
+  return Math.min(60 * 60, n); // cap at 1 hour
+}
+
+function safeParseCachedProduct(raw: string): ReturnType<typeof mapProduct> | null {
+  try {
+    const v = JSON.parse(raw) as Partial<ReturnType<typeof mapProduct>>;
+    const id = typeof v.id === 'number' ? v.id : parseInt(String(v.id ?? ''), 10);
+    if (!Number.isFinite(id) || id <= 0) return null;
+    if (typeof v.name !== 'string' || !v.name) return null;
+    if (typeof v.price !== 'number' || !Number.isFinite(v.price)) return null;
+    const stock = typeof v.stock === 'number' ? v.stock : parseInt(String(v.stock ?? ''), 10);
+    if (!Number.isFinite(stock) || stock < 0) return null;
+    const quantity =
+      typeof v.quantity === 'number' ? v.quantity : parseInt(String(v.quantity ?? ''), 10);
+    if (!Number.isFinite(quantity) || quantity < 0) return null;
+    if (v.status !== 'AVAILABLE' && v.status !== 'UNAVAILABLE' && v.status !== 'DRAFT') return null;
+    const categoryId =
+      typeof v.categoryId === 'number' ? v.categoryId : parseInt(String(v.categoryId ?? ''), 10);
+    if (!Number.isFinite(categoryId) || categoryId <= 0) return null;
+
+    return v as ReturnType<typeof mapProduct>;
+  } catch {
+    return null;
+  }
 }
 
 const sortMap: Record<string, Prisma.ProductOrderByWithRelationInput> = {
@@ -124,12 +162,26 @@ export async function listProducts(query: {
 }
 
 export async function getProductById(id: number) {
+  await ensureRedisConnected();
+  const redis = redisClient();
+  const key = productDetailCacheKey(id);
+
+  const cachedRaw = await redis.get(key);
+  if (cachedRaw) {
+    const cached = safeParseCachedProduct(cachedRaw);
+    if (cached) return cached;
+  }
+
   const p = await prisma.product.findUnique({
     where: { id },
     include: { category: { select: { id: true, name: true } } },
   });
   if (!p) throw httpError(404, 'Product not found');
-  return mapProduct(p);
+  const data = mapProduct(p);
+
+  // Best-effort cache fill.
+  await redis.set(key, JSON.stringify(data), { EX: productDetailCacheTtlSeconds() });
+  return data;
 }
 
 export async function createProduct(body: {
@@ -210,12 +262,29 @@ export async function updateProduct(
     },
     include: { category: { select: { id: true, name: true } } },
   });
-  return mapProduct(p);
+  const data = mapProduct(p);
+
+  // Best-effort cache invalidation to avoid stale detail reads.
+  try {
+    await ensureRedisConnected();
+    await redisClient().del(productDetailCacheKey(id));
+  } catch {
+    // ignore Redis issues (DB update already succeeded)
+  }
+
+  return data;
 }
 
 export async function deleteProduct(id: number) {
   try {
     await prisma.product.delete({ where: { id } });
+    // Best-effort cache invalidation.
+    try {
+      await ensureRedisConnected();
+      await redisClient().del(productDetailCacheKey(id));
+    } catch {
+      // ignore
+    }
   } catch (e) {
     if (e instanceof Prisma.PrismaClientKnownRequestError) {
       if (e.code === 'P2025') throw httpError(404, 'Product not found');

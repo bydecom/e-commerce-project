@@ -21,6 +21,7 @@ import { setupSwagger } from './config/swagger';
 import { systemLogRouter } from './modules/system-log/system-log.route';
 import { ensureRedisConnected } from './config/redis';
 import { cartRouter } from './modules/cart/cart.route';
+import { paymentRouter } from './modules/payment/payment.route';
 
 export const app = express();
 
@@ -80,5 +81,6 @@ app.use('/api/ai', aiRouter);
 app.use('/api/store-settings', storeSettingRoute);
 app.use('/api/system-logs', systemLogRouter);
 app.use('/api/cart', cartRouter);
+app.use('/api/payments', paymentRouter);
 
 app.use(errorMiddleware);

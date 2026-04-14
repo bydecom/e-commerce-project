@@ -16,6 +16,30 @@ export class UserApiService {
   private readonly http = inject(HttpClient);
   private readonly baseUrl = `${environment.apiUrl}/api/users`;
 
+  getMe(): Observable<User> {
+    return this.http.get<ApiSuccess<User>>(`${this.baseUrl}/me`).pipe(
+      map((r) => {
+        if (!r.success) {
+          throw new Error(r.message);
+        }
+        return r.data;
+      }),
+      catchError(mapHttpError)
+    );
+  }
+
+  updateMe(patch: { name?: string | null; phone?: string | null; address?: string | null }): Observable<User> {
+    return this.http.put<ApiSuccess<User>>(`${this.baseUrl}/me`, patch).pipe(
+      map((r) => {
+        if (!r.success) {
+          throw new Error(r.message);
+        }
+        return r.data;
+      }),
+      catchError(mapHttpError)
+    );
+  }
+
   getUsers(
     page = 1,
     limit = 20,

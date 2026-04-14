@@ -89,6 +89,19 @@ export class AuthService {
     this.persistSession(token, user);
   }
 
+  /** Updates local user snapshot without changing the auth token. */
+  updateCurrentUserSnapshot(user: User): void {
+    if (!isPlatformBrowser(this.platformId)) {
+      return;
+    }
+    const token = localStorage.getItem(TOKEN_KEY);
+    if (!token) {
+      return;
+    }
+    localStorage.setItem(USER_KEY, JSON.stringify(user));
+    this.userSignal.set(user);
+  }
+
   /**
    * Calls `POST /api/auth/logout` to blacklist the JWT server-side, then clears client session.
    * If there is no token (or outside browser), only clears local state.

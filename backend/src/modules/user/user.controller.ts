@@ -41,3 +41,58 @@ export async function updateRole(req: Request, res: Response, next: NextFunction
     next(err);
   }
 }
+
+export async function getMe(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const auth = req.auth;
+    if (!auth) {
+      res.status(401).json({ success: false, message: 'Unauthorized', errors: null });
+      return;
+    }
+    const me = await userService.getMe(auth.userId);
+    res.json(success(me));
+  } catch (err) {
+    next(err);
+  }
+}
+
+function normalizeOptionalString(v: unknown): string | null | undefined {
+  if (v === undefined) return undefined;
+  if (v === null) return null;
+  if (typeof v !== 'string') return undefined;
+  const s = v.trim();
+  return s.length === 0 ? null : s;
+}
+
+export async function updateMe(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const auth = req.auth;
+    if (!auth) {
+      res.status(401).json({ success: false, message: 'Unauthorized', errors: null });
+      return;
+    }
+
+    const body = req.body as Record<string, unknown>;
+    const name = normalizeOptionalString(body['name']);
+    const phone = normalizeOptionalString(body['phone']);
+    const address = normalizeOptionalString(body['address']);
+
+    if (name !== undefined && name !== null && name.length > 100) {
+      res.status(400).json({ success: false, message: 'name is too long', errors: null });
+      return;
+    }
+    if (phone !== undefined && phone !== null && phone.length > 30) {
+      res.status(400).json({ success: false, message: 'phone is too long', errors: null });
+      return;
+    }
+    if (address !== undefined && address !== null && address.length > 500) {
+      res.status(400).json({ success: false, message: 'address is too long', errors: null });
+      return;
+    }
+
+    const updated = await userService.updateMe(auth.userId, { name, phone, address });
+    res.json(success(updated));
+  } catch (err) {
+    next(err);
+  }
+}

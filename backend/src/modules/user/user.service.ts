@@ -11,6 +11,16 @@ const userListSelect = {
   createdAt: true,
 } as const;
 
+const userMeSelect = {
+  id: true,
+  email: true,
+  name: true,
+  phone: true,
+  address: true,
+  role: true,
+  createdAt: true,
+} as const;
+
 export async function listUsers(params: { page: number; limit: number; search?: string }) {
   const page = Math.max(1, params.page);
   const limit = Math.min(100, Math.max(1, params.limit));
@@ -69,5 +79,35 @@ export async function updateUserRole(targetId: number, newRole: Role) {
     where: { id: targetId },
     data: { role: newRole },
     select: userListSelect,
+  });
+}
+
+export async function getMe(userId: number) {
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: userMeSelect,
+  });
+  if (!user) {
+    throw httpError(404, 'User not found');
+  }
+  return user;
+}
+
+export async function updateMe(
+  userId: number,
+  patch: { name?: string | null; phone?: string | null; address?: string | null }
+) {
+  const existing = await prisma.user.findUnique({ where: { id: userId }, select: { id: true } });
+  if (!existing) {
+    throw httpError(404, 'User not found');
+  }
+  return prisma.user.update({
+    where: { id: userId },
+    data: {
+      ...(patch.name !== undefined ? { name: patch.name } : {}),
+      ...(patch.phone !== undefined ? { phone: patch.phone } : {}),
+      ...(patch.address !== undefined ? { address: patch.address } : {}),
+    },
+    select: userMeSelect,
   });
 }

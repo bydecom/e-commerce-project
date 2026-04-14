@@ -1,6 +1,7 @@
 import { Routes } from '@angular/router';
 import { authGuard } from './core/guards/auth.guard';
 import { adminGuard } from './core/guards/admin.guard';
+import { EditProfileComponent } from './features/profile';
 
 export const routes: Routes = [
   {
@@ -69,6 +70,11 @@ export const routes: Routes = [
           import('./features/orders/order-detail/order-detail.component').then(
             (m) => m.OrderDetailComponent
           ),
+      },
+      {
+        path: 'profile/edit',
+        canActivate: [authGuard],
+        component: EditProfileComponent,
       },
       {
         path: 'profile',
