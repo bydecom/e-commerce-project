@@ -280,7 +280,7 @@ export async function getLandingPageData(): Promise<{
         rating: true,
         comment: true,
         user: { select: { name: true } },
-        product: { select: { name: true } },
+        product: { select: { id: true, name: true } },
       },
     }),
   ]);
