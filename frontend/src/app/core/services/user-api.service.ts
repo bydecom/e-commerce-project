@@ -28,7 +28,15 @@ export class UserApiService {
     );
   }
 
-  updateMe(patch: { name?: string | null; phone?: string | null; address?: string | null }): Observable<User> {
+  updateMe(patch: {
+    name?: string | null;
+    phone?: string | null;
+    provinceId?: string | null;
+    districtId?: string | null;
+    wardId?: string | null;
+    streetAddress?: string | null;
+    fullAddress?: string | null;
+  }): Observable<User> {
     return this.http.patch<ApiSuccess<User>>(`${this.baseUrl}/me`, patch).pipe(
       map((r) => {
         if (!r.success) {

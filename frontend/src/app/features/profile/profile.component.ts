@@ -140,7 +140,7 @@ import type { User } from '../../shared/models/user.model';
                   <div class="sm:col-span-2">
                     <dt class="text-xs font-medium text-gray-500">Default Shipping Address</dt>
                     <dd class="mt-1 text-sm font-semibold leading-relaxed text-gray-900">
-                      {{ me()?.address || 'No address saved. Add one to speed up checkout.' }}
+                      {{ me()?.fullAddress || me()?.streetAddress || 'No address saved. Add one to speed up checkout.' }}
                     </dd>
                   </div>
                 </dl>

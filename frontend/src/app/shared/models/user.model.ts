@@ -5,7 +5,11 @@ export interface User {
   email: string;
   name?: string | null;
   phone?: string | null;
-  address?: string | null;
+  provinceId?: string | null;
+  districtId?: string | null;
+  wardId?: string | null;
+  streetAddress?: string | null;
+  fullAddress?: string | null;
   role: Role;
   /** ISO string from API when backend exposes `createdAt` */
   createdAt?: string;

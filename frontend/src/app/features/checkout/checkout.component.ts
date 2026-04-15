@@ -32,187 +32,189 @@ type CacheEntry = { data: CartPricingData; ts: number };
   standalone: true,
   imports: [RouterLink, NgClass, CurrencyVndPipe],
   template: `
-    <div class="relative isolate">
-      <div class="pointer-events-none absolute inset-x-0 -top-16 -z-10 h-72 bg-gradient-to-b from-indigo-50 via-white to-transparent">
-      </div>
-
-      <div class="mx-auto w-full max-w-6xl px-4 py-8">
+    <div class="bg-white">
+      <div class="mx-auto max-w-2xl px-4 pb-24 py-8 sm:px-6 lg:max-w-7xl lg:px-8">
         <div class="min-w-0">
-          <a routerLink="/cart" class="text-sm font-medium text-indigo-700 hover:underline">← Back to cart</a>
-          <h1 class="mt-2 text-2xl font-extrabold tracking-tight text-gray-900">Order verification</h1>
-          <p class="mt-1 text-sm text-gray-600">Review your items, confirm delivery details, then continue to payment.</p>
+          <a routerLink="/cart" class="text-sm font-medium text-gray-500 transition-colors hover:text-gray-900">
+            &larr; Back to cart
+          </a>
+          <h1 class="mt-2 text-3xl font-bold tracking-tight text-gray-900 sm:text-4xl">Confirm your order</h1>
+          <p class="mt-2 text-sm text-gray-500">Review delivery details and items before proceeding to payment.</p>
         </div>
 
         @if (loading()) {
-          <p class="mt-8 text-gray-600">Loading your checkout…</p>
+          <div class="flex justify-center py-24">
+            <div class="h-10 w-10 animate-spin rounded-full border-4 border-gray-200 border-t-gray-900" aria-hidden="true"></div>
+          </div>
         } @else if (error()) {
-          <div class="mt-8 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-rose-900">
-            {{ error() }}
-          </div>
-        } @else if (items().length === 0) {
-          <div class="mt-8 rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
-            <p class="text-gray-700">Your cart is empty.</p>
-            <a routerLink="/products" class="mt-3 inline-block text-indigo-700 hover:underline">Browse products</a>
-          </div>
-        } @else {
-          <div class="mt-6 grid grid-cols-1 gap-4 lg:grid-cols-3">
-            <div class="lg:col-span-2">
-              <div class="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
-                <div class="flex items-start justify-between gap-4">
-                  <div class="min-w-0">
-                    <p class="text-sm font-bold uppercase tracking-wide text-gray-900">Customer</p>
-                    <p class="mt-1 truncate text-base font-semibold text-gray-800">
-                      {{ user()?.name || 'Guest Customer' }}
-                    </p>
-                    <p class="truncate text-sm text-gray-600">{{ user()?.email || '—' }}</p>
-                  </div>
-
-                  <div
-                    class="inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-bold"
-                    [ngClass]="
-                      isAuthenticated()
-                        ? 'border-emerald-200 bg-emerald-50 text-emerald-800'
-                        : 'border-amber-200 bg-amber-50 text-amber-800'
-                    "
-                  >
-                    <span
-                      class="h-2 w-2 rounded-full"
-                      [ngClass]="isAuthenticated() ? 'bg-emerald-500' : 'bg-amber-500'"
-                    ></span>
-                    {{ isAuthenticated() ? 'Signed in' : 'Not signed in' }}
-                  </div>
-                </div>
-
-                <div class="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2">
-                  <div
-                    class="flex gap-4 rounded-xl border border-indigo-100 bg-gradient-to-br from-indigo-50 via-white to-white p-5 shadow-sm"
-                  >
-                    <div class="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-indigo-100 text-indigo-700">
-                      <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
-                        <path
-                          stroke-linecap="round"
-                          stroke-linejoin="round"
-                          stroke-width="2"
-                          d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"
-                        />
-                      </svg>
-                    </div>
-                    <div class="min-w-0">
-                      <h2 class="text-sm font-bold uppercase tracking-wide text-gray-900">Contact</h2>
-                      <p class="mt-2 truncate text-sm font-medium text-gray-700">{{ user()?.email || '—' }}</p>
-                      <p class="truncate text-sm text-gray-600">{{ user()?.phone || '' }}</p>
-                    </div>
-                  </div>
-
-                  <div
-                    class="flex gap-4 rounded-xl border border-emerald-100 bg-gradient-to-br from-emerald-50 via-white to-white p-5 shadow-sm"
-                  >
-                    <div class="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-emerald-700">
-                      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-6">
-                        <path stroke-linecap="round" stroke-linejoin="round" d="m2.25 12 8.954-8.955c.44-.439 1.152-.439 1.591 0L21.75 12M4.5 9.75v10.125c0 .621.504 1.125 1.125 1.125H9.75v-4.875c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21h4.125c.621 0 1.125-.504 1.125-1.125V9.75" />
-                      </svg>
-                    </div>
-                    <div class="min-w-0 flex-1">
-                      <h2 class="text-sm font-bold uppercase tracking-wide text-gray-900">Shipping address</h2>
-
-                      <label class="mt-2 block text-xs font-semibold text-gray-600">Address</label>
-                      <p class="mt-2 truncate text-sm font-medium text-gray-700">{{ shippingAddress || '—' }}</p>
-                      <p class="mt-1 text-xs text-gray-500">Update your address in profile if needed.</p>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <div class="mt-4 overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
-                <div class="flex items-center gap-2 border-b border-gray-200 bg-gradient-to-r from-gray-50 via-white to-white px-5 py-3">
-                  <svg class="h-5 w-5 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
-                    <path
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                      stroke-width="2"
-                      d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z"
-                    />
-                  </svg>
-                  <h2 class="text-base font-bold text-gray-900">Items in your order</h2>
-                </div>
-
-                <div class="overflow-x-auto">
-                  <table class="min-w-full divide-y divide-gray-200 text-left text-sm">
-                    <thead class="bg-white">
-                      <tr>
-                        <th class="px-5 py-2.5 text-xs font-semibold uppercase tracking-wider text-gray-500">Product</th>
-                        <th class="px-5 py-2.5 text-center text-xs font-semibold uppercase tracking-wider text-gray-500">
-                          Qty
-                        </th>
-                        <th class="px-5 py-2.5 text-right text-xs font-semibold uppercase tracking-wider text-gray-500">
-                          Unit price
-                        </th>
-                        <th class="px-5 py-2.5 text-right text-xs font-semibold uppercase tracking-wider text-gray-500">
-                          Line total
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody class="divide-y divide-gray-100 bg-white">
-                      @for (line of items(); track line.productId) {
-                        <tr class="transition-colors hover:bg-indigo-50/40">
-                          <td class="px-5 py-3 font-medium text-gray-900">{{ line.name }}</td>
-                          <td class="px-5 py-3 text-center text-gray-700">
-                            <span class="rounded-md bg-indigo-50 px-2.5 py-1 text-xs font-extrabold text-indigo-800">
-                              {{ line.quantity }}
-                            </span>
-                          </td>
-                          <td class="px-5 py-3 text-right text-gray-500">{{ line.unitPrice | currencyVnd }}</td>
-                          <td class="px-5 py-3 text-right font-semibold text-gray-900">
-                            {{ line.lineTotal | currencyVnd }}
-                          </td>
-                        </tr>
-                      }
-                    </tbody>
-                  </table>
+          <div class="mt-6 rounded-md bg-red-50 p-4 shadow-sm border border-red-100">
+            <div class="flex">
+              <div class="ml-3">
+                <h3 class="text-sm font-medium text-red-800">Something went wrong</h3>
+                <div class="mt-2 text-sm text-red-700">
+                  <p>{{ error() }}</p>
                 </div>
               </div>
             </div>
+          </div>
+        } @else if (items().length === 0) {
+          <div class="mt-6 flex flex-col items-center justify-center rounded-2xl border-2 border-dashed border-gray-200 bg-gray-50 px-6 py-24 text-center">
+            <svg class="mx-auto h-16 w-16 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" />
+            </svg>
+            <h2 class="mt-4 text-lg font-medium text-gray-900">Your cart is empty</h2>
+            <a
+              routerLink="/products"
+              class="mt-6 inline-flex items-center rounded-sm bg-gray-900 px-6 py-3 text-sm font-medium text-white shadow-sm transition-colors hover:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-gray-900 focus:ring-offset-2"
+            >
+              Continue shopping
+            </a>
+          </div>
+        } @else {
+          <div class="mt-6 lg:grid lg:grid-cols-12 lg:items-start lg:gap-x-12 xl:gap-x-16">
 
-            <div class="lg:col-span-1">
-              <div class="sticky top-4 rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
-                <p class="text-sm font-bold uppercase tracking-wide text-gray-900">Summary</p>
+            <div class="lg:col-span-7 space-y-8">
 
-                <div class="mt-4 space-y-2 text-sm">
-                  <div class="flex justify-between text-gray-600">
-                    <span>Subtotal</span>
-                    <span class="font-semibold text-gray-900">{{ total() | currencyVnd }}</span>
-                  </div>
-                  <div class="flex justify-between text-gray-600">
-                    <span>Shipping</span>
-                    <span class="font-semibold text-emerald-700">Free</span>
-                  </div>
-                  <div class="pt-3 border-t border-gray-200 flex items-center justify-between">
-                    <span class="text-base font-extrabold text-gray-900">Total</span>
-                    <span class="text-xl font-extrabold text-indigo-600">{{ total() | currencyVnd }}</span>
-                  </div>
+              <div class="rounded-lg border border-gray-200 bg-white shadow-sm">
+                <div class="border-b border-gray-100 bg-gray-50/50 px-6 py-4 flex justify-between items-center">
+                  <h2 class="font-bold text-gray-900">Delivery details</h2>
                 </div>
 
-                <button
-                  type="button"
-                  (click)="confirmAndPay()"
-                  [disabled]="paying() || loading() || items().length === 0"
-                  class="mt-5 inline-flex min-h-[2.75rem] w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-indigo-600 via-blue-600 to-sky-600 px-5 py-3 text-sm font-extrabold text-white shadow-sm transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  @if (paying()) {
-                    <svg class="h-4 w-4 animate-spin" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                      <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                      <path
-                        class="opacity-75"
-                        fill="currentColor"
-                        d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                      ></path>
-                    </svg>
-                  }
-                  Confirm & Pay
-                </button>
+                <div class="px-6 py-5 grid grid-cols-1 sm:grid-cols-2 gap-6">
+                  <div>
+                    <div class="flex justify-between items-center mb-1">
+                      <label class="block text-xs font-medium text-gray-500 uppercase tracking-wider">Contact</label>
+                      @if (isAuthenticated() && !hasPhone()) {
+                        <a routerLink="/profile/edit" class="text-xs font-medium text-blue-600 hover:text-blue-800 transition-colors">Add phone</a>
+                      }
+                    </div>
+                    <p class="font-medium text-gray-900">{{ user()?.name || 'Customer' }}</p>
+                    <p class="text-sm text-gray-600">{{ user()?.email || '—' }}</p>
 
-                <p class="mt-2 text-xs text-gray-500">Payment will be connected to a sandbox later.</p>
+                    @if (hasPhone()) {
+                      <p class="text-sm text-gray-600">{{ user()?.phone }}</p>
+                    } @else {
+                      <div class="mt-1 flex items-center gap-1 text-red-600">
+                        <svg class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+                        </svg>
+                        <span class="text-xs font-medium">Phone number is missing</span>
+                      </div>
+                    }
+                  </div>
+
+                  <div>
+                    <div class="flex justify-between items-center mb-1">
+                      <label class="block text-xs font-medium text-gray-500 uppercase tracking-wider">Shipping address</label>
+                      @if (isAuthenticated()) {
+                        <a routerLink="/profile/edit" class="text-xs font-medium text-blue-600 hover:text-blue-800 transition-colors">
+                          {{ hasAddress() ? 'Change' : 'Add address' }}
+                        </a>
+                      }
+                    </div>
+
+                    @if (hasAddress()) {
+                      <p class="text-sm text-gray-900 leading-relaxed">{{ shippingAddress }}</p>
+                    } @else {
+                      <div class="mt-1 flex items-center gap-1 text-red-600">
+                        <svg class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+                        </svg>
+                        <span class="text-xs font-medium">Shipping address is missing</span>
+                      </div>
+                    }
+                  </div>
+                </div>
               </div>
+
+              <div class="rounded-lg border border-gray-200 bg-white shadow-sm">
+                 <div class="border-b border-gray-100 bg-gray-50/50 px-6 py-4">
+                  <h2 class="font-bold text-gray-900">Items ({{ items().length }})</h2>
+                </div>
+                <ul role="list" class="divide-y divide-gray-100 px-6">
+                  @for (line of items(); track line.productId) {
+                    <li class="flex py-6">
+                      <div class="flex flex-1 flex-col">
+                        <div class="flex justify-between text-base font-medium text-gray-900">
+                          <h3 class="line-clamp-2 pr-4">{{ line.name }}</h3>
+                          <p class="whitespace-nowrap">{{ line.lineTotal | currencyVnd }}</p>
+                        </div>
+                        <div class="mt-1 flex items-end justify-between text-sm">
+                          <p class="text-gray-500">Unit price: {{ line.unitPrice | currencyVnd }}</p>
+                          <p class="font-medium text-gray-900">Qty: {{ line.quantity }}</p>
+                        </div>
+                      </div>
+                    </li>
+                  }
+                </ul>
+              </div>
+            </div>
+
+            <div class="mt-16 rounded-lg bg-gray-50 px-4 py-6 sm:p-6 lg:col-span-5 lg:mt-0 lg:p-8 border border-gray-100 shadow-sm sticky top-8">
+              <h2 class="text-lg font-medium text-gray-900">Order summary</h2>
+
+              <dl class="mt-6 space-y-4">
+                <div class="flex items-center justify-between">
+                  <dt class="text-sm text-gray-600">Subtotal</dt>
+                  <dd class="text-sm font-medium text-gray-900">{{ total() | currencyVnd }}</dd>
+                </div>
+                <div class="flex items-center justify-between border-t border-gray-200 pt-4">
+                  <dt class="flex items-center text-sm text-gray-600">
+                    <span>Shipping</span>
+                  </dt>
+                  <dd class="text-sm font-medium text-indigo-600">Free</dd>
+                </div>
+                <div class="flex items-center justify-between border-t border-gray-200 pt-4">
+                  <dt class="text-base font-bold text-gray-900">Total</dt>
+                  <dd class="text-xl font-bold text-gray-900">{{ total() | currencyVnd }}</dd>
+                </div>
+              </dl>
+
+              @if (isAuthenticated() && (!hasAddress() || !hasPhone())) {
+                <div class="mt-6 rounded-sm border-l-4 border-red-500 bg-red-50 p-4 text-sm text-red-800">
+                  <p class="font-medium">Please update:</p>
+                  <ul class="mt-1 ml-4 list-disc text-red-700">
+                    @if (!hasPhone()) { <li>Phone number</li> }
+                    @if (!hasAddress()) { <li>Shipping address</li> }
+                  </ul>
+                  <a routerLink="/profile/edit" class="mt-3 inline-block font-bold text-red-700 hover:text-red-900 transition-colors">
+                    Update now &rarr;
+                  </a>
+                </div>
+              }
+
+              @if (!isAuthenticated()) {
+                <div class="mt-6 rounded-sm border-l-4 border-gray-500 bg-gray-100 p-4 text-sm text-gray-800">
+                  Please log in to complete checkout.
+                  <a routerLink="/login" class="mt-2 block font-bold text-gray-900 hover:underline">
+                    Go to login &rarr;
+                  </a>
+                </div>
+              }
+
+              <button
+                type="button"
+                (click)="confirmAndPay()"
+                [disabled]="paying() || loading() || items().length === 0 || !isAuthenticated() || !hasAddress() || !hasPhone()"
+                class="mt-6 flex w-full items-center justify-center gap-2 rounded-sm bg-gray-900 px-4 py-3 text-base font-bold text-white shadow-sm transition-colors hover:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-gray-900 focus:ring-offset-2 disabled:cursor-not-allowed disabled:bg-gray-300 disabled:text-gray-500"
+              >
+                @if (paying()) {
+                  <svg class="h-5 w-5 animate-spin" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  </svg>
+                  Processing...
+                } @else {
+                  Pay with VNPay
+                }
+              </button>
+
+              <p class="mt-4 text-center text-xs text-gray-500 flex items-center justify-center gap-1">
+                <svg class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/>
+                </svg>
+                Secure payment via VNPay
+              </p>
             </div>
           </div>
         }
@@ -247,6 +249,14 @@ export class CheckoutComponent implements OnInit {
     return this.auth.isAuthenticated();
   }
 
+  hasPhone(): boolean {
+    return !!this.user()?.phone?.trim();
+  }
+
+  hasAddress(): boolean {
+    return !!this.shippingAddress?.trim();
+  }
+
   confirmAndPay(): void {
     if (this.paying()) return;
     if (this.items().length === 0) {
@@ -257,8 +267,14 @@ export class CheckoutComponent implements OnInit {
       this.toast.show('Please login to continue to payment.', 'error');
       return;
     }
-    if (!this.shippingAddress.trim()) {
-      this.toast.show('Please update your shipping address in your profile before paying.', 'error');
+
+    // Double-check in TS (do not rely on disabled button only)
+    if (!this.hasPhone()) {
+      this.toast.show('Please add a phone number before paying.', 'error');
+      return;
+    }
+    if (!this.hasAddress()) {
+      this.toast.show('Please add a shipping address before paying.', 'error');
       return;
     }
 
@@ -327,8 +343,11 @@ export class CheckoutComponent implements OnInit {
       .pipe(
         tap((u) => {
           this.user.set(u);
-          if (!this.shippingAddress.trim() && typeof u.address === 'string' && u.address.trim()) {
-            this.shippingAddress = u.address;
+          if (!this.shippingAddress.trim()) {
+            this.shippingAddress =
+              u.fullAddress?.trim() ||
+              u.streetAddress?.trim() ||
+              '';
           }
         }),
         catchError(() => {

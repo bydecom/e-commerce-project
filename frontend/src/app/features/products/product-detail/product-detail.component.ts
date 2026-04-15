@@ -184,4 +184,9 @@ export class ProductDetailComponent implements OnInit, OnDestroy {
         },
       });
   }
+
+  goToCart(): void {
+    this.cartHint.set(false);
+    void this.router.navigate(['/cart']);
+  }
 }

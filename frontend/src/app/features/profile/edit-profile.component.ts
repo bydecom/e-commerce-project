@@ -1,21 +1,19 @@
 import { Component, OnInit, inject, signal, DestroyRef } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { HttpClient } from '@angular/common/http';
-import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
+import { AbstractControl, FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
+import { forkJoin } from 'rxjs';
 import { AuthService } from '../../core/services/auth.service';
 import { ToastService } from '../../core/services/toast.service';
 import { UserApiService } from '../../core/services/user-api.service';
+import { environment } from '../../../environments/environment';
 import type { User } from '../../shared/models/user.model';
+import type { ApiSuccess } from '../../shared/models/api-response.model';
 
 interface LocationItem {
   id: string;
   full_name: string;
-}
-
-interface EsgooResponse {
-  error: number;
-  data: LocationItem[];
 }
 
 @Component({
@@ -49,7 +47,7 @@ interface EsgooResponse {
               type="button"
               (click)="save()"
               [disabled]="loading() || saving()"
-              class="rounded-sm bg-gray-900 px-4 py-2 text-sm font-bold text-white shadow-sm transition hover:bg-gray-800 disabled:opacity-50"
+              class="rounded-sm bg-gray-900 px-4 py-2 text-sm font-bold text-white shadow-sm transition hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-50"
             >
               {{ saving() ? 'Saving...' : 'Save Profile' }}
             </button>
@@ -65,14 +63,12 @@ interface EsgooResponse {
 
       @if (loading()) {
         <div class="flex justify-center py-12">
-          <div
-            class="h-8 w-8 animate-spin rounded-full border-4 border-gray-200 border-t-gray-900"
-            aria-hidden="true"
-          ></div>
+          <div class="h-8 w-8 animate-spin rounded-full border-4 border-gray-200 border-t-gray-900" aria-hidden="true"></div>
         </div>
       } @else {
         <form [formGroup]="form" (ngSubmit)="save()" class="space-y-6">
 
+          <!-- Basic Info -->
           <div class="rounded-lg border border-gray-200 bg-white shadow-sm">
             <div class="border-b border-gray-100 bg-gray-50/50 px-6 py-4">
               <h2 class="font-bold text-gray-900">Basic Information</h2>
@@ -96,8 +92,9 @@ interface EsgooResponse {
                   <input
                     type="text"
                     formControlName="name"
-                    class="mt-1 block w-full rounded-sm border-0 px-3 py-2 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-gray-900 sm:text-sm"
                     placeholder="E.g. Nguyen Van A"
+                    class="mt-1 block w-full rounded-sm border-0 px-3 py-2 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-gray-900 sm:text-sm"
+                    [class.ring-red-300]="form.controls.name.invalid && form.controls.name.touched"
                   />
                   @if (form.controls.name.touched && form.controls.name.errors?.['maxlength']) {
                     <p class="mt-1 text-xs text-red-600">Name cannot exceed 100 characters.</p>
@@ -109,8 +106,9 @@ interface EsgooResponse {
                   <input
                     type="text"
                     formControlName="phone"
-                    class="mt-1 block w-full rounded-sm border-0 px-3 py-2 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-gray-900 sm:text-sm"
                     placeholder="+84 123 456 789"
+                    class="mt-1 block w-full rounded-sm border-0 px-3 py-2 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-gray-900 sm:text-sm"
+                    [class.ring-red-300]="form.controls.phone.invalid && form.controls.phone.touched"
                   />
                   @if (form.controls.phone.touched && form.controls.phone.errors?.['maxlength']) {
                     <p class="mt-1 text-xs text-red-600">Phone number cannot exceed 30 characters.</p>
@@ -120,73 +118,98 @@ interface EsgooResponse {
             </div>
           </div>
 
+          <!-- Delivery Details -->
           <div class="rounded-lg border border-gray-200 bg-white shadow-sm">
             <div class="border-b border-gray-100 bg-gray-50/50 px-6 py-4">
               <h2 class="font-bold text-gray-900">Delivery Details</h2>
             </div>
-            <div class="px-6 py-5 space-y-5">
+            <div class="space-y-5 px-6 py-5">
 
-              <div class="grid grid-cols-1 gap-5 sm:grid-cols-2">
+              <div class="grid grid-cols-1 gap-5 sm:grid-cols-3">
+                <!-- Province -->
                 <div>
                   <label class="block text-sm font-medium text-gray-700">
                     Province / City <span class="text-red-500">*</span>
                   </label>
                   <select
-                    formControlName="province"
-                    class="mt-1 block w-full rounded-sm border-0 bg-white px-3 py-2 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-inset focus:ring-gray-900 sm:text-sm"
-                    [class.ring-red-300]="form.controls.province.invalid && form.controls.province.touched"
+                    formControlName="provinceId"
+                    class="mt-1 block w-full rounded-sm border-0 bg-white px-3 py-2 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-inset focus:ring-gray-900 disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-400 sm:text-sm"
+                    [class.ring-red-300]="form.controls.provinceId.invalid && form.controls.provinceId.touched"
                   >
-                    <option value="" disabled>Select Province</option>
+                    <option value="" disabled selected>Select Province</option>
                     @for (p of provinces(); track p.id) {
                       <option [value]="p.id">{{ p.full_name }}</option>
                     }
                   </select>
-                  @if (form.controls.province.touched && form.controls.province.errors?.['required']) {
+                  @if (form.controls.provinceId.touched && form.controls.provinceId.errors?.['required']) {
                     <p class="mt-1 text-xs text-red-600">Province is required.</p>
                   }
                 </div>
 
+                <!-- District -->
                 <div>
                   <label class="block text-sm font-medium text-gray-700">
-                    District / Ward <span class="text-red-500">*</span>
+                    District <span class="text-red-500">*</span>
                   </label>
                   <select
-                    formControlName="ward"
+                    formControlName="districtId"
                     class="mt-1 block w-full rounded-sm border-0 bg-white px-3 py-2 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-inset focus:ring-gray-900 disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-400 sm:text-sm"
-                    [class.ring-red-300]="form.controls.ward.invalid && form.controls.ward.touched"
+                    [class.ring-red-300]="form.controls.districtId.invalid && form.controls.districtId.touched"
                   >
-                    <option value="" disabled>Select District/Ward</option>
+                    <option value="" disabled selected>Select District</option>
+                    @for (d of districts(); track d.id) {
+                      <option [value]="d.id">{{ d.full_name }}</option>
+                    }
+                  </select>
+                  @if (form.controls.districtId.touched && form.controls.districtId.errors?.['required']) {
+                    <p class="mt-1 text-xs text-red-600">District is required.</p>
+                  }
+                </div>
+
+                <!-- Ward -->
+                <div>
+                  <label class="block text-sm font-medium text-gray-700">
+                    Ward / Commune <span class="text-red-500">*</span>
+                  </label>
+                  <select
+                    formControlName="wardId"
+                    class="mt-1 block w-full rounded-sm border-0 bg-white px-3 py-2 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-inset focus:ring-gray-900 disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-400 sm:text-sm"
+                    [class.ring-red-300]="form.controls.wardId.invalid && form.controls.wardId.touched"
+                  >
+                    <option value="" disabled selected>Select Ward</option>
                     @for (w of wards(); track w.id) {
                       <option [value]="w.id">{{ w.full_name }}</option>
                     }
                   </select>
-                  @if (form.controls.ward.touched && form.controls.ward.errors?.['required']) {
-                    <p class="mt-1 text-xs text-red-600">District/Ward is required.</p>
+                  @if (form.controls.wardId.touched && form.controls.wardId.errors?.['required']) {
+                    <p class="mt-1 text-xs text-red-600">Ward is required.</p>
                   }
                 </div>
               </div>
 
+              <!-- Street -->
               <div>
                 <label class="block text-sm font-medium text-gray-700">
                   Street Address <span class="text-red-500">*</span>
                 </label>
                 <input
                   type="text"
-                  formControlName="street"
-                  class="mt-1 block w-full rounded-sm border-0 px-3 py-2 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-gray-900 sm:text-sm"
+                  formControlName="streetAddress"
                   placeholder="E.g. 123 Le Loi Street"
-                  [class.ring-red-300]="form.controls.street.invalid && form.controls.street.touched"
+                  class="mt-1 block w-full rounded-sm border-0 px-3 py-2 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-gray-900 sm:text-sm"
+                  [class.ring-red-300]="form.controls.streetAddress.invalid && form.controls.streetAddress.touched"
                 />
-                @if (form.controls.street.touched) {
-                  @if (form.controls.street.errors?.['required']) {
+                @if (form.controls.streetAddress.touched) {
+                  @if (form.controls.streetAddress.errors?.['required']) {
                     <p class="mt-1 text-xs text-red-600">Street address is required.</p>
-                  } @else if (form.controls.street.errors?.['maxlength']) {
+                  } @else if (form.controls.streetAddress.errors?.['maxlength']) {
                     <p class="mt-1 text-xs text-red-600">Street address cannot exceed 200 characters.</p>
                   }
                 }
               </div>
 
-              @if (form.controls.province.value || form.controls.street.value) {
+              <!-- Preview -->
+              @if (form.controls.provinceId.value || form.controls.streetAddress.value) {
                 <div class="rounded-sm bg-gray-50 px-4 py-3 text-sm text-gray-700 ring-1 ring-inset ring-gray-200">
                   <span class="font-medium text-gray-500">Preview: </span>{{ buildPreview() }}
                 </div>
@@ -202,109 +225,242 @@ interface EsgooResponse {
   `,
 })
 export class EditProfileComponent implements OnInit {
-  private readonly fb = inject(FormBuilder);
-  private readonly api = inject(UserApiService);
-  private readonly http = inject(HttpClient);
-  private readonly toast = inject(ToastService);
-  private readonly auth = inject(AuthService);
-  private readonly router = inject(Router);
-  private readonly destroyRef = inject(DestroyRef);
+  private readonly fb          = inject(FormBuilder);
+  private readonly api         = inject(UserApiService);
+  private readonly http        = inject(HttpClient);
+  private readonly toast       = inject(ToastService);
+  private readonly auth        = inject(AuthService);
+  private readonly router      = inject(Router);
+  private readonly destroyRef  = inject(DestroyRef);
 
-  readonly loading = signal(true);
-  readonly saving = signal(false);
+  readonly loading   = signal(true);
+  readonly saving    = signal(false);
   readonly loadError = signal<string | null>(null);
-  readonly me = signal<User | null>(null);
+  readonly me        = signal<User | null>(null);
 
   readonly provinces = signal<LocationItem[]>([]);
-  readonly wards = signal<LocationItem[]>([]); // level-2: Phường/Xã theo Tỉnh đã chọn
+  readonly districts = signal<LocationItem[]>([]);
+  readonly wards     = signal<LocationItem[]>([]);
 
   readonly form = this.fb.nonNullable.group({
-    name: ['', [Validators.maxLength(100)]],
-    phone: ['', [Validators.maxLength(30)]],
-    province: ['', [Validators.required]],
-    ward: [{ value: '', disabled: true }, [Validators.required]],
-    street: ['', [Validators.required, Validators.maxLength(200)]],
+    name:          ['', [Validators.maxLength(100)]],
+    phone:         ['', [Validators.maxLength(30)]],
+    provinceId:    ['', [Validators.required]],
+    districtId:    [{ value: '', disabled: true }, [Validators.required]],
+    wardId:        [{ value: '', disabled: true }, [Validators.required]],
+    streetAddress: ['', [Validators.required, Validators.maxLength(200)]],
   });
 
   ngOnInit(): void {
-    this.fetchProvinces();
     this.setupCascade();
-    this.reload();
+    this.loadInitialData();
   }
 
   private setupCascade(): void {
-    // Khi chọn Tỉnh → reset & load Phường/Xã
-    this.form.controls.province.valueChanges
+    this.form.controls.provinceId.valueChanges
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe((id) => {
+        this.districts.set([]);
+        this.wards.set([]);
+        this.form.controls.districtId.setValue('', { emitEvent: false });
+        this.form.controls.wardId.setValue('', { emitEvent: false });
+        this.form.controls.districtId.disable({ emitEvent: false });
+        this.form.controls.wardId.disable({ emitEvent: false });
+        if (id) {
+          this.http
+            .get<ApiSuccess<LocationItem[]>>(`${environment.apiUrl}/api/locations/districts/${id}`)
+            .pipe(takeUntilDestroyed(this.destroyRef))
+            .subscribe((res) => {
+              if (res.success) {
+                this.districts.set(res.data);
+                // Chỉ enable sau khi đã có danh sách districts để tránh dropdown trống
+                this.enableClean(this.form.controls.districtId);
+              }
+            });
+        }
+      });
+
+    this.form.controls.districtId.valueChanges
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe((id) => {
         this.wards.set([]);
-        this.form.controls.ward.setValue('', { emitEvent: false });
-        this.form.controls.ward.disable({ emitEvent: false });
+        this.form.controls.wardId.setValue('', { emitEvent: false });
+        this.form.controls.wardId.disable({ emitEvent: false });
         if (id) {
-          this.fetchWards(id);
-          this.form.controls.ward.enable({ emitEvent: false });
+          this.http
+            .get<ApiSuccess<LocationItem[]>>(`${environment.apiUrl}/api/locations/wards/${id}`)
+            .pipe(takeUntilDestroyed(this.destroyRef))
+            .subscribe((res) => {
+              if (res.success) {
+                this.wards.set(res.data);
+                // Chỉ enable sau khi đã có danh sách wards để tránh dropdown trống
+                this.enableClean(this.form.controls.wardId);
+              }
+            });
         }
       });
   }
 
-  private fetchProvinces(): void {
-    this.http
-      .get<EsgooResponse>('https://esgoo.net/api-tinhthanh-new/1/0.htm')
-      .pipe(takeUntilDestroyed(this.destroyRef))
-      .subscribe((res) => {
-        if (res.error === 0) this.provinces.set(res.data);
-      });
+  private enableClean(control: AbstractControl): void {
+    control.enable({ emitEvent: false });
+    control.markAsUntouched();
+    control.markAsPristine();
   }
 
-  private fetchWards(provinceId: string): void {
+  private fetchProvinces(): void {
     this.http
-      .get<EsgooResponse>(`https://esgoo.net/api-tinhthanh-new/2/${provinceId}.htm`)
+      .get<ApiSuccess<LocationItem[]>>(`${environment.apiUrl}/api/locations/provinces`)
       .pipe(takeUntilDestroyed(this.destroyRef))
-      .subscribe((res) => {
-        if (res.error === 0) this.wards.set(res.data);
-      });
+      .subscribe((res) => { if (res.success) this.provinces.set(res.data); });
+  }
+
+  private fetchDistricts(provinceId: string): void {
+    this.http
+      .get<ApiSuccess<LocationItem[]>>(`${environment.apiUrl}/api/locations/districts/${provinceId}`)
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe((res) => { if (res.success) this.districts.set(res.data); });
+  }
+
+  private fetchWards(districtId: string): void {
+    this.http
+      .get<ApiSuccess<LocationItem[]>>(`${environment.apiUrl}/api/locations/wards/${districtId}`)
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe((res) => { if (res.success) this.wards.set(res.data); });
   }
 
   buildPreview(): string {
     const v = this.form.getRawValue();
     const parts: string[] = [];
-    if (v.street.trim()) parts.push(v.street.trim());
-    const wardName = this.wards().find((w) => w.id === v.ward)?.full_name;
-    const provinceName = this.provinces().find((p) => p.id === v.province)?.full_name;
+    if (v.streetAddress.trim()) parts.push(v.streetAddress.trim());
+    const wardName     = this.wards().find((w) => w.id === v.wardId)?.full_name;
+    const districtName = this.districts().find((d) => d.id === v.districtId)?.full_name;
+    const provinceName = this.provinces().find((p) => p.id === v.provinceId)?.full_name;
     if (wardName) parts.push(wardName);
+    if (districtName) parts.push(districtName);
     if (provinceName) parts.push(provinceName);
     return parts.join(', ');
   }
 
   resetForm(): void {
     if (this.loading() || this.saving()) return;
+    this.districts.set([]);
     this.wards.set([]);
-    this.form.controls.ward.disable({ emitEvent: false });
-    this.form.reset();
-    this.reload();
+    this.form.controls.districtId.disable({ emitEvent: false });
+    this.form.controls.wardId.disable({ emitEvent: false });
+    this.form.reset({}, { emitEvent: false });
+    this.loadInitialData();
   }
 
-  private reload(): void {
+  private loadInitialData(): void {
     this.loading.set(true);
     this.loadError.set(null);
-    this.api.getMe().subscribe({
-      next: (me) => {
-        this.me.set(me);
-        // address cũ (free-form string) đưa vào ô street để tiện chỉnh sửa
-        this.form.patchValue({
-          name: me.name ?? '',
-          phone: me.phone ?? '',
-          province: '',
-          ward: '',
-          street: me.address ?? '',
-        });
-        this.loading.set(false);
-      },
-      error: (e: Error) => {
-        this.loadError.set(e.message || 'Could not load profile');
-        this.loading.set(false);
-      },
-    });
+
+    // Reset sạch trạng thái cascade trước khi patch để UI/validation không nhảy
+    this.districts.set([]);
+    this.wards.set([]);
+    this.form.controls.districtId.disable({ emitEvent: false });
+    this.form.controls.wardId.disable({ emitEvent: false });
+
+    forkJoin({
+      provincesRes: this.http.get<ApiSuccess<LocationItem[]>>(`${environment.apiUrl}/api/locations/provinces`),
+      me: this.api.getMe(),
+    })
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: ({ provincesRes, me }) => {
+          if (provincesRes.success) {
+            this.provinces.set(provincesRes.data);
+          }
+
+          this.me.set(me);
+          this.patchUserData(me);
+        },
+        error: (e: Error) => {
+          this.loadError.set(e.message || 'Could not load profile');
+          this.loading.set(false);
+        },
+      });
+  }
+
+  private patchUserData(me: User): void {
+    // Backend có thể trả id dạng number; ép về string để match value trong <option>
+    const provinceId    = me.provinceId != null ? String(me.provinceId) : '';
+    const districtId    = me.districtId != null ? String(me.districtId) : '';
+    const wardId        = me.wardId     != null ? String(me.wardId)     : '';
+    const streetAddress = me.streetAddress ?? '';
+
+    // Patch các field không phụ thuộc cascade trước
+    this.form.patchValue(
+      { name: me.name ?? '', phone: me.phone ?? '', streetAddress },
+      { emitEvent: false }
+    );
+
+    if (!provinceId) {
+      // Không có địa chỉ: chỉ patch province rỗng rồi xong
+      this.form.patchValue({ provinceId: '' }, { emitEvent: false });
+      this.form.markAsPristine();
+      this.form.markAsUntouched();
+      this.loading.set(false);
+      return;
+    }
+
+    // Có province: patch province, fetch districts xong mới patch district
+    this.form.patchValue({ provinceId }, { emitEvent: false });
+
+    this.http
+      .get<ApiSuccess<LocationItem[]>>(`${environment.apiUrl}/api/locations/districts/${provinceId}`)
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: (res) => {
+          if (res.success) {
+            this.districts.set(res.data);
+            // Chỉ enable sau khi đã có danh sách districts để select match được option
+            this.enableClean(this.form.controls.districtId);
+          }
+
+          if (!districtId) {
+            this.form.markAsPristine();
+            this.form.markAsUntouched();
+            this.loading.set(false);
+            return;
+          }
+
+          this.form.patchValue({ districtId }, { emitEvent: false });
+
+          this.http
+            .get<ApiSuccess<LocationItem[]>>(`${environment.apiUrl}/api/locations/wards/${districtId}`)
+            .pipe(takeUntilDestroyed(this.destroyRef))
+            .subscribe({
+              next: (wardRes) => {
+                if (wardRes.success) {
+                  this.wards.set(wardRes.data);
+                  // Chỉ enable sau khi đã có danh sách wards
+                  this.enableClean(this.form.controls.wardId);
+                }
+
+                // Patch ward SAU KHI wards đã có data
+                if (wardId) {
+                  this.form.patchValue({ wardId }, { emitEvent: false });
+                }
+
+                this.form.markAsPristine();
+                this.form.markAsUntouched();
+                this.loading.set(false);
+              },
+              error: () => {
+                // Không block UI: vẫn kết thúc loading để user có thể thao tác lại
+                this.form.markAsPristine();
+                this.form.markAsUntouched();
+                this.loading.set(false);
+              },
+            });
+        },
+        error: () => {
+          this.form.markAsPristine();
+          this.form.markAsUntouched();
+          this.loading.set(false);
+        },
+      });
   }
 
   save(): void {
@@ -315,13 +471,15 @@ export class EditProfileComponent implements OnInit {
     this.saving.set(true);
     const v = this.form.getRawValue();
 
-    const fullAddress = this.buildPreview() || null;
-
     this.api
       .updateMe({
-        name: v.name.trim() || null,
-        phone: v.phone.trim() || null,
-        address: fullAddress,
+        name:          v.name.trim() || null,
+        phone:         v.phone.trim() || null,
+        provinceId:    v.provinceId    || null,
+        districtId:    v.districtId    || null,
+        wardId:        v.wardId        || null,
+        streetAddress: v.streetAddress.trim() || null,
+        fullAddress:   this.buildPreview()     || null,
       })
       .subscribe({
         next: (updated) => {

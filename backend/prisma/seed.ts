@@ -191,7 +191,22 @@ async function main() {
       description: p.desc,
       price: p.price,
       stock: p.stock,
-      imageUrl: `https://via.placeholder.com/300x300/F3F4F6/333333/?text=Product+${i + 1}`,
+      imageUrl: (() => {
+        const catId = p.cat.id;
+        if (catId === catSmartphone.id)
+          return 'https://encrypted-tbn1.gstatic.com/shopping?q=tbn:ANd9GcR7AJq9rOPmTE-DzPkDzybKEPU43HP5NKmFvROAFCrN3NodUUe3FXr28y60yqneGvoPTfUIkF2PuzdE-kBg4g3PqDJ0k6XpXsjXEhmMbkBuJHDiQMNB3fIToeGmX2Pge2zPGQ&usqp=CAc';
+        if (catId === catLaptop.id)
+          return 'https://surfaceviet.vn/wp-content/uploads/2024/05/Surface-Laptop-7-Black-13.8-inch.jpg';
+        if (catId === catTablet.id)
+          return 'https://lapvip.vn/upload/filters_img/thumb_350x0/1107-2-1722567148.jpg';
+        if (catId === catHeadphone.id)
+          return 'https://down-vn.img.susercontent.com/file/vn-11134207-7ra0g-m9d1mhxlbds700_tn';
+        if (catId === catSmarwatch.id)
+          return 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTOwR7zjuZ_6KQ2UGvhbW34oxIEcoSUQaiWfA&s';
+        if (catId === catCharger.id)
+          return 'https://bizweb.dktcdn.net/100/444/581/products/1-jpeg-7a7668dc-b7d3-46a2-b0e6-19caaef682f1.jpg?v=1641360367993';
+        return `https://via.placeholder.com/300x300/F3F4F6/333333/?text=Product+${i + 1}`;
+      })(),
       status: 'AVAILABLE' as const,
       categoryId: p.cat.id,
     })),

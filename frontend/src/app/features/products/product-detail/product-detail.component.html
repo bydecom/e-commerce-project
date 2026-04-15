@@ -204,7 +204,13 @@
                   <p class="text-sm font-medium">
                     Added <span class="font-bold">{{ quantity() }}</span> items to your cart!
                   </p>
-                  <a routerLink="/cart" class="ml-auto text-sm font-bold text-green-700 hover:underline">View Cart &rarr;</a>
+                  <button
+                    type="button"
+                    (click)="goToCart()"
+                    class="ml-auto text-sm font-bold text-green-700 hover:underline"
+                  >
+                    View Cart &rarr;
+                  </button>
                 </div>
               }
               @if (cartError()) {

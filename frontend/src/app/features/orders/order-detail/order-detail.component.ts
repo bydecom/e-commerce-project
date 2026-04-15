@@ -19,7 +19,7 @@ function nextStatusesForUser(current: OrderStatus): OrderStatus[] {
   standalone: true,
   imports: [RouterLink, CurrencyVndPipe],
   template: `
-    <div class="mx-auto w-full max-w-6xl">
+    <div class="mx-auto w-full max-w-6xl py-8">
       <a routerLink="/orders" class="text-sm text-blue-600 hover:underline">← Back to orders</a>
 
       @if (loading()) {
@@ -226,7 +226,7 @@ function nextStatusesForUser(current: OrderStatus): OrderStatus[] {
             class="flex gap-4 rounded-xl border border-gray-200 bg-white p-5 shadow-sm transition-shadow hover:shadow-md"
           >
             <div
-              class="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-emerald-50 text-emerald-600"
+              class="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-indigo-50 text-indigo-600"
             >
               <svg
                 xmlns="http://www.w3.org/2000/svg"
@@ -379,7 +379,7 @@ export class OrderDetailComponent implements OnInit {
       case 'SHIPPING':
         return 'border-indigo-400 bg-indigo-100 text-indigo-600';
       case 'DONE':
-        return 'border-emerald-400 bg-emerald-100 text-emerald-600';
+        return 'border-green-400 bg-green-100 text-green-700';
       case 'CANCELLED':
         return 'border-gray-400 bg-gray-200 text-gray-600';
       default:
@@ -396,7 +396,7 @@ export class OrderDetailComponent implements OnInit {
       case 'SHIPPING':
         return 'text-indigo-950';
       case 'DONE':
-        return 'text-emerald-950';
+        return 'text-green-950';
       case 'CANCELLED':
         return 'text-gray-800';
       default:

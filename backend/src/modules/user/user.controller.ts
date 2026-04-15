@@ -71,9 +71,13 @@ export async function updateMe(req: Request, res: Response, next: NextFunction):
       return;
     }
     const body = req.body as Record<string, unknown>;
-    const name = normalizeOptionalString(body['name']);
-    const phone = normalizeOptionalString(body['phone']);
-    const address = normalizeOptionalString(body['address']);
+    const name          = normalizeOptionalString(body['name']);
+    const phone         = normalizeOptionalString(body['phone']);
+    const provinceId    = normalizeOptionalString(body['provinceId']);
+    const districtId    = normalizeOptionalString(body['districtId']);
+    const wardId        = normalizeOptionalString(body['wardId']);
+    const streetAddress = normalizeOptionalString(body['streetAddress']);
+    const fullAddress   = normalizeOptionalString(body['fullAddress']);
 
     if (name !== undefined && name !== null && name.length > 100) {
       res.status(400).json({ success: false, message: 'name is too long', errors: null });
@@ -83,12 +87,24 @@ export async function updateMe(req: Request, res: Response, next: NextFunction):
       res.status(400).json({ success: false, message: 'phone is too long', errors: null });
       return;
     }
-    if (address !== undefined && address !== null && address.length > 500) {
-      res.status(400).json({ success: false, message: 'address is too long', errors: null });
+    if (streetAddress !== undefined && streetAddress !== null && streetAddress.length > 200) {
+      res.status(400).json({ success: false, message: 'streetAddress is too long', errors: null });
+      return;
+    }
+    if (fullAddress !== undefined && fullAddress !== null && fullAddress.length > 500) {
+      res.status(400).json({ success: false, message: 'fullAddress is too long', errors: null });
       return;
     }
 
-    const updated = await userService.updateMe(auth.userId, { name, phone, address });
+    const updated = await userService.updateMe(auth.userId, {
+      name,
+      phone,
+      provinceId,
+      districtId,
+      wardId,
+      streetAddress,
+      fullAddress,
+    });
     res.json(success(updated, 'Updated'));
   } catch (err) {
     next(err);

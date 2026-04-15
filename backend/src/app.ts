@@ -22,6 +22,7 @@ import { systemLogRouter } from './modules/system-log/system-log.route';
 import { ensureRedisConnected } from './config/redis';
 import { cartRouter } from './modules/cart/cart.route';
 import { paymentRouter } from './modules/payment/payment.route';
+import { locationRouter } from './modules/location/location.route';
 
 export const app = express();
 
@@ -82,5 +83,6 @@ app.use('/api/store-settings', storeSettingRoute);
 app.use('/api/system-logs', systemLogRouter);
 app.use('/api/cart', cartRouter);
 app.use('/api/payments', paymentRouter);
+app.use('/api/locations', locationRouter);
 
 app.use(errorMiddleware);

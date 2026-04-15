@@ -7,7 +7,11 @@ const userListSelect = {
   email: true,
   name: true,
   phone: true,
-  address: true,
+  provinceId: true,
+  districtId: true,
+  wardId: true,
+  streetAddress: true,
+  fullAddress: true,
   role: true,
   createdAt: true,
 } as const;
@@ -17,7 +21,11 @@ const userMeSelect = {
   email: true,
   name: true,
   phone: true,
-  address: true,
+  provinceId: true,
+  districtId: true,
+  wardId: true,
+  streetAddress: true,
+  fullAddress: true,
   role: true,
   createdAt: true,
 } as const;
@@ -100,7 +108,15 @@ export async function getMe(userId: number) {
 
 export async function updateMe(
   userId: number,
-  patch: { name?: string | null; phone?: string | null; address?: string | null }
+  patch: {
+    name?: string | null;
+    phone?: string | null;
+    provinceId?: string | null;
+    districtId?: string | null;
+    wardId?: string | null;
+    streetAddress?: string | null;
+    fullAddress?: string | null;
+  }
 ) {
   const id = Math.floor(Number(userId));
   if (!Number.isFinite(id) || id < 1) {
@@ -117,7 +133,11 @@ export async function updateMe(
     data: {
       ...(patch.name !== undefined ? { name: patch.name } : {}),
       ...(patch.phone !== undefined ? { phone: patch.phone } : {}),
-      ...(patch.address !== undefined ? { address: patch.address } : {}),
+      ...(patch.provinceId !== undefined ? { provinceId: patch.provinceId } : {}),
+      ...(patch.districtId !== undefined ? { districtId: patch.districtId } : {}),
+      ...(patch.wardId !== undefined ? { wardId: patch.wardId } : {}),
+      ...(patch.streetAddress !== undefined ? { streetAddress: patch.streetAddress } : {}),
+      ...(patch.fullAddress !== undefined ? { fullAddress: patch.fullAddress } : {}),
     },
     select: userMeSelect,
   });

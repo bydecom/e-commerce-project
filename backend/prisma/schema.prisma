@@ -35,14 +35,18 @@ enum ProductStatus {
 }
 
 model User {
-  id        Int        @id @default(autoincrement())
-  email     String     @unique
-  password  String
-  name      String?
-  phone     String?
-  address   String?
-  role      Role       @default(USER)
-  createdAt DateTime   @default(now())
+  id            Int        @id @default(autoincrement())
+  email         String     @unique
+  password      String
+  name          String?
+  phone         String?
+  provinceId    String?
+  districtId    String?
+  wardId        String?
+  streetAddress String?
+  fullAddress   String?
+  role          Role       @default(USER)
+  createdAt     DateTime   @default(now())
 
   orders    Order[]
   feedbacks Feedback[]
@@ -114,7 +118,7 @@ model Feedback {
   product     Product         @relation(fields: [productId], references: [id])
   order       Order           @relation(fields: [orderId], references: [id])
   type        FeedbackType    @relation(fields: [typeId], references: [id])
-  @@unique([orderId, productId, userId]) 
+  @@unique([orderId, productId]) 
 }
 
 model FeedbackType {

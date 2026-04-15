@@ -22,15 +22,15 @@ type VerifyPayload = {
       >
         @if (loading()) {
           <div class="flex flex-col items-center justify-center py-8">
-            <div class="h-12 w-12 animate-spin rounded-full border-4 border-indigo-100 border-t-indigo-600"></div>
+            <div class="h-12 w-12 animate-spin rounded-full border-4 border-green-100 border-t-green-600"></div>
             <p class="mt-6 animate-pulse text-sm font-medium text-gray-500">
               Confirming payment with VNPay...
             </p>
           </div>
         } @else if (success()) {
-          <div class="mx-auto mb-6 flex h-20 w-20 items-center justify-center rounded-full bg-emerald-100">
+          <div class="mx-auto mb-6 flex h-20 w-20 items-center justify-center rounded-full bg-green-100">
             <svg
-              class="h-10 w-10 text-emerald-600"
+              class="h-10 w-10 text-green-700"
               fill="none"
               viewBox="0 0 24 24"
               stroke="currentColor"
@@ -53,7 +53,7 @@ type VerifyPayload = {
           <div class="mt-8 flex flex-col gap-3">
             <a
               routerLink="/orders"
-              class="inline-flex w-full items-center justify-center rounded-xl bg-indigo-600 px-5 py-3.5 text-sm font-bold text-white shadow-sm transition hover:bg-indigo-700 focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
+              class="inline-flex w-full items-center justify-center rounded-xl bg-green-600 px-5 py-3.5 text-sm font-bold text-white shadow-sm transition hover:bg-green-700 focus:ring-2 focus:ring-green-500 focus:ring-offset-2"
             >
               View My Orders
             </a>
