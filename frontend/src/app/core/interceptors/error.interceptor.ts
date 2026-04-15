@@ -1,5 +1,6 @@
 import { HttpInterceptorFn, HttpErrorResponse } from '@angular/common/http';
 import { inject } from '@angular/core';
+import { Router } from '@angular/router';
 import { catchError, throwError } from 'rxjs';
 import { AuthService } from '../services/auth.service';
 import { ToastService } from '../services/toast.service';
@@ -7,6 +8,7 @@ import { ToastService } from '../services/toast.service';
 export const errorInterceptor: HttpInterceptorFn = (req, next) => {
   const auth = inject(AuthService);
   const toast = inject(ToastService);
+  const router = inject(Router);
 
   return next(req).pipe(
     catchError((err: HttpErrorResponse) => {
@@ -14,6 +16,15 @@ export const errorInterceptor: HttpInterceptorFn = (req, next) => {
       // Skip logout: AuthService.logout() sends Bearer; 401 there must not re-enter logout (loop).
       const url = req.url;
       const isLogout = url.includes('/api/auth/logout');
+      const isOrdersApi = url.includes('/api/orders');
+
+      // Order detail (or orders API) may return 403/404 when user tries to access others' orders.
+      if (isOrdersApi && (err.status === 403 || err.status === 404)) {
+        toast.show('You do not have permission to view this order or it does not exist.', 'error');
+        void router.navigate(['/orders']);
+        return throwError(() => err);
+      }
+
       if (err.status === 401 && req.headers.has('Authorization') && !isLogout) {
         toast.show('Session expired. Please sign in again.', 'error');
         auth.logout();

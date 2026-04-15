@@ -8,6 +8,8 @@ import { randomBytes } from 'crypto';
 import { ensureRedisConnected, redisClient } from '../../config/redis';
 import { sendMail } from '../../utils/mail';
 import { blacklistJwt } from '../../utils/jwt-blacklist';
+import { buildVerifyEmailTemplate } from '../../utils/mail-templates';
+import { StoreSettingService } from '../store-setting/store-setting.service';
 
 function normalizeEmail(email: string): string {
   return email.trim().toLowerCase();
@@ -82,24 +84,26 @@ function verifyLink(token: string): string {
   return url.toString();
 }
 
-async function issueVerificationEmail(email: string, token: string): Promise<void> {
+async function issueVerificationEmail(email: string, token: string, name: string | null): Promise<void> {
   const ttl = tokenTtlSeconds();
   const link = verifyLink(token);
   const minutes = Math.max(1, Math.round(ttl / 60));
 
+  const setting = await StoreSettingService.getSetting();
+  const shopName = setting?.name?.trim() || 'Shop';
+
+  const { subject, html, text } = buildVerifyEmailTemplate({
+    name,
+    verifyLink: link,
+    expiresInMinutes: minutes,
+    shopName,
+  });
+
   await sendMail({
     to: email,
-    subject: 'Verify your email',
-    text: `Hi,
-
-Thanks for registering.
-
-Please verify your email address by clicking the link below (expires in ${minutes} minutes):
-${link}
-
-If you didn’t create an account, you can ignore this email.
-
-Thank you.`,
+    subject,
+    text,
+    html,
   });
 }
 
@@ -146,7 +150,7 @@ export async function register(input: { name: string; email: string; password: s
   pending.resendCount = 1;
   await redis.set(redisKeyPending(email), JSON.stringify(pending), { EX: pendingTtlSeconds() });
 
-  await issueVerificationEmail(email, token);
+  await issueVerificationEmail(email, token, name);
 
   return { email, message: 'Verification email sent' };
 }
@@ -287,7 +291,7 @@ export async function resendVerification(input: { email: string }) {
   pending.resendCount = pending.resendCount + 1;
   await redis.set(redisKeyPending(email), JSON.stringify(pending), { EX: pendingTtlSeconds() });
 
-  await issueVerificationEmail(email, token);
+  await issueVerificationEmail(email, token, pending.name);
 
   return { email, message: 'If the account exists, a verification email has been sent' };
 }

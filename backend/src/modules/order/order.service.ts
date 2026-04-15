@@ -7,6 +7,9 @@ type DbTx = Omit<
 import { prisma } from '../../db';
 import { parsePagination } from '../../utils/pagination';
 import { httpError } from '../../utils/http-error';
+import { sendMail } from '../../utils/mail';
+import { StoreSettingService } from '../store-setting/store-setting.service';
+import { buildOrderCompletedEmail } from './email-templates/order-completed-email';
 
 const orderItemInclude = {
   product: { select: { id: true, name: true, imageUrl: true } },
@@ -16,6 +19,45 @@ const orderListInclude = {
   items: { include: orderItemInclude },
   user: { select: { id: true, email: true, name: true } },
 } as const;
+
+async function sendOrderCompletedEmail(order: {
+  id: number;
+  total: number;
+  user: { email: string; name: string | null };
+  items: Array<{ name: string; quantity: number }>;
+}): Promise<void> {
+  const setting = await StoreSettingService.getSetting();
+  const shopName = setting?.name?.trim() || 'Shop';
+  const orderUrl = `${process.env.CLIENT_URL?.trim() || 'http://localhost:4200'}/orders/${order.id}`;
+  const customerName = order.user.name?.trim() || 'bạn';
+
+  const totalVnd = new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(order.total);
+
+  const { subject, text, html } = buildOrderCompletedEmail({
+    shopName,
+    orderId: order.id,
+    customerName,
+    orderUrl,
+    items: order.items,
+    totalVnd,
+    supportEmail: setting?.email,
+    supportPhone: setting?.phone,
+  });
+
+  try {
+    await sendMail({
+      to: order.user.email,
+      subject,
+      text,
+      html,
+    });
+    // eslint-disable-next-line no-console
+    console.log(`[Mail] Order completed mail sent to ${order.user.email}`);
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.error('[Mail Error] Could not send order completed email:', err);
+  }
+}
 
 function mapItem(
   row: {
@@ -342,7 +384,7 @@ const allowedNext: Record<OrderStatus, OrderStatus[]> = {
 };
 
 export async function updateOrderStatus(orderId: number, nextStatus: OrderStatus) {
-  return prisma.$transaction(async (tx) => {
+  const updated = await prisma.$transaction(async (tx) => {
     const order = await tx.order.findUnique({ where: { id: orderId } });
     if (!order) throw httpError(404, 'Order not found');
 
@@ -363,4 +405,15 @@ export async function updateOrderStatus(orderId: number, nextStatus: OrderStatus
     // Admin update: no userId context => do not mark reviewed.
     return mapOrderFull(updated, new Set());
   });
+
+  if (nextStatus === 'DONE' && updated.user?.email) {
+    void sendOrderCompletedEmail({
+      id: updated.id,
+      total: updated.total,
+      user: { email: updated.user.email, name: updated.user.name },
+      items: updated.items.map((it) => ({ name: it.name, quantity: it.quantity })),
+    });
+  }
+
+  return updated;
 }
