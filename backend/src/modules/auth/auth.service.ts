@@ -304,3 +304,35 @@ export async function getMe(userId: number) {
   if (!u) throw httpError(404, 'User not found');
   return u;
 }
+
+export async function changePassword(input: {
+  userId: number;
+  currentPassword: string;
+  newPassword: string;
+}): Promise<void> {
+  const userId = Math.floor(Number(input.userId));
+  if (!Number.isFinite(userId) || userId <= 0) throw httpError(400, 'Invalid user');
+
+  const currentPassword = input.currentPassword ?? '';
+  const newPassword = input.newPassword ?? '';
+
+  if (!currentPassword) throw httpError(400, 'currentPassword is required');
+  if (!newPassword) throw httpError(400, 'newPassword is required');
+  if (newPassword.length < 6) throw httpError(400, 'Password must be at least 6 characters');
+  if (newPassword === currentPassword) throw httpError(400, 'New password must be different');
+
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { id: true, password: true },
+  });
+  if (!user) throw httpError(404, 'User not found');
+
+  const ok = await bcrypt.compare(currentPassword, user.password);
+  if (!ok) throw httpError(401, 'Invalid current password');
+
+  const passwordHash = await bcrypt.hash(newPassword, 10);
+  await prisma.user.update({
+    where: { id: userId },
+    data: { password: passwordHash },
+  });
+}

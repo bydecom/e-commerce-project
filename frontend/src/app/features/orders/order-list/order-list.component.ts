@@ -49,7 +49,7 @@ import type { OrderDetail } from '../../../shared/models/order.model';
                   class="relative h-20 w-20 flex-shrink-0 overflow-hidden rounded-xl border border-gray-200 bg-white"
                 >
                   <img
-                    [src]="o.items[0]?.imageUrl || 'https://via.placeholder.com/160x160?text=Product'"
+                    [src]="o.items.at(0)?.imageUrl || 'https://via.placeholder.com/160x160?text=Product'"
                     class="h-full w-full object-cover"
                     alt="Order Thumbnail"
                   />

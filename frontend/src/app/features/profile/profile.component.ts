@@ -14,220 +14,139 @@ import type { User } from '../../shared/models/user.model';
   standalone: true,
   imports: [RouterLink, DatePipe, CurrencyVndPipe],
   template: `
-    <div class="mx-auto max-w-5xl px-4 py-10 sm:px-6">
+    <div class="mx-auto max-w-6xl px-4 py-8 sm:px-6">
       @if (loadError()) {
-        <div class="rounded-2xl border border-red-200 bg-red-50 p-6 text-red-800 shadow-sm">
-          <div class="flex items-center gap-3">
-            <svg class="h-6 w-6 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                stroke-width="2"
-                d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-              />
-            </svg>
-            <p class="font-bold">{{ loadError() }}</p>
-          </div>
+        <div class="rounded-sm border-l-4 border-red-500 bg-red-50 p-4 text-red-800 shadow-sm">
+          <p class="font-medium">{{ loadError() }}</p>
         </div>
       } @else if (loading()) {
-        <div class="grid grid-cols-1 gap-6 lg:grid-cols-3">
-          <div class="space-y-6 lg:col-span-1">
-            <div class="h-64 animate-pulse rounded-3xl bg-gray-100"></div>
-            <div class="h-24 animate-pulse rounded-3xl bg-gray-100"></div>
+        <div class="flex animate-pulse gap-8">
+          <div class="hidden w-64 flex-shrink-0 flex-col gap-4 lg:flex">
+            <div class="h-10 w-full bg-gray-100"></div>
+            <div class="h-10 w-full bg-gray-100"></div>
           </div>
-          <div class="h-96 animate-pulse rounded-3xl bg-gray-100 lg:col-span-2"></div>
+          <div class="flex-1 space-y-6">
+            <div class="h-40 w-full bg-gray-100"></div>
+            <div class="h-40 w-full bg-gray-100"></div>
+          </div>
         </div>
       } @else {
-        <div class="grid grid-cols-1 gap-8 lg:grid-cols-3">
-          <div class="space-y-6 lg:col-span-1">
-            <div class="overflow-hidden rounded-3xl border border-gray-200 bg-white shadow-sm">
-              <div class="h-24 bg-gradient-to-r from-gray-800 to-gray-900"></div>
-              <div class="px-6 pb-6 text-center">
-                <div
-                  class="relative mx-auto -mt-12 flex h-24 w-24 items-center justify-center rounded-full border-4 border-white bg-white text-3xl font-bold shadow-md"
+        <div class="flex flex-col gap-8 lg:flex-row">
+          <aside class="w-full lg:w-64 lg:flex-shrink-0">
+            <nav class="flex flex-col space-y-1">
+              <a class="flex items-center rounded-sm bg-gray-900 px-3 py-2.5 text-sm font-medium text-white">
+                <svg
+                  class="mr-3 h-5 w-5 text-gray-300"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
                 >
-                  <div class="flex h-full w-full items-center justify-center rounded-full bg-gray-100 text-gray-800">
-                    {{ (me()?.name?.trim() || me()?.email || '?').slice(0, 1).toUpperCase() }}
-                  </div>
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="2"
+                    d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"
+                  />
+                </svg>
+                General Profile
+              </a>
+              <a
+                routerLink="/orders"
+                class="flex items-center rounded-sm px-3 py-2.5 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50 hover:text-gray-900"
+              >
+                <svg class="mr-3 h-5 w-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="2"
+                    d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z"
+                  />
+                </svg>
+                Order History
+              </a>
+              <a
+                routerLink="/profile/change-password"
+                class="flex items-center rounded-sm px-3 py-2.5 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50 hover:text-gray-900"
+              >
+                <svg class="mr-3 h-5 w-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="2"
+                    d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"
+                  />
+                </svg>
+                Change Password
+              </a>
+            </nav>
+          </aside>
 
+          <main class="flex-1 space-y-8">
+            <div class="flex items-center gap-6 rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
+              <div
+                class="flex h-20 w-20 flex-shrink-0 items-center justify-center rounded-sm bg-gray-900 text-2xl font-bold text-white shadow-inner"
+              >
+                {{ (me()?.name?.trim() || me()?.email || '?').slice(0, 1).toUpperCase() }}
+              </div>
+              <div class="flex-1">
+                <div class="flex items-center gap-3">
+                  <h2 class="text-xl font-bold text-gray-900">{{ me()?.name || 'BanDai Member' }}</h2>
                   @if (me()?.role === 'ADMIN') {
                     <span
-                      class="absolute bottom-0 right-0 flex h-6 w-6 items-center justify-center rounded-full border-2 border-white bg-emerald-500"
-                      title="Admin"
+                      class="rounded-sm bg-indigo-50 px-2 py-0.5 text-xs font-bold text-indigo-700 ring-1 ring-inset ring-indigo-200"
+                      >ADMIN</span
                     >
-                      <svg class="h-3 w-3 text-white" fill="currentColor" viewBox="0 0 20 20">
-                        <path
-                          fill-rule="evenodd"
-                          d="M2.166 4.999A11.954 11.954 0 0010 1.944 11.954 11.954 0 0017.834 5c.11.65.166 1.32.166 2.001 0 5.225-3.34 9.67-8 11.317C5.34 16.67 2 12.225 2 7c0-.682.057-1.35.166-2.001zm11.541 3.708a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"
-                          clip-rule="evenodd"
-                        />
-                      </svg>
-                    </span>
                   }
                 </div>
-                <h2 class="mt-4 text-xl font-extrabold text-gray-900">{{ me()?.name || 'BanDai member' }}</h2>
-                <p class="text-sm font-medium text-gray-500">{{ me()?.email }}</p>
-                <p class="mt-4 text-xs text-gray-400">Joined: {{ me()?.createdAt | date: 'MM/yyyy' }}</p>
+                <p class="text-sm text-gray-500">{{ me()?.email }}</p>
+                <p class="mt-1 text-xs text-gray-400">Joined on {{ me()?.createdAt | date: 'mediumDate' }}</p>
               </div>
-            </div>
-
-            <div class="grid grid-cols-2 gap-4">
-              <div
-                class="rounded-3xl border border-emerald-100 bg-emerald-50 p-5 shadow-sm transition hover:shadow-md"
-              >
-                <div class="flex items-center gap-2 text-emerald-600">
-                  <svg
-                    class="h-5 w-5"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    stroke="currentColor"
-                    stroke-width="2"
-                  >
-                    <path
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                      d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z"
-                    />
-                  </svg>
-                  <p class="text-[10px] font-bold uppercase tracking-widest">Orders</p>
-                </div>
-                <div class="mt-3 flex items-baseline gap-2">
-                  <p class="text-3xl font-black text-emerald-700">{{ stats().totalOrders }}</p>
-                </div>
-                @if (stats().processing > 0) {
-                  <p class="mt-1 text-xs font-semibold text-emerald-600">{{ stats().processing }} processing</p>
-                } @else {
-                  <p class="mt-1 text-xs font-semibold text-emerald-600/70">No pending orders</p>
-                }
-              </div>
-
-              <div
-                class="rounded-3xl border border-indigo-100 bg-indigo-50 p-5 shadow-sm transition hover:shadow-md"
-              >
-                <div class="flex items-center gap-2 text-indigo-600">
-                  <svg
-                    class="h-5 w-5"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    stroke="currentColor"
-                    stroke-width="2"
-                  >
-                    <path
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                      d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-                    />
-                  </svg>
-                  <p class="text-[10px] font-bold uppercase tracking-widest">Spent</p>
-                </div>
-                <p class="mt-3 text-xl font-black text-indigo-700">{{ stats().totalSpent | currencyVnd }}</p>
-                <p class="mt-1 text-xs font-semibold text-indigo-600">Lifetime total</p>
-              </div>
-            </div>
-
-            <div class="rounded-3xl border border-gray-200 bg-white p-6 shadow-sm">
-              <h3 class="text-sm font-bold uppercase tracking-wider text-gray-900">Quick actions</h3>
-              <div class="mt-4 space-y-3">
-                <a
-                  routerLink="/orders"
-                  class="group flex items-center justify-between rounded-xl bg-gray-50 p-4 transition hover:bg-gray-100"
-                >
-                  <div class="flex items-center gap-3">
-                    <span class="font-bold text-gray-700 group-hover:text-gray-900">Order history</span>
-                  </div>
-                  <span class="font-bold text-gray-300 group-hover:text-gray-600">&rarr;</span>
-                </a>
-
+              <div>
                 <a
                   routerLink="/profile/edit"
-                  class="group flex items-center justify-between rounded-xl bg-gray-50 p-4 transition hover:bg-gray-100"
+                  class="rounded-sm border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 shadow-sm transition hover:bg-gray-50"
                 >
-                  <div class="flex items-center gap-3">
-                    <span class="font-bold text-gray-700 group-hover:text-gray-900">Edit profile</span>
-                  </div>
-                  <span class="font-bold text-gray-300 group-hover:text-gray-600">&rarr;</span>
+                  Edit Profile
                 </a>
               </div>
             </div>
-          </div>
 
-          <div class="space-y-6 lg:col-span-2">
-            <div class="rounded-3xl border border-gray-200 bg-white shadow-sm">
-              <div class="flex items-center justify-between border-b border-gray-100 p-6">
-                <h3 class="text-lg font-bold text-gray-900">Personal information</h3>
-                <a routerLink="/profile/edit" class="text-sm font-bold text-indigo-600 hover:text-indigo-800">Edit</a>
+            <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <div class="rounded-lg border border-gray-200 bg-white p-5 shadow-sm transition hover:border-gray-300">
+                <p class="text-xs font-bold uppercase tracking-wider text-gray-500">Total Orders</p>
+                <div class="mt-2 flex items-baseline gap-2">
+                  <span class="text-3xl font-black text-gray-900">{{ stats().totalOrders }}</span>
+                  @if (stats().processing > 0) {
+                    <span class="text-sm font-medium text-amber-600">({{ stats().processing }} pending)</span>
+                  }
+                </div>
               </div>
-              <div class="p-6">
+              <div class="rounded-lg border border-gray-200 bg-white p-5 shadow-sm transition hover:border-gray-300">
+                <p class="text-xs font-bold uppercase tracking-wider text-gray-500">Lifetime Spent</p>
+                <p class="mt-2 text-3xl font-black text-gray-900">{{ stats().totalSpent | currencyVnd }}</p>
+              </div>
+            </div>
+
+            <div class="rounded-lg border border-gray-200 bg-white shadow-sm">
+              <div class="border-b border-gray-100 bg-gray-50/50 px-6 py-4">
+                <h3 class="font-bold text-gray-900">Contact Details</h3>
+              </div>
+              <div class="px-6 py-5">
                 <dl class="grid grid-cols-1 gap-x-4 gap-y-6 sm:grid-cols-2">
                   <div>
-                    <dt class="text-xs font-bold uppercase tracking-wider text-gray-500">Full name</dt>
-                    <dd class="mt-2 text-base font-semibold text-gray-900">{{ me()?.name || 'Not set' }}</dd>
+                    <dt class="text-xs font-medium text-gray-500">Phone Number</dt>
+                    <dd class="mt-1 text-sm font-semibold text-gray-900">{{ me()?.phone || 'Not provided' }}</dd>
                   </div>
-                  <div>
-                    <dt class="text-xs font-bold uppercase tracking-wider text-gray-500">Email (login)</dt>
-                    <dd class="mt-2 text-base font-semibold text-gray-900">{{ me()?.email }}</dd>
-                  </div>
-                  <div>
-                    <dt class="text-xs font-bold uppercase tracking-wider text-gray-500">Phone</dt>
-                    <dd class="mt-2 text-base font-semibold text-gray-900">{{ me()?.phone || 'Not set' }}</dd>
-                  </div>
-                  <div>
-                    <dt class="text-xs font-bold uppercase tracking-wider text-gray-500">Role</dt>
-                    <dd class="mt-2">
-                      <span
-                        class="inline-flex items-center rounded-md px-2.5 py-1 text-xs font-extrabold uppercase"
-                        [class]="me()?.role === 'ADMIN' ? 'bg-emerald-100 text-emerald-800' : 'bg-gray-100 text-gray-800'"
-                      >
-                        {{ me()?.role }}
-                      </span>
+                  <div class="sm:col-span-2">
+                    <dt class="text-xs font-medium text-gray-500">Default Shipping Address</dt>
+                    <dd class="mt-1 text-sm font-semibold leading-relaxed text-gray-900">
+                      {{ me()?.address || 'No address saved. Add one to speed up checkout.' }}
                     </dd>
                   </div>
                 </dl>
               </div>
             </div>
-
-            <div class="rounded-3xl border border-gray-200 bg-white shadow-sm">
-              <div class="flex items-center justify-between border-b border-gray-100 p-6">
-                <h3 class="text-lg font-bold text-gray-900">Address book</h3>
-                <a routerLink="/profile/edit" class="text-sm font-bold text-indigo-600 hover:text-indigo-800">Edit</a>
-              </div>
-              <div class="p-6">
-                <div class="flex items-start gap-4 rounded-2xl bg-gray-50 p-5">
-                  <div
-                    class="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-white shadow-sm ring-1 ring-gray-200"
-                  >
-                    <svg
-                      class="h-5 w-5 text-gray-500"
-                      fill="none"
-                      viewBox="0 0 24 24"
-                      stroke="currentColor"
-                      stroke-width="2"
-                    >
-                      <path
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                        d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"
-                      />
-                      <path
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                        d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"
-                      />
-                    </svg>
-                  </div>
-                  <div>
-                    <h4 class="font-bold text-gray-900">Default shipping address</h4>
-                    <p class="mt-2 text-sm leading-relaxed text-gray-600">
-                      {{
-                        me()?.address ||
-                          'You have not set a shipping address yet. Please update it to make checkout faster.'
-                      }}
-                    </p>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
+          </main>
         </div>
       }
     </div>

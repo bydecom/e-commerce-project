@@ -10,3 +10,4 @@ authRouter.get('/verify-email', authController.verifyEmail);
 authRouter.post('/resend-verification', authController.resendVerification);
 authRouter.get('/me', authMiddleware, authController.me);
 authRouter.post('/logout', authMiddleware, authController.logout);
+authRouter.post('/change-password', authMiddleware, authController.changePassword);

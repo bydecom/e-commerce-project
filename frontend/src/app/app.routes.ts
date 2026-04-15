@@ -86,6 +86,12 @@ export const routes: Routes = [
         component: EditProfileComponent,
       },
       {
+        path: 'profile/change-password',
+        canActivate: [authGuard],
+        loadComponent: () =>
+          import('./features/profile/change-password.component').then((m) => m.ChangePasswordComponent),
+      },
+      {
         path: 'profile',
         canActivate: [authGuard],
         loadComponent: () =>

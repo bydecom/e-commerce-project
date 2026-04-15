@@ -313,7 +313,7 @@ export async function listAdminOrders(query: {
   ]);
 
   return {
-    data: rows.map((o) => mapOrderFull(o)),
+    data: rows.map((o) => mapOrderFull(o, new Set())),
     meta: {
       page,
       limit,

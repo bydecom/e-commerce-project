@@ -124,6 +124,22 @@ export class AuthService {
     });
   }
 
+  changePassword(currentPassword: string, newPassword: string): Observable<void> {
+    return this.http
+      .post<ApiSuccess<null>>(`${environment.apiUrl}/api/auth/change-password`, {
+        currentPassword,
+        newPassword,
+      })
+      .pipe(
+        map((res) => {
+          if (!res.success) {
+            throw new Error(res.message || 'Change password failed');
+          }
+          return;
+        })
+      );
+  }
+
   private clearClientSession(): void {
     if (isPlatformBrowser(this.platformId)) {
       localStorage.removeItem(TOKEN_KEY);

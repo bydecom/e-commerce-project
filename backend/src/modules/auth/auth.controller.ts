@@ -100,3 +100,22 @@ export async function logout(req: Request, res: Response, next: NextFunction): P
     next(err);
   }
 }
+
+export async function changePassword(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const auth = req.auth;
+    if (!auth) {
+      next(httpError(500, 'Auth context missing'));
+      return;
+    }
+
+    const b = req.body as Record<string, unknown>;
+    const currentPassword = typeof b.currentPassword === 'string' ? b.currentPassword : '';
+    const newPassword = typeof b.newPassword === 'string' ? b.newPassword : '';
+
+    await authService.changePassword({ userId: auth.userId, currentPassword, newPassword });
+    res.json(success(null, 'Updated'));
+  } catch (err) {
+    next(err);
+  }
+}
