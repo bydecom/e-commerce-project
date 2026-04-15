@@ -35,7 +35,8 @@ function productDetailCacheKey(id: number): string {
 function productDetailCacheTtlSeconds(): number {
   const raw = (process.env.PRODUCT_DETAIL_CACHE_TTL_SECONDS || '').trim();
   const n = raw ? parseInt(raw, 10) : NaN;
-  if (!Number.isFinite(n) || n <= 0) return 60;
+  // Demo-friendly default: keep cache short to reflect stock changes quickly.
+  if (!Number.isFinite(n) || n <= 0) return 5;
   return Math.min(60 * 60, n); // cap at 1 hour
 }
 

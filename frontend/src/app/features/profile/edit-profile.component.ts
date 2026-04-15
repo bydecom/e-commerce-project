@@ -16,6 +16,17 @@ interface LocationItem {
   full_name: string;
 }
 
+interface WardItem extends LocationItem {
+  districtId: string;
+}
+
+const MANUAL_WARD_ID = '__manual__';
+const MANUAL_WARD_OPTION: WardItem = {
+  id: MANUAL_WARD_ID,
+  full_name: "(Skip) I'll type Ward/Commune in Street Address",
+  districtId: '',
+};
+
 @Component({
   selector: 'app-edit-profile',
   standalone: true,
@@ -125,7 +136,7 @@ interface LocationItem {
             </div>
             <div class="space-y-5 px-6 py-5">
 
-              <div class="grid grid-cols-1 gap-5 sm:grid-cols-3">
+              <div class="grid grid-cols-1 gap-5 sm:grid-cols-2">
                 <!-- Province -->
                 <div>
                   <label class="block text-sm font-medium text-gray-700">
@@ -146,26 +157,6 @@ interface LocationItem {
                   }
                 </div>
 
-                <!-- District -->
-                <div>
-                  <label class="block text-sm font-medium text-gray-700">
-                    District <span class="text-red-500">*</span>
-                  </label>
-                  <select
-                    formControlName="districtId"
-                    class="mt-1 block w-full rounded-sm border-0 bg-white px-3 py-2 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-inset focus:ring-gray-900 disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-400 sm:text-sm"
-                    [class.ring-red-300]="form.controls.districtId.invalid && form.controls.districtId.touched"
-                  >
-                    <option value="" disabled selected>Select District</option>
-                    @for (d of districts(); track d.id) {
-                      <option [value]="d.id">{{ d.full_name }}</option>
-                    }
-                  </select>
-                  @if (form.controls.districtId.touched && form.controls.districtId.errors?.['required']) {
-                    <p class="mt-1 text-xs text-red-600">District is required.</p>
-                  }
-                </div>
-
                 <!-- Ward -->
                 <div>
                   <label class="block text-sm font-medium text-gray-700">
@@ -177,6 +168,7 @@ interface LocationItem {
                     [class.ring-red-300]="form.controls.wardId.invalid && form.controls.wardId.touched"
                   >
                     <option value="" disabled selected>Select Ward</option>
+                    <option [value]="manualWardId">{{ manualWardLabel }}</option>
                     @for (w of wards(); track w.id) {
                       <option [value]="w.id">{{ w.full_name }}</option>
                     }
@@ -239,14 +231,14 @@ export class EditProfileComponent implements OnInit {
   readonly me        = signal<User | null>(null);
 
   readonly provinces = signal<LocationItem[]>([]);
-  readonly districts = signal<LocationItem[]>([]);
-  readonly wards     = signal<LocationItem[]>([]);
+  readonly wards     = signal<WardItem[]>([]);
+  readonly manualWardId = MANUAL_WARD_ID;
+  readonly manualWardLabel = MANUAL_WARD_OPTION.full_name;
 
   readonly form = this.fb.nonNullable.group({
     name:          ['', [Validators.maxLength(100)]],
     phone:         ['', [Validators.maxLength(30)]],
     provinceId:    ['', [Validators.required]],
-    districtId:    [{ value: '', disabled: true }, [Validators.required]],
     wardId:        [{ value: '', disabled: true }, [Validators.required]],
     streetAddress: ['', [Validators.required, Validators.maxLength(200)]],
   });
@@ -260,41 +252,18 @@ export class EditProfileComponent implements OnInit {
     this.form.controls.provinceId.valueChanges
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe((id) => {
-        this.districts.set([]);
-        this.wards.set([]);
-        this.form.controls.districtId.setValue('', { emitEvent: false });
-        this.form.controls.wardId.setValue('', { emitEvent: false });
-        this.form.controls.districtId.disable({ emitEvent: false });
-        this.form.controls.wardId.disable({ emitEvent: false });
-        if (id) {
-          this.http
-            .get<ApiSuccess<LocationItem[]>>(`${environment.apiUrl}/api/locations/districts/${id}`)
-            .pipe(takeUntilDestroyed(this.destroyRef))
-            .subscribe((res) => {
-              if (res.success) {
-                this.districts.set(res.data);
-                // Chỉ enable sau khi đã có danh sách districts để tránh dropdown trống
-                this.enableClean(this.form.controls.districtId);
-              }
-            });
-        }
-      });
-
-    this.form.controls.districtId.valueChanges
-      .pipe(takeUntilDestroyed(this.destroyRef))
-      .subscribe((id) => {
         this.wards.set([]);
         this.form.controls.wardId.setValue('', { emitEvent: false });
         this.form.controls.wardId.disable({ emitEvent: false });
         if (id) {
+          // Allow user to pick manual option immediately, even if API is slow/fails.
+          this.enableClean(this.form.controls.wardId);
           this.http
-            .get<ApiSuccess<LocationItem[]>>(`${environment.apiUrl}/api/locations/wards/${id}`)
+            .get<ApiSuccess<WardItem[]>>(`${environment.apiUrl}/api/locations/wards-by-province/${id}`)
             .pipe(takeUntilDestroyed(this.destroyRef))
             .subscribe((res) => {
               if (res.success) {
                 this.wards.set(res.data);
-                // Chỉ enable sau khi đã có danh sách wards để tránh dropdown trống
-                this.enableClean(this.form.controls.wardId);
               }
             });
         }
@@ -314,38 +283,21 @@ export class EditProfileComponent implements OnInit {
       .subscribe((res) => { if (res.success) this.provinces.set(res.data); });
   }
 
-  private fetchDistricts(provinceId: string): void {
-    this.http
-      .get<ApiSuccess<LocationItem[]>>(`${environment.apiUrl}/api/locations/districts/${provinceId}`)
-      .pipe(takeUntilDestroyed(this.destroyRef))
-      .subscribe((res) => { if (res.success) this.districts.set(res.data); });
-  }
-
-  private fetchWards(districtId: string): void {
-    this.http
-      .get<ApiSuccess<LocationItem[]>>(`${environment.apiUrl}/api/locations/wards/${districtId}`)
-      .pipe(takeUntilDestroyed(this.destroyRef))
-      .subscribe((res) => { if (res.success) this.wards.set(res.data); });
-  }
-
   buildPreview(): string {
     const v = this.form.getRawValue();
     const parts: string[] = [];
     if (v.streetAddress.trim()) parts.push(v.streetAddress.trim());
-    const wardName     = this.wards().find((w) => w.id === v.wardId)?.full_name;
-    const districtName = this.districts().find((d) => d.id === v.districtId)?.full_name;
+    const wardName =
+      v.wardId === MANUAL_WARD_ID ? null : this.wards().find((w) => w.id === v.wardId)?.full_name;
     const provinceName = this.provinces().find((p) => p.id === v.provinceId)?.full_name;
     if (wardName) parts.push(wardName);
-    if (districtName) parts.push(districtName);
     if (provinceName) parts.push(provinceName);
     return parts.join(', ');
   }
 
   resetForm(): void {
     if (this.loading() || this.saving()) return;
-    this.districts.set([]);
     this.wards.set([]);
-    this.form.controls.districtId.disable({ emitEvent: false });
     this.form.controls.wardId.disable({ emitEvent: false });
     this.form.reset({}, { emitEvent: false });
     this.loadInitialData();
@@ -356,9 +308,7 @@ export class EditProfileComponent implements OnInit {
     this.loadError.set(null);
 
     // Reset sạch trạng thái cascade trước khi patch để UI/validation không nhảy
-    this.districts.set([]);
     this.wards.set([]);
-    this.form.controls.districtId.disable({ emitEvent: false });
     this.form.controls.wardId.disable({ emitEvent: false });
 
     forkJoin({
@@ -385,7 +335,6 @@ export class EditProfileComponent implements OnInit {
   private patchUserData(me: User): void {
     // Backend có thể trả id dạng number; ép về string để match value trong <option>
     const provinceId    = me.provinceId != null ? String(me.provinceId) : '';
-    const districtId    = me.districtId != null ? String(me.districtId) : '';
     const wardId        = me.wardId     != null ? String(me.wardId)     : '';
     const streetAddress = me.streetAddress ?? '';
 
@@ -408,52 +357,27 @@ export class EditProfileComponent implements OnInit {
     this.form.patchValue({ provinceId }, { emitEvent: false });
 
     this.http
-      .get<ApiSuccess<LocationItem[]>>(`${environment.apiUrl}/api/locations/districts/${provinceId}`)
+      .get<ApiSuccess<WardItem[]>>(`${environment.apiUrl}/api/locations/wards-by-province/${provinceId}`)
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: (res) => {
           if (res.success) {
-            this.districts.set(res.data);
-            // Chỉ enable sau khi đã có danh sách districts để select match được option
-            this.enableClean(this.form.controls.districtId);
+            this.wards.set(res.data);
+            // Chỉ enable sau khi đã có danh sách wards để select match được option
+            this.enableClean(this.form.controls.wardId);
+          } else {
+            // Still allow manual option
+            this.enableClean(this.form.controls.wardId);
           }
 
-          if (!districtId) {
-            this.form.markAsPristine();
-            this.form.markAsUntouched();
-            this.loading.set(false);
-            return;
+          // Patch ward SAU KHI wards đã có data
+          if (wardId) {
+            this.form.patchValue({ wardId }, { emitEvent: false });
           }
 
-          this.form.patchValue({ districtId }, { emitEvent: false });
-
-          this.http
-            .get<ApiSuccess<LocationItem[]>>(`${environment.apiUrl}/api/locations/wards/${districtId}`)
-            .pipe(takeUntilDestroyed(this.destroyRef))
-            .subscribe({
-              next: (wardRes) => {
-                if (wardRes.success) {
-                  this.wards.set(wardRes.data);
-                  // Chỉ enable sau khi đã có danh sách wards
-                  this.enableClean(this.form.controls.wardId);
-                }
-
-                // Patch ward SAU KHI wards đã có data
-                if (wardId) {
-                  this.form.patchValue({ wardId }, { emitEvent: false });
-                }
-
-                this.form.markAsPristine();
-                this.form.markAsUntouched();
-                this.loading.set(false);
-              },
-              error: () => {
-                // Không block UI: vẫn kết thúc loading để user có thể thao tác lại
-                this.form.markAsPristine();
-                this.form.markAsUntouched();
-                this.loading.set(false);
-              },
-            });
+          this.form.markAsPristine();
+          this.form.markAsUntouched();
+          this.loading.set(false);
         },
         error: () => {
           this.form.markAsPristine();
@@ -470,14 +394,16 @@ export class EditProfileComponent implements OnInit {
     }
     this.saving.set(true);
     const v = this.form.getRawValue();
+    const isManualWard = v.wardId === MANUAL_WARD_ID;
+    const selectedWard = isManualWard ? null : this.wards().find((w) => w.id === v.wardId) || null;
 
     this.api
       .updateMe({
         name:          v.name.trim() || null,
         phone:         v.phone.trim() || null,
         provinceId:    v.provinceId    || null,
-        districtId:    v.districtId    || null,
-        wardId:        v.wardId        || null,
+        districtId:    selectedWard?.districtId || null,
+        wardId:        isManualWard ? null : (v.wardId || null),
         streetAddress: v.streetAddress.trim() || null,
         fullAddress:   this.buildPreview()     || null,
       })

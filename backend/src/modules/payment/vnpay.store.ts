@@ -2,6 +2,7 @@ import { ensureRedisConnected, redisClient } from '../../config/redis';
 
 export type PendingVnpayCheckout = {
   userId: number;
+  orderId: number;
   shippingAddress: string;
   items: Array<{ productId: number; quantity: number }>;
 };

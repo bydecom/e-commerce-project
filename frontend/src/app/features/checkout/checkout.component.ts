@@ -247,11 +247,19 @@ export class CheckoutComponent implements OnInit {
   readonly user = signal<User | null>(null);
 
   shippingAddress = '';
+  private pendingTxnRef: string | null = null;
 
   private cache: CacheEntry | null = null;
   private readonly CACHE_TTL_MS = 30_000;
 
   ngOnInit(): void {
+    // Restore pending txnRef across refresh (best-effort).
+    try {
+      const saved = sessionStorage.getItem('pendingCheckoutTxnRef');
+      this.pendingTxnRef = saved && saved.trim() ? saved.trim() : null;
+    } catch {
+      this.pendingTxnRef = null;
+    }
     this.load();
   }
 
@@ -269,7 +277,37 @@ export class CheckoutComponent implements OnInit {
 
   cancelCheckout(): void {
     if (this.paying()) return;
-    this.router.navigateByUrl('/');
+    const txnRef = (() => {
+      try {
+        return sessionStorage.getItem('pendingCheckoutTxnRef') || '';
+      } catch {
+        return '';
+      }
+    })();
+    if (!txnRef) {
+      this.router.navigateByUrl('/cart');
+      return;
+    }
+    this.paying.set(true);
+    this.http
+      .post<ApiSuccess<{ cancelled: boolean }>>(`${environment.apiUrl}/api/payments/vnpay/cancel`, { txnRef })
+      .pipe(
+        tap(() => {
+          try {
+            sessionStorage.removeItem('pendingCheckoutTxnRef');
+            sessionStorage.removeItem('pendingCheckoutOrderId');
+          } catch {
+            // ignore
+          }
+        }),
+        tap(() => this.router.navigateByUrl('/cart')),
+        catchError((e: Error) => {
+          this.toast.show(e.message ?? 'Failed to cancel checkout', 'error');
+          this.paying.set(false);
+          return of(null);
+        })
+      )
+      .subscribe();
   }
 
   confirmAndPay(): void {
@@ -296,8 +334,8 @@ export class CheckoutComponent implements OnInit {
     this.paying.set(true);
     const returnUrl = `${window.location.origin}/checkout/result`;
     this.http
-      .post<ApiSuccess<{ paymentUrl: string }>>(`${environment.apiUrl}/api/payments/vnpay/create`, {
-        shippingAddress: this.shippingAddress.trim(),
+      .post<ApiSuccess<{ paymentUrl: string }>>(`${environment.apiUrl}/api/payments/vnpay/pay`, {
+        txnRef: this.pendingTxnRef,
         returnUrl,
       })
       .pipe(
@@ -348,6 +386,41 @@ export class CheckoutComponent implements OnInit {
       .subscribe();
   }
 
+  private initReservationBestEffort(): void {
+    if (!this.isAuthenticated()) return;
+    if (this.items().length === 0) return;
+    if (!this.hasPhone() || !this.hasAddress()) return;
+    if (this.pendingTxnRef) return;
+
+    this.http
+      .post<ApiSuccess<{ txnRef: string }>>(`${environment.apiUrl}/api/payments/vnpay/init`, {
+        shippingAddress: this.shippingAddress.trim(),
+      })
+      .pipe(
+        map((r) => {
+          if (!r.success) throw new Error(r.message);
+          return r.data.txnRef;
+        }),
+        tap((txnRef) => {
+          this.pendingTxnRef = txnRef;
+          try {
+            sessionStorage.setItem('pendingCheckoutTxnRef', txnRef);
+          } catch {
+            // ignore
+          }
+        }),
+        catchError((e: Error) => {
+          // If init fails (e.g. out of stock), do not let user stay in confirm step.
+          const msg = e.message ?? 'Checkout is not available';
+          this.toast.show(msg, 'error');
+          this.error.set(msg);
+          queueMicrotask(() => this.router.navigateByUrl('/cart'));
+          return of(null);
+        })
+      )
+      .subscribe();
+  }
+
   private loadUserBestEffort(): void {
     if (!this.isAuthenticated()) {
       this.user.set(null);
@@ -365,6 +438,7 @@ export class CheckoutComponent implements OnInit {
               '';
           }
         }),
+        tap(() => this.initReservationBestEffort()),
         catchError(() => {
           // Avoid blocking checkout UI if profile fetch fails.
           this.user.set(this.auth.currentUser());

@@ -310,6 +310,31 @@ export async function cancelUserOrder(userId: number, orderId: number) {
   });
 }
 
+/**
+ * System cancellation used by payment/TTL flows.
+ * - Only cancels when status is PENDING
+ * - Restores stock and marks CANCELLED in the same transaction
+ * - Idempotent-ish: if not pending, returns the current order
+ */
+export async function cancelOrderSystem(orderId: number) {
+  return prisma.$transaction(async (tx) => {
+    const order = await tx.order.findUnique({ where: { id: orderId } });
+    if (!order) throw httpError(404, 'Order not found');
+    if (order.status !== 'PENDING') {
+      const existing = await tx.order.findUnique({ where: { id: orderId }, include: orderListInclude });
+      if (!existing) throw httpError(404, 'Order not found');
+      return mapOrderFull(existing, new Set());
+    }
+    await restoreStockForOrder(tx, orderId);
+    const updated = await tx.order.update({
+      where: { id: orderId },
+      data: { status: 'CANCELLED' },
+      include: orderListInclude,
+    });
+    return mapOrderFull(updated, new Set());
+  });
+}
+
 export async function listAdminOrders(query: {
   page?: string;
   limit?: string;
