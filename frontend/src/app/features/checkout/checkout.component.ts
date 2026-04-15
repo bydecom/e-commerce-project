@@ -162,7 +162,7 @@ type CacheEntry = { data: CartPricingData; ts: number };
                   <dt class="flex items-center text-sm text-gray-600">
                     <span>Shipping</span>
                   </dt>
-                  <dd class="text-sm font-medium text-indigo-600">Free</dd>
+                  <dd class="text-sm font-medium text-green-600">Free</dd>
                 </div>
                 <div class="flex items-center justify-between border-t border-gray-200 pt-4">
                   <dt class="text-base font-bold text-gray-900">Total</dt>

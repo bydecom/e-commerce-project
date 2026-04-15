@@ -47,7 +47,7 @@ import { StoreSettingService } from '../../core/services/store-setting.service';
       </main>
 
       <footer class="border-t border-gray-200 bg-white">
-        <div class="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
+        <div class="mx-auto max-w-7xl px-4 py-4 sm:px-6 lg:px-8">
           <div class="flex flex-col items-center justify-between gap-4 sm:flex-row">
             <p class="text-sm text-gray-500">&copy; 2026 {{ shopName() }}. All rights reserved.</p>
             <div class="flex gap-4 text-sm text-gray-500">
@@ -55,9 +55,6 @@ import { StoreSettingService } from '../../core/services/store-setting.service';
               <a routerLink="/privacy" class="hover:text-gray-900 hover:underline">Privacy Policy</a>
               <a routerLink="/terms" class="hover:text-gray-900 hover:underline">Terms of Service</a>
             </div>
-          </div>
-          <div class="mt-4 text-center text-xs text-gray-400">
-            Need help? Contact us at {{ supportEmail() || 'support@localhost' }} or call {{ supportPhone() || '1800-123-456' }}
           </div>
         </div>
       </footer>

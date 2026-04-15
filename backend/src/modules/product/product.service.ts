@@ -340,7 +340,7 @@ export async function searchSmartHybrid(keyword: string, limit = 5): Promise<Sma
 
   const qUnaccent = toTitleUnaccent(q);
   const candidateSize = Math.max(limit * 10, 50);
-  const MIN_SCORE_THRESHOLD = 0.7;
+  const MIN_SCORE_THRESHOLD = 0.3;
   const K = 50;
   // 1) PREFIX (ưu tiên cao nhất)
   const prefixPromise = prisma.product.findMany({

@@ -70,10 +70,10 @@ import type { OrderDetail, OrderStatus } from '../../../shared/models/order.mode
               @for (o of orders(); track o.id) {
                 <div class="overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm transition-all hover:shadow-md">
                   <div class="flex flex-col border-b border-gray-100 p-5 sm:flex-row sm:items-center">
-                <div class="relative h-24 w-24 flex-shrink-0 overflow-hidden rounded-xl border border-gray-200 bg-white">
+                <div class="relative h-24 w-24 flex-shrink-0 overflow-hidden rounded-xl border border-gray-200 bg-gradient-to-br from-slate-100 to-slate-200">
                   <img
                     [src]="o.items.at(0)?.imageUrl || 'https://via.placeholder.com/160x160?text=Product'"
-                    class="h-full w-full object-cover"
+                    class="h-full w-full object-contain p-2"
                     alt="Order Thumbnail"
                   />
                   @if (o.items.length > 1) {

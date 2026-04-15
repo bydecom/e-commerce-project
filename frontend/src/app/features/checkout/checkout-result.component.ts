@@ -41,7 +41,7 @@ type VerifyPayload = {
           </div>
           <h1 class="text-2xl font-extrabold tracking-tight text-gray-900">Payment Successful!</h1>
           <p class="mt-3 text-base text-gray-500">
-            Thank you for your purchase. We're processing your order.
+            Thank you for your purchase.
           </p>
 
           @if (orderId()) {

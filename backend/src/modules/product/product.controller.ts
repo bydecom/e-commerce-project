@@ -11,7 +11,6 @@ function parseParamInt(param: string | string[] | undefined): number {
 
 export async function listProducts(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
-    // User: luôn dùng smart hybrid để đảm bảo đồng nhất Navbar <-> Product list
     const result = await productService.searchSmartHybridList(
       req.query as Parameters<typeof productService.searchSmartHybridList>[0]
     );
