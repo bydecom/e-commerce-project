@@ -1,7 +1,7 @@
 import { HttpClient } from '@angular/common/http';
 import { NgClass } from '@angular/common';
 import { Component, OnInit, inject, signal } from '@angular/core';
-import { RouterLink } from '@angular/router';
+import { Router, RouterLink } from '@angular/router';
 import { catchError, map, of, tap } from 'rxjs';
 import { environment } from '../../../environments/environment';
 import { AuthService } from '../../core/services/auth.service';
@@ -209,6 +209,15 @@ type CacheEntry = { data: CartPricingData; ts: number };
                 }
               </button>
 
+              <button
+                type="button"
+                (click)="cancelCheckout()"
+                [disabled]="paying()"
+                class="mt-3 w-full rounded-sm border border-gray-300 bg-white px-4 py-3 text-sm font-semibold text-gray-700 shadow-sm transition-colors hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-gray-900 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                Cancel checkout
+              </button>
+
               <p class="mt-4 text-center text-xs text-gray-500 flex items-center justify-center gap-1">
                 <svg class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/>
@@ -224,6 +233,7 @@ type CacheEntry = { data: CartPricingData; ts: number };
 })
 export class CheckoutComponent implements OnInit {
   private readonly http = inject(HttpClient);
+  private readonly router = inject(Router);
   private readonly auth = inject(AuthService);
   private readonly users = inject(UserApiService);
   private readonly toast = inject(ToastService);
@@ -255,6 +265,11 @@ export class CheckoutComponent implements OnInit {
 
   hasAddress(): boolean {
     return !!this.shippingAddress?.trim();
+  }
+
+  cancelCheckout(): void {
+    if (this.paying()) return;
+    this.router.navigateByUrl('/');
   }
 
   confirmAndPay(): void {
