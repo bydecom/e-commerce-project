@@ -62,3 +62,33 @@ export async function getWardsByProvince(req: Request, res: Response): Promise<v
   await redis.set(cacheKey, JSON.stringify(data), { EX: CACHE_TTL });
   res.json(success(data));
 }
+
+export async function getWardsByProvince(req: Request, res: Response): Promise<void> {
+  const { provinceId } = req.params as { provinceId: string };
+
+  if (!wardByProvinceCache.has(provinceId)) {
+    // `api/v2` rejects `depth=3` (422). Do it in 2 steps: Province(depth=2) -> District(depth=2) to get wards.
+    const provinceDetail = await fetchJson<ProvinceDetailDepth2>(`${apiBase()}/p/${encodeURIComponent(provinceId)}?depth=2`);
+    const districts = Array.isArray(provinceDetail.districts) ? provinceDetail.districts : [];
+
+    const wards: WardWithDistrictItem[] = [];
+    const districtDetails = await Promise.all(
+      districts.map(async (d) => {
+        const dId = String(d.code);
+        const detail = await fetchJson<DistrictDetailDepth2>(`${apiBase()}/d/${encodeURIComponent(dId)}?depth=2`);
+        return { districtId: dId, wards: Array.isArray(detail.wards) ? detail.wards : [] };
+      })
+    );
+
+    for (const dd of districtDetails) {
+      for (const w of dd.wards) {
+        wards.push({ id: String(w.code), full_name: w.name, districtId: dd.districtId });
+      }
+    }
+
+    wards.sort((a, b) => a.id.localeCompare(b.id));
+    wardByProvinceCache.set(provinceId, wards);
+  }
+
+  res.json(success(wardByProvinceCache.get(provinceId)!));
+}

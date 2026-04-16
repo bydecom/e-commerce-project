@@ -23,6 +23,7 @@ import { ensureRedisConnected } from './config/redis';
 import { cartRouter } from './modules/cart/cart.route';
 import { paymentRouter } from './modules/payment/payment.route';
 import { locationRouter } from './modules/location/location.route';
+import { startReservationCleanupLoop } from './modules/inventory/stock-reservation.service';
 
 export const app = express();
 
@@ -52,6 +53,12 @@ setupSwagger(app);
 ensureRedisConnected().catch((err) => {
   // eslint-disable-next-line no-console
   console.error('Redis connection failed:', err);
+});
+
+// Best-effort cleanup loop for expired checkout stock holds.
+startReservationCleanupLoop({
+  intervalMs: 5_000,
+  batchSize: 100,
 });
 
 const success = (data: unknown, message = 'OK', meta: unknown = null) => ({

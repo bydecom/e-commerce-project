@@ -89,7 +89,17 @@ async function main() {
 
   const customers = await Promise.all(
     customerData.map((c) =>
-      prisma.user.create({ data: { ...c, password: 'hashed_pw', role: 'USER' } }),
+      prisma.user.create({
+        data: {
+          name: c.name,
+          email: c.email,
+          phone: c.phone,
+          streetAddress: c.address,
+          fullAddress: c.address,
+          password: 'hashed_pw',
+          role: 'USER',
+        },
+      }),
     ),
   );
   console.log(`✅ Created ${customers.length} customers + 1 admin.`);
@@ -251,7 +261,7 @@ async function main() {
         userId: customer.id,
         status,
         total,
-        shippingAddress: customer.address ?? '',
+        shippingAddress: customer.fullAddress ?? customer.streetAddress ?? '',
         createdAt: orderDate,
         items: { create: items },
       },

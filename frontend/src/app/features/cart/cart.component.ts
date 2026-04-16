@@ -195,7 +195,7 @@ type CartPricingData = {
                 <div class="mt-8">
                   <a
                     routerLink="/checkout"
-                    class="block w-full rounded-sm bg-gray-900 px-4 py-3 text-center text-base font-bold text-white shadow-sm transition-colors hover:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-gray-900 focus:ring-offset-2 focus:ring-offset-gray-50"
+                    class="block w-full rounded-sm bg-gray-900 px-4 py-3 text-center text-base font-bold text-white shadow-sm transition-colors hover:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-gray-900 focus:ring-offset-2 focus:ring-offset-gray-50 disabled:cursor-not-allowed disabled:bg-gray-300 disabled:text-gray-500"
                   >
                     Proceed to checkout
                   </a>
