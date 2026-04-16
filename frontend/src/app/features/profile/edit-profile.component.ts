@@ -12,8 +12,8 @@ import type { User } from '../../shared/models/user.model';
 import type { ApiSuccess } from '../../shared/models/api-response.model';
 
 interface LocationItem {
-  id: string;
-  full_name: string;
+  code: number;
+  name: string;
 }
 
 interface WardItem extends LocationItem {
@@ -148,8 +148,8 @@ const MANUAL_WARD_OPTION: WardItem = {
                     [class.ring-red-300]="form.controls.provinceId.invalid && form.controls.provinceId.touched"
                   >
                     <option value="" disabled selected>Select Province</option>
-                    @for (p of provinces(); track p.id) {
-                      <option [value]="p.id">{{ p.full_name }}</option>
+                    @for (p of provinces(); track p.code) {
+                      <option [value]="p.code">{{ p.name }}</option>
                     }
                   </select>
                   @if (form.controls.provinceId.touched && form.controls.provinceId.errors?.['required']) {
@@ -168,9 +168,8 @@ const MANUAL_WARD_OPTION: WardItem = {
                     [class.ring-red-300]="form.controls.wardId.invalid && form.controls.wardId.touched"
                   >
                     <option value="" disabled selected>Select Ward</option>
-                    <option [value]="manualWardId">{{ manualWardLabel }}</option>
-                    @for (w of wards(); track w.id) {
-                      <option [value]="w.id">{{ w.full_name }}</option>
+                    @for (w of wards(); track w.code) {
+                      <option [value]="w.code">{{ w.name }}</option>
                     }
                   </select>
                   @if (form.controls.wardId.touched && form.controls.wardId.errors?.['required']) {
@@ -225,15 +224,15 @@ export class EditProfileComponent implements OnInit {
   private readonly router      = inject(Router);
   private readonly destroyRef  = inject(DestroyRef);
 
+  private readonly locationApiUrl = `${environment.apiUrl}/api/locations`;
+
   readonly loading   = signal(true);
   readonly saving    = signal(false);
   readonly loadError = signal<string | null>(null);
   readonly me        = signal<User | null>(null);
 
   readonly provinces = signal<LocationItem[]>([]);
-  readonly wards     = signal<WardItem[]>([]);
-  readonly manualWardId = MANUAL_WARD_ID;
-  readonly manualWardLabel = MANUAL_WARD_OPTION.full_name;
+  readonly wards     = signal<LocationItem[]>([]);
 
   readonly form = this.fb.nonNullable.group({
     name:          ['', [Validators.maxLength(100)]],
@@ -259,11 +258,13 @@ export class EditProfileComponent implements OnInit {
           // Allow user to pick manual option immediately, even if API is slow/fails.
           this.enableClean(this.form.controls.wardId);
           this.http
-            .get<ApiSuccess<WardItem[]>>(`${environment.apiUrl}/api/locations/wards-by-province/${id}`)
+            .get<ApiSuccess<LocationItem[]>>(`${this.locationApiUrl}/wards/${encodeURIComponent(id)}`)
             .pipe(takeUntilDestroyed(this.destroyRef))
             .subscribe((res) => {
               if (res.success) {
-                this.wards.set(res.data);
+                this.wards.set(Array.isArray(res.data) ? res.data : []);
+                // Chỉ enable sau khi đã có danh sách wards để tránh dropdown trống
+                this.enableClean(this.form.controls.wardId);
               }
             });
         }
@@ -276,20 +277,12 @@ export class EditProfileComponent implements OnInit {
     control.markAsPristine();
   }
 
-  private fetchProvinces(): void {
-    this.http
-      .get<ApiSuccess<LocationItem[]>>(`${environment.apiUrl}/api/locations/provinces`)
-      .pipe(takeUntilDestroyed(this.destroyRef))
-      .subscribe((res) => { if (res.success) this.provinces.set(res.data); });
-  }
-
   buildPreview(): string {
     const v = this.form.getRawValue();
     const parts: string[] = [];
     if (v.streetAddress.trim()) parts.push(v.streetAddress.trim());
-    const wardName =
-      v.wardId === MANUAL_WARD_ID ? null : this.wards().find((w) => w.id === v.wardId)?.full_name;
-    const provinceName = this.provinces().find((p) => p.id === v.provinceId)?.full_name;
+    const wardName     = this.wards().find((w) => String(w.code) === v.wardId)?.name;
+    const provinceName = this.provinces().find((p) => String(p.code) === v.provinceId)?.name;
     if (wardName) parts.push(wardName);
     if (provinceName) parts.push(provinceName);
     return parts.join(', ');
@@ -312,14 +305,14 @@ export class EditProfileComponent implements OnInit {
     this.form.controls.wardId.disable({ emitEvent: false });
 
     forkJoin({
-      provincesRes: this.http.get<ApiSuccess<LocationItem[]>>(`${environment.apiUrl}/api/locations/provinces`),
+      provincesRes: this.http.get<ApiSuccess<LocationItem[]>>(`${this.locationApiUrl}/provinces`),
       me: this.api.getMe(),
     })
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: ({ provincesRes, me }) => {
           if (provincesRes.success) {
-            this.provinces.set(provincesRes.data);
+            this.provinces.set(Array.isArray(provincesRes.data) ? provincesRes.data : []);
           }
 
           this.me.set(me);
@@ -357,22 +350,17 @@ export class EditProfileComponent implements OnInit {
     this.form.patchValue({ provinceId }, { emitEvent: false });
 
     this.http
-      .get<ApiSuccess<WardItem[]>>(`${environment.apiUrl}/api/locations/wards-by-province/${provinceId}`)
+      .get<ApiSuccess<LocationItem[]>>(`${this.locationApiUrl}/wards/${encodeURIComponent(provinceId)}`)
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: (res) => {
           if (res.success) {
-            this.wards.set(res.data);
-            // Chỉ enable sau khi đã có danh sách wards để select match được option
+            this.wards.set(Array.isArray(res.data) ? res.data : []);
             this.enableClean(this.form.controls.wardId);
-          } else {
-            // Still allow manual option
-            this.enableClean(this.form.controls.wardId);
-          }
 
-          // Patch ward SAU KHI wards đã có data
-          if (wardId) {
-            this.form.patchValue({ wardId }, { emitEvent: false });
+            if (wardId) {
+              this.form.patchValue({ wardId }, { emitEvent: false });
+            }
           }
 
           this.form.markAsPristine();
@@ -402,8 +390,8 @@ export class EditProfileComponent implements OnInit {
         name:          v.name.trim() || null,
         phone:         v.phone.trim() || null,
         provinceId:    v.provinceId    || null,
-        districtId:    selectedWard?.districtId || null,
-        wardId:        isManualWard ? null : (v.wardId || null),
+        districtId:    null,
+        wardId:        v.wardId        || null,
         streetAddress: v.streetAddress.trim() || null,
         fullAddress:   this.buildPreview()     || null,
       })

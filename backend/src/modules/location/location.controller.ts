@@ -1,15 +1,9 @@
 import type { Request, Response } from 'express';
 import { success } from '../../utils/response';
+import { ensureRedisConnected, redisClient } from '../../config/redis';
 
-type LocationItem = { id: string; full_name: string };
-type WardWithDistrictItem = LocationItem & { districtId: string };
-
-type ProvinceRow = { code: number; name: string };
-type DistrictRow = { code: number; name: string };
-type WardRow = { code: number; name: string };
-
-type ProvinceDetailDepth2 = ProvinceRow & { districts?: DistrictRow[] | null };
-type DistrictDetailDepth2 = DistrictRow & { wards?: WardRow[] | null };
+// Theo API 2025: không còn District, chỉ Province -> Ward
+type LocationItem = { code: number; name: string };
 
 function apiBase(): string {
   return (process.env.LOCATION_API_BASE || 'https://provinces.open-api.vn/api/v2').trim().replace(/\/+$/, '');
@@ -21,46 +15,52 @@ async function fetchJson<T>(url: string): Promise<T> {
   return (await r.json()) as T;
 }
 
-function mapRow(row: { code: number; name: string }): LocationItem {
-  return { id: String(row.code), full_name: row.name };
-}
+// TTL cache: 30 ngày
+const CACHE_TTL = 30 * 24 * 60 * 60;
 
-// Lazy cache per province/district to reduce repeated external calls
-const provinceCache = new Map<string, LocationItem[]>();
-const districtCache = new Map<string, LocationItem[]>();
-const wardCache = new Map<string, LocationItem[]>();
-const wardByProvinceCache = new Map<string, WardWithDistrictItem[]>();
+function sortByName(items: LocationItem[]): LocationItem[] {
+  return items.sort((a, b) => a.name.localeCompare(b.name));
+}
 
 export async function getProvinces(_req: Request, res: Response): Promise<void> {
-  const cacheKey = 'all';
-  if (!provinceCache.has(cacheKey)) {
-    const rows = await fetchJson<ProvinceRow[]>(`${apiBase()}/p/`);
-    const data = rows.map(mapRow).sort((a, b) => a.id.localeCompare(b.id));
-    provinceCache.set(cacheKey, data);
+  const cacheKey = 'location:provinces';
+
+  await ensureRedisConnected();
+  const redis = redisClient();
+
+  const cached = await redis.get(cacheKey);
+  if (cached) {
+    res.json(success(JSON.parse(cached) as LocationItem[]));
+    return;
   }
-  res.json(success(provinceCache.get(cacheKey)!));
+
+  const rows = await fetchJson<LocationItem[]>(`${apiBase()}/p/`);
+  const data = sortByName(Array.isArray(rows) ? rows : []);
+
+  await redis.set(cacheKey, JSON.stringify(data), { EX: CACHE_TTL });
+  res.json(success(data));
 }
 
-export async function getDistricts(req: Request, res: Response): Promise<void> {
+export async function getWardsByProvince(req: Request, res: Response): Promise<void> {
   const { provinceId } = req.params as { provinceId: string };
-  if (!districtCache.has(provinceId)) {
-    const detail = await fetchJson<ProvinceDetailDepth2>(`${apiBase()}/p/${encodeURIComponent(provinceId)}?depth=2`);
-    const rows = Array.isArray(detail.districts) ? detail.districts : [];
-    const data = rows.map(mapRow).sort((a, b) => a.id.localeCompare(b.id));
-    districtCache.set(provinceId, data);
-  }
-  res.json(success(districtCache.get(provinceId)!));
-}
+  const cacheKey = `location:wards:province:${provinceId}`;
 
-export async function getWards(req: Request, res: Response): Promise<void> {
-  const { districtId } = req.params as { districtId: string };
-  if (!wardCache.has(districtId)) {
-    const detail = await fetchJson<DistrictDetailDepth2>(`${apiBase()}/d/${encodeURIComponent(districtId)}?depth=2`);
-    const rows = Array.isArray(detail.wards) ? detail.wards : [];
-    const data = rows.map(mapRow).sort((a, b) => a.id.localeCompare(b.id));
-    wardCache.set(districtId, data);
+  await ensureRedisConnected();
+  const redis = redisClient();
+
+  const cached = await redis.get(cacheKey);
+  if (cached) {
+    res.json(success(JSON.parse(cached) as LocationItem[]));
+    return;
   }
-  res.json(success(wardCache.get(districtId)!));
+
+  const rows = await fetchJson<LocationItem[]>(
+    `${apiBase()}/w/?province=${encodeURIComponent(provinceId)}`
+  );
+  const data = sortByName(Array.isArray(rows) ? rows : []);
+
+  await redis.set(cacheKey, JSON.stringify(data), { EX: CACHE_TTL });
+  res.json(success(data));
 }
 
 export async function getWardsByProvince(req: Request, res: Response): Promise<void> {
