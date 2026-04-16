@@ -16,17 +16,6 @@ interface LocationItem {
   name: string;
 }
 
-interface WardItem extends LocationItem {
-  districtId: string;
-}
-
-const MANUAL_WARD_ID = '__manual__';
-const MANUAL_WARD_OPTION: WardItem = {
-  id: MANUAL_WARD_ID,
-  full_name: "(Skip) I'll type Ward/Commune in Street Address",
-  districtId: '',
-};
-
 @Component({
   selector: 'app-edit-profile',
   standalone: true,
@@ -382,8 +371,6 @@ export class EditProfileComponent implements OnInit {
     }
     this.saving.set(true);
     const v = this.form.getRawValue();
-    const isManualWard = v.wardId === MANUAL_WARD_ID;
-    const selectedWard = isManualWard ? null : this.wards().find((w) => w.id === v.wardId) || null;
 
     this.api
       .updateMe({
