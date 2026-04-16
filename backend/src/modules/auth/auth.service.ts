@@ -166,10 +166,10 @@ export async function login(input: { email: string; password: string }) {
     where: { email },
     select: { id: true, name: true, email: true, role: true, password: true },
   });
-  if (!user) throw httpError(401, 'Invalid credentials');
+  if (!user) throw httpError(401, 'Email or Password wrong');
 
   const ok = await bcrypt.compare(password, user.password);
-  if (!ok) throw httpError(401, 'Invalid credentials');
+  if (!ok) throw httpError(401, 'Email or Password wrong');
 
   const secret = process.env.JWT_SECRET;
   if (!secret) throw httpError(500, 'JWT secret is not configured');

@@ -22,6 +22,12 @@ enum OrderStatus {
   CANCELLED
 }
 
+enum PaymentStatus {
+  PENDING
+  PAID
+  FAILED
+}
+
 enum SentimentLabel {
   POSITIVE
   NEUTRAL
@@ -83,6 +89,7 @@ model Order {
   id              Int           @id @default(autoincrement())
   userId          Int
   status          OrderStatus   @default(PENDING)
+  paymentStatus   PaymentStatus @default(PENDING)
   total           Float
   shippingAddress String
   createdAt       DateTime      @default(now())              

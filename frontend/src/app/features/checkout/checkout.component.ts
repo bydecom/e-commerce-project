@@ -85,7 +85,9 @@ type CacheEntry = { data: CartPricingData; ts: number };
                     <div class="flex justify-between items-center mb-1">
                       <label class="block text-xs font-medium text-gray-500 uppercase tracking-wider">Contact</label>
                       @if (isAuthenticated() && !hasPhone()) {
-                        <a routerLink="/profile/edit" class="text-xs font-medium text-blue-600 hover:text-blue-800 transition-colors">Add phone</a>
+                        <a routerLink="/profile" class="text-xs font-medium text-blue-600 hover:text-blue-800 transition-colors"
+                          >Update profile</a
+                        >
                       }
                     </div>
                     <p class="font-medium text-gray-900">{{ user()?.name || 'Customer' }}</p>
@@ -107,7 +109,10 @@ type CacheEntry = { data: CartPricingData; ts: number };
                     <div class="flex justify-between items-center mb-1">
                       <label class="block text-xs font-medium text-gray-500 uppercase tracking-wider">Shipping address</label>
                       @if (isAuthenticated()) {
-                        <a routerLink="/profile/edit" class="text-xs font-medium text-blue-600 hover:text-blue-800 transition-colors">
+                        <a
+                          routerLink="/profile"
+                          class="text-xs font-medium text-blue-600 hover:text-blue-800 transition-colors"
+                        >
                           {{ hasAddress() ? 'Change' : 'Add address' }}
                         </a>
                       }
@@ -177,7 +182,7 @@ type CacheEntry = { data: CartPricingData; ts: number };
                     @if (!hasPhone()) { <li>Phone number</li> }
                     @if (!hasAddress()) { <li>Shipping address</li> }
                   </ul>
-                  <a routerLink="/profile/edit" class="mt-3 inline-block font-bold text-red-700 hover:text-red-900 transition-colors">
+                  <a routerLink="/profile" class="mt-3 inline-block font-bold text-red-700 hover:text-red-900 transition-colors">
                     Update now &rarr;
                   </a>
                 </div>

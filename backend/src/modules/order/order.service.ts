@@ -1,4 +1,4 @@
-import type { OrderStatus, Prisma, PrismaClient } from '@prisma/client';
+import type { OrderStatus, PaymentStatus, Prisma, PrismaClient } from '@prisma/client';
 
 type DbTx = Omit<
   PrismaClient,
@@ -88,6 +88,7 @@ function mapOrderFull(
   shippingAddress: string;
   createdAt: Date;
   updatedAt: Date;
+  paymentStatus: PaymentStatus;
   items: Array<{
     productId: number;
     quantity: number;
@@ -103,6 +104,7 @@ function mapOrderFull(
     id: order.id,
     userId: order.userId,
     status: order.status,
+    paymentStatus: order.paymentStatus,
     total: order.total,
     shippingAddress: order.shippingAddress,
     items: order.items.map((it) => mapItem(it, reviewedSet)),
@@ -224,6 +226,7 @@ export async function listUserOrders(
     page: query.page,
     limit: query.limit ?? '20',
   });
+
   const statusFilter =
     query.status && ['PENDING', 'CONFIRMED', 'SHIPPING', 'DONE', 'CANCELLED'].includes(query.status)
       ? (query.status as OrderStatus)

@@ -257,7 +257,12 @@ export async function cancelPayment(req: Request, res: Response, next: NextFunct
       (await getReservationPayload(txnRef))?.orderId ??
       null;
     if (orderId) {
-      await orderService.cancelOrderSystem(orderId).catch(() => null);
+      await prisma.order
+        .update({
+          where: { id: orderId },
+          data: { paymentStatus: 'FAILED' },
+        })
+        .catch(() => null);
     }
     await releaseReservationBestEffort(txnRef, pending?.items);
     res.json(success({ cancelled: true, orderId }, 'OK'));
@@ -279,7 +284,12 @@ export async function verifyReturn(req: Request, res: Response, next: NextFuncti
           (await getReservationPayload(failTxnRef))?.orderId ??
           null;
         if (orderId) {
-          await orderService.cancelOrderSystem(orderId).catch(() => null);
+          await prisma.order
+            .update({
+              where: { id: orderId },
+              data: { paymentStatus: 'FAILED' },
+            })
+            .catch(() => null);
         }
         await releaseReservationBestEffort(failTxnRef, pending?.items);
       }
@@ -306,6 +316,12 @@ export async function verifyReturn(req: Request, res: Response, next: NextFuncti
       if (!orderId) throw httpError(409, 'No pending checkout found for this transaction');
 
       // Payment success: keep order as PENDING (shop confirms later).
+      await prisma.order
+        .update({
+          where: { id: orderId },
+          data: { paymentStatus: 'PAID' },
+        })
+        .catch(() => null);
       await cartService.clearCart(pending?.userId ?? 0).catch(() => undefined);
       await vnpStore.markCompletedOrderId(txnRef, orderId);
       await releaseReservationBestEffort(txnRef, pending?.items);

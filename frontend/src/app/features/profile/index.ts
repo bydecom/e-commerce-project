@@ -1,2 +1,1 @@
-export * from './edit-profile.component';
-
+export {};

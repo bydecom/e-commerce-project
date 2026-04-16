@@ -1,5 +1,7 @@
 export type OrderStatus = 'PENDING' | 'CONFIRMED' | 'SHIPPING' | 'DONE' | 'CANCELLED';
 
+export type PaymentStatus = 'PENDING' | 'PAID' | 'FAILED';
+
 export interface OrderItemLine {
   productId: number;
   name: string;
@@ -13,6 +15,7 @@ export interface OrderDetail {
   id: number;
   userId: number;
   status: OrderStatus;
+  paymentStatus: PaymentStatus;
   total: number;
   shippingAddress: string;
   items: OrderItemLine[];

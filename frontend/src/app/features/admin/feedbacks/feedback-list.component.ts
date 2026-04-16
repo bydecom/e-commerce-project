@@ -10,7 +10,7 @@ import { SentimentBadgeComponent } from '../../../shared/components/sentiment-ba
 
 interface CacheEntry {
   data: AdminFeedbackItem[];
-  meta: { page: number; totalPages: number } | null;
+  meta: { page: number; limit: number; total: number; totalPages: number } | null;
   ts: number;
 }
 
@@ -23,7 +23,6 @@ interface CacheEntry {
       <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 class="text-2xl font-bold text-gray-900">Feedbacks</h1>
-          <p class="mt-1 text-sm text-gray-600">Review customer feedbacks and sentiment.</p>
         </div>
       </div>
 
@@ -161,12 +160,20 @@ interface CacheEntry {
         </div>
 
         @if (meta()) {
-          <app-pagination
-            class="mt-6 block"
-            [page]="meta()!.page"
-            [totalPages]="meta()!.totalPages"
-            (pageChange)="onPage($event)"
-          />
+          <div class="mt-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <p class="text-sm text-gray-500">
+              Showing <span class="font-medium text-gray-800">{{ rangeStart() }}</span>–<span class="font-medium text-gray-800">{{ rangeEnd() }}</span>
+              of <span class="font-medium text-gray-800">{{ meta()!.total }}</span> feedbacks
+            </p>
+            <div class="flex justify-center sm:justify-end">
+              <app-pagination
+                class="block"
+                [page]="meta()!.page"
+                [totalPages]="meta()!.totalPages"
+                (pageChange)="onPage($event)"
+              />
+            </div>
+          </div>
         }
       }
     </div>
@@ -178,7 +185,7 @@ export class AdminFeedbackListComponent implements OnInit, OnDestroy {
   readonly loading = signal(false);
   readonly error = signal<string | null>(null);
   readonly feedbacks = signal<AdminFeedbackItem[]>([]);
-  readonly meta = signal<{ page: number; totalPages: number } | null>(null);
+  readonly meta = signal<{ page: number; limit: number; total: number; totalPages: number } | null>(null);
   readonly feedbackTypes = signal<FeedbackType[]>([]);
 
   searchInput = '';
@@ -192,7 +199,7 @@ export class AdminFeedbackListComponent implements OnInit, OnDestroy {
   private appliedType: number | undefined;
 
   page = 1;
-  readonly limit = 20;
+  readonly limit = 5;
 
   // ── In-memory cache ──────────────────────────────────────────────
   private readonly cache = new Map<string, CacheEntry>();
@@ -239,6 +246,20 @@ export class AdminFeedbackListComponent implements OnInit, OnDestroy {
   onPage(p: number): void {
     this.page = p;
     this.throttledLoad();
+  }
+
+  rangeStart(): number {
+    const m = this.meta();
+    if (!m) return 0;
+    const len = this.feedbacks().length;
+    if (len === 0) return 0;
+    return (m.page - 1) * m.limit + 1;
+  }
+
+  rangeEnd(): number {
+    const m = this.meta();
+    if (!m) return 0;
+    return (m.page - 1) * m.limit + this.feedbacks().length;
   }
 
   private throttledLoad(): void {
@@ -289,7 +310,14 @@ export class AdminFeedbackListComponent implements OnInit, OnDestroy {
           const meta: PaginationMeta | null | undefined = r.meta;
           return {
             data: Array.isArray(r.data) ? r.data : [],
-            meta: meta ? { page: meta.page, totalPages: meta.totalPages } : null,
+            meta: meta
+              ? {
+                  page: meta.page,
+                  limit: meta.limit,
+                  total: meta.total,
+                  totalPages: meta.totalPages,
+                }
+              : null,
           };
         }),
         catchError((err: HttpErrorResponse) => {

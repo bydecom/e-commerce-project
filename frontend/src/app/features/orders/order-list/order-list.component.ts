@@ -251,7 +251,7 @@ export class OrderListComponent implements OnInit {
     this.error.set(null);
     this.api.getMyOrders().subscribe({
       next: (data) => {
-        this.orders.set(data);
+        this.orders.set((Array.isArray(data) ? data : []).filter((o) => o.paymentStatus === 'PAID'));
         this.loading.set(false);
       },
       error: (e: Error) => {

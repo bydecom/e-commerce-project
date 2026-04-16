@@ -12,7 +12,7 @@ import { PaginationComponent } from '../../../../shared/components/pagination/pa
 
 interface CacheEntry {
   data: Product[];
-  meta: { page: number; totalPages: number };
+  meta: { page: number; limit: number; total: number; totalPages: number };
   ts: number;
 }
 
@@ -25,7 +25,6 @@ interface CacheEntry {
       <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 class="text-2xl font-bold text-gray-900">Products</h1>
-          <p class="mt-1 text-sm text-gray-600">Create, edit, and delete products.</p>
         </div>
         
         <a
@@ -89,22 +88,26 @@ interface CacheEntry {
         <p class="mt-8 text-red-600">{{ error() }}</p>
       } @else {
         <div class="mt-6 overflow-x-auto rounded-xl border border-gray-200 bg-white shadow-sm">
-          <table class="min-w-full divide-y divide-gray-200 text-left text-sm">
+          <table class="min-w-full table-fixed divide-y divide-gray-200 text-left text-sm">
             <thead class="bg-gray-50">
               <tr>
-                <th class="px-4 py-3 font-medium text-gray-700">Name</th>
-                <th class="px-4 py-3 font-medium text-gray-700">Category</th>
-                <th class="px-4 py-3 font-medium text-gray-700">Price</th>
-                <th class="px-4 py-3 font-medium text-gray-700">Stock</th>
-                <th class="px-4 py-3 font-medium text-gray-700">Status</th>
-                <th class="px-4 py-3 font-medium text-gray-700"></th>
+                <th class="w-[34%] px-4 py-3 font-medium text-gray-700">Name</th>
+                <th class="w-[18%] px-4 py-3 font-medium text-gray-700">Category</th>
+                <th class="w-[12%] px-4 py-3 font-medium text-gray-700">Price</th>
+                <th class="w-[8%] px-4 py-3 font-medium text-gray-700">Stock</th>
+                <th class="w-[12%] px-4 py-3 font-medium text-gray-700">Status</th>
+                <th class="w-[16%] px-4 py-3 font-medium text-gray-700"></th>
               </tr>
             </thead>
             <tbody class="divide-y divide-gray-100">
               @for (p of products(); track p.id) {
                 <tr class="hover:bg-gray-50">
-                  <td class="px-4 py-3 font-medium text-gray-900">{{ p.name }}</td>
-                  <td class="px-4 py-3 text-gray-600">{{ p.category?.name ?? '—' }}</td>
+                  <td class="px-4 py-3 font-medium text-gray-900">
+                    <span class="block truncate" [title]="p.name">{{ p.name }}</span>
+                  </td>
+                  <td class="px-4 py-3 text-gray-600">
+                    <span class="block truncate" [title]="p.category?.name ?? '—'">{{ p.category?.name ?? '—' }}</span>
+                  </td>
                   <td class="px-4 py-3">{{ p.price | currencyVnd }}</td>
                   <td class="px-4 py-3">{{ p.stock }}</td>
                   <td class="px-4 py-3">
@@ -149,12 +152,18 @@ interface CacheEntry {
         </div>
 
         @if (meta()) {
-          <app-pagination
-            class="mt-6 block"
-            [page]="meta()!.page"
-            [totalPages]="meta()!.totalPages"
-            (pageChange)="onPage($event)"
-          />
+          <div class="mt-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <p class="text-sm text-gray-500">
+              Showing <span class="font-medium text-gray-800">{{ rangeStart() }}</span>–<span class="font-medium text-gray-800">{{ rangeEnd() }}</span>
+              of <span class="font-medium text-gray-800">{{ meta()!.total }}</span> products
+            </p>
+            <app-pagination
+              class="block"
+              [page]="meta()!.page"
+              [totalPages]="meta()!.totalPages"
+              (pageChange)="onPage($event)"
+            />
+          </div>
         }
       }
 
@@ -176,7 +185,7 @@ export class AdminProductListComponent implements OnInit, OnDestroy {
   readonly error = signal<string | null>(null);
   readonly products = signal<Product[]>([]);
   readonly categories = signal<CategoryDto[]>([]);
-  readonly meta = signal<{ page: number; totalPages: number } | null>(null);
+  readonly meta = signal<{ page: number; limit: number; total: number; totalPages: number } | null>(null);
 
   readonly confirmOpen = signal(false);
   readonly confirmMessage = signal('');
@@ -191,7 +200,7 @@ export class AdminProductListComponent implements OnInit, OnDestroy {
   private appliedStatus: ProductStatus | undefined;
 
   page = 1;
-  readonly limit = 12;
+  readonly limit = 7;
 
   // ── In-memory cache ──────────────────────────────────────────────
   private readonly cache = new Map<string, CacheEntry>();
@@ -242,6 +251,20 @@ export class AdminProductListComponent implements OnInit, OnDestroy {
   onPage(p: number): void {
     this.page = p;
     this.throttledLoad();
+  }
+
+  rangeStart(): number {
+    const m = this.meta();
+    if (!m) return 0;
+    const len = this.products().length;
+    if (len === 0) return 0;
+    return (m.page - 1) * m.limit + 1;
+  }
+
+  rangeEnd(): number {
+    const m = this.meta();
+    if (!m) return 0;
+    return (m.page - 1) * m.limit + this.products().length;
   }
 
   statusLabel(s: ProductStatus): string {
@@ -328,7 +351,12 @@ export class AdminProductListComponent implements OnInit, OnDestroy {
       })
       .subscribe({
         next: (res) => {
-          const meta = { page: res.meta.page, totalPages: res.meta.totalPages };
+          const meta = {
+            page: res.meta.page,
+            limit: res.meta.limit,
+            total: res.meta.total,
+            totalPages: res.meta.totalPages,
+          };
           this.cache.set(cacheKey, { data: res.data, meta, ts: Date.now() });
           this.products.set(res.data);
           this.meta.set(meta);

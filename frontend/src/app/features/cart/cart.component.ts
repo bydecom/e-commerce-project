@@ -25,7 +25,7 @@ type CartPricingData = {
   standalone: true,
   imports: [RouterLink, CurrencyVndPipe],
   template: `
-    <div class="bg-white">
+    <div class="min-h-full bg-white pb-12">
       <div class="mx-auto max-w-2xl px-4 py-8 sm:px-6 lg:max-w-7xl lg:px-8">
         <h1 class="text-3xl font-bold tracking-tight text-gray-900 sm:text-4xl">Shopping Cart</h1>
 
@@ -53,7 +53,7 @@ type CartPricingData = {
 
           @if (items().length === 0) {
             <div
-              class="mt-8 flex flex-col items-center justify-center rounded-2xl border-2 border-dashed border-gray-200 bg-gray-50 px-6 py-24 text-center"
+              class="mt-8 flex flex-col items-center justify-center rounded-2xl border-2 border-dashed border-gray-200 bg-white px-6 py-24 text-center"
             >
               <svg
                 class="mx-auto h-16 w-16 text-gray-400"

@@ -227,6 +227,7 @@ async function main() {
 
   // ── 7. ORDERS — 120 orders, strictly oldest → newest ────────────────────────
   type OrderStatus = 'DONE' | 'PENDING' | 'CONFIRMED' | 'SHIPPING' | 'CANCELLED';
+  type PaymentStatus = 'PENDING' | 'PAID' | 'FAILED';
 
   const statusPool: OrderStatus[] = [
     ...Array<OrderStatus>(55).fill('DONE'),
@@ -244,7 +245,9 @@ async function main() {
 
   for (let i = 0; i < 120; i++) {
     const customer = pick(customers);
-    const status: OrderStatus = pick(statusPool);
+    const rawStatus: OrderStatus = pick(statusPool);
+    const status: 'PENDING' | 'DONE' = rawStatus === 'PENDING' ? 'PENDING' : 'DONE';
+    const paymentStatus: PaymentStatus = status === 'PENDING' ? pick(['PENDING', 'PAID']) : 'PAID';
     const itemCount = ri(1, 4);
     const chosenProducts = [...allProducts].sort(() => 0.5 - Math.random()).slice(0, itemCount);
 
@@ -260,11 +263,12 @@ async function main() {
       data: {
         userId: customer.id,
         status,
+        paymentStatus,
         total,
         shippingAddress: customer.fullAddress ?? customer.streetAddress ?? '',
         createdAt: orderDate,
         items: { create: items },
-      },
+      } as any,
     });
   }
   console.log('✅ Created 120 orders in chronological order (oldest → newest).');
