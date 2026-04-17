@@ -227,7 +227,7 @@ Errors: `401` missing/invalid/expired token, or token already blacklisted. `500`
 | GET | `/categories` | ❌ | List categories (có `_count.products`) |
 | POST | `/categories` | ❌ | Create category |
 
-> `backend/src/modules/category/category.route.ts` chỉ đăng ký **GET /** và **POST /** — chưa có `PUT`/`DELETE`. Middleware admin **chưa** gắn.
+> `backend/src/modules/category/category.route.ts`  đăng ký **GET /** và **POST /** — chưa có `PUT`/`DELETE`. Middleware admin **chưa** gắn.
 
 **GET /categories** — mỗi phần tử `data`:
 ```json

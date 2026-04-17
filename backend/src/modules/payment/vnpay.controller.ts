@@ -257,12 +257,10 @@ export async function cancelPayment(req: Request, res: Response, next: NextFunct
       (await getReservationPayload(txnRef))?.orderId ??
       null;
     if (orderId) {
-      await prisma.order
-        .update({
-          where: { id: orderId },
-          data: { paymentStatus: 'FAILED' },
-        })
-        .catch(() => null);
+      await orderService.cancelOrderSystem(orderId).catch((err) => {
+        // eslint-disable-next-line no-console
+        console.error('[cancelPayment] Failed to cancel order:', err);
+      });
     }
     await releaseReservationBestEffort(txnRef, pending?.items);
     res.json(success({ cancelled: true, orderId }, 'OK'));
@@ -284,12 +282,10 @@ export async function verifyReturn(req: Request, res: Response, next: NextFuncti
           (await getReservationPayload(failTxnRef))?.orderId ??
           null;
         if (orderId) {
-          await prisma.order
-            .update({
-              where: { id: orderId },
-              data: { paymentStatus: 'FAILED' },
-            })
-            .catch(() => null);
+          await orderService.cancelOrderSystem(orderId).catch((err) => {
+            // eslint-disable-next-line no-console
+            console.error('[verifyReturn] Failed to cancel order:', err);
+          });
         }
         await releaseReservationBestEffort(failTxnRef, pending?.items);
       }

@@ -106,12 +106,12 @@ async function main() {
 
   // ── 5. CATEGORIES — 6 independent, single-concept categories ────────────────
   //
-  //  1. Smartphone   — điện thoại thông minh các thương hiệu
-  //  2. Laptop       — máy tính xách tay
-  //  3. Tablet       — máy tính bảng
-  //  4. Headphone    — tai nghe (không dây / có dây)
-  //  5. Smartwatch   — đồng hồ thông minh
-  //  6. Charger      — sạc dự phòng, củ sạc, dây sạc
+  //  1. Smartphone   — smart phone brands
+  //  2. Laptop       — laptop
+  //  3. Tablet       — tablet
+  //  4. Headphone    — headphone (wireless / wired)
+  //  5. Smartwatch   — smartwatch
+  //  6. Charger      — backup charger, phone charger, charging cable
   //
   const [
     catSmartphone,

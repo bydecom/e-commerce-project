@@ -1042,8 +1042,8 @@ export const openApiSpec = {
           orderId: { type: 'integer', example: 4 },
           productId: { type: 'integer', example: 6 },
           rating: { type: 'integer', minimum: 1, maximum: 5, example: 5 },
-          comment: { type: 'string', nullable: true, example: 'iPad dùng siêu mượt, shop đóng gói cực kỳ cẩn thận nhé, rất đáng tiền!' },
-          typeId: { type: 'integer', nullable: true, description: 'Optional — Gemini AI tự phân tích comment và gán type. Chỉ truyền nếu muốn override AI.' },
+          comment: { type: 'string', nullable: true, example: 'iPad is super smooth, the shop packs very carefully, it\'s worth the price!' },
+          typeId: { type: 'integer', nullable: true, description: 'Optional — Gemini AI automatically analyzes comment and assigns type. Only pass if you want to override AI.' },
         },
       },
       FeedbackTypeCreate: {

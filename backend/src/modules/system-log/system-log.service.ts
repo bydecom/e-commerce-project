@@ -134,7 +134,7 @@ function truncateUrl(s: string, max: number): string {
   return `${s.slice(0, max - 1)}…`;
 }
 
-/** Hiển thị thời gian phản hồi (ms) làm tròn 2 chữ số thập phân. */
+/** Display response time (ms) rounded to 2 decimal places. */
 function formatResponseTimeMs(ms: number): string {
   const n = Number(ms);
   if (Number.isNaN(n)) return '0.00';

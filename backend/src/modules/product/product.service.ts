@@ -210,7 +210,7 @@ export async function searchSmartHybridList(query: {
     ...(priceFilter ? { price: priceFilter } : {}),
   };
 
-  // Không có keyword => trả list thường (giữ sort/filter/pagination)
+  // No keyword => return regular list (keep sort/filter/pagination)
   if (!search) {
     const sortKey = query.sort && sortMap[query.sort] ? query.sort : 'newest';
     const [total, rows] = await prisma.$transaction([
@@ -289,7 +289,7 @@ export async function searchSmartHybridList(query: {
   pushAll(trigramResults);
   pushAll(vectorResults);
 
-  // Filter lại theo baseWhere (vì vector có thể trả ID ngoài filter)
+  // Filter again with baseWhere (because vector might return IDs outside filter)
   const rawRows = await prisma.product.findMany({
     where: { id: { in: orderedIds }, ...baseWhere },
     select: { id: true, name: true, price: true, imageUrl: true },
@@ -300,7 +300,7 @@ export async function searchSmartHybridList(query: {
     .map((id) => byIdAll.get(id))
     .filter((r): r is SmartSearchProduct => r !== undefined);
 
-  // AI chọn ứng viên, User sắp xếp (nếu có yêu cầu sort)
+  // AI selects candidates, User sorts (if requested)
   let finalSortedRows = relevanceOrderedRows;
   if (query.sort === 'price_desc') {
     finalSortedRows = [...relevanceOrderedRows].sort((a, b) => b.price - a.price);
@@ -331,9 +331,9 @@ export async function searchSmartHybridList(query: {
 }
 
 /**
- * Hybrid Search (RRF) dành riêng cho Navbar của User.
- * Chạy song song Postgres full-text + Qdrant vector, trộn điểm theo RRF, trả về top `limit` kết quả.
- * Nếu Qdrant chưa có dữ liệu hoặc không kết nối được, fallback hoàn toàn về kết quả Postgres.
+ * Hybrid Search (RRF) specifically for User's navbar.
+ * Run parallel Postgres full-text + Qdrant vector, mix scores by RRF, return top `limit` results.
+ * If Qdrant is empty or not connected, fallback to Postgres results completely.
  */
 export async function searchSmartHybrid(keyword: string, limit = 5): Promise<SmartSearchProduct[]> {
   const q = keyword.trim();
@@ -341,9 +341,9 @@ export async function searchSmartHybrid(keyword: string, limit = 5): Promise<Sma
 
   const qUnaccent = toTitleUnaccent(q);
   const candidateSize = Math.max(limit * 10, 50);
-  const MIN_SCORE_THRESHOLD = 0.3;
+  const MIN_SCORE_THRESHOLD = 0.15;
   const K = 50;
-  // 1) PREFIX (ưu tiên cao nhất)
+  // 1) PREFIX (highest priority)
   const prefixPromise = prisma.product.findMany({
     where: {
       OR: [
@@ -357,8 +357,8 @@ export async function searchSmartHybrid(keyword: string, limit = 5): Promise<Sma
     orderBy: { id: 'desc' },
   });
 
-  // 2) TRIGRAM (pg_trgm) — ưu tiên sau prefix
-  // Fallback: nếu DB chưa bật pg_trgm thì coi như rỗng.
+  // 2) TRIGRAM (pg_trgm) — highest priority after prefix
+  // Fallback: if DB doesn't have pg_trgm enabled, consider it empty.
   const trigramPromise: Promise<{ id: number }[]> = prisma
     .$queryRaw<{ id: number }[]>`
       SELECT p."id"
@@ -377,7 +377,7 @@ export async function searchSmartHybrid(keyword: string, limit = 5): Promise<Sma
     `
     .catch(() => []);
 
-  // 3) VECTOR DB (Qdrant) — ưu tiên cuối
+  // 3) VECTOR DB (Qdrant) — highest priority at the end
   const vectorPromise = aiService.searchVectors(q, candidateSize);
 
   const [prefixResults, trigramResults, vectorResults] = await Promise.all([
@@ -388,7 +388,7 @@ export async function searchSmartHybrid(keyword: string, limit = 5): Promise<Sma
 
   const filteredVectorResults = vectorResults.filter((v) => v.score >= MIN_SCORE_THRESHOLD);
 
-  // RRF: trộn điểm theo thứ hạng của từng nguồn (prefix/trigram/vector)
+  // RRF: mix scores by rank of each source (prefix/trigram/vector)
   const rrfScores = new Map<number, number>();
   const addRankScores = (items: { id: number }[]) => {
     items.forEach((item, index) => {
@@ -470,19 +470,19 @@ export async function createProduct(body: {
     include: { category: { select: { id: true, name: true } } },
   });
 
-  // Auto-sync Qdrant khi sản phẩm AVAILABLE
+  // Auto-sync Qdrant when product is AVAILABLE
   if (p.status === 'AVAILABLE') {
-    aiService
-      .initQdrant()
-      .then(() =>
-        aiService.upsertProductVector({
-          id: p.id,
-          name: p.name,
-          description: p.description,
-          categoryName: p.category?.name ?? null,
-        })
-      )
-      .catch((err) => console.warn('[Qdrant] Sync on create failed:', err));
+    try {
+      await aiService.initQdrant();
+      await aiService.upsertProductVector({
+        id: p.id,
+        name: p.name,
+        description: p.description,
+        categoryName: p.category?.name ?? null,
+      });
+    } catch (err) {
+      console.error('[Qdrant] Sync on create failed:', err);
+    }
   }
   return mapProduct(p);
 }
@@ -533,24 +533,29 @@ export async function updateProduct(
     include: { category: { select: { id: true, name: true } } },
   });
 
-  // Auto-sync Qdrant theo thay đổi status
+    // Auto-sync Qdrant when status changes
   const prevStatus = existing.status as ProductStatus;
   const nextStatus = p.status as ProductStatus;
 
-  if (nextStatus === 'AVAILABLE') {
-    aiService
-      .initQdrant()
-      .then(() =>
-        aiService.upsertProductVector({
-          id: p.id,
-          name: p.name,
-          description: p.description,
-          categoryName: p.category?.name ?? null,
-        })
-      )
-      .catch((err) => console.warn('[Qdrant] Sync on update failed:', err));
-  } else if (prevStatus === 'AVAILABLE') {
-    aiService.deleteProductVector(p.id).catch((err) => console.warn('[Qdrant] Delete on update failed:', err));
+  const isTextDataChanged =
+    body.name !== undefined || body.description !== undefined || body.categoryId !== undefined;
+  const isStatusChangedToAvailable = prevStatus !== 'AVAILABLE' && nextStatus === 'AVAILABLE';
+  const isUpdatingAvailableVector = prevStatus === 'AVAILABLE' && nextStatus === 'AVAILABLE' && isTextDataChanged;
+
+  try {
+    if (isStatusChangedToAvailable || isUpdatingAvailableVector) {
+      await aiService.initQdrant();
+      await aiService.upsertProductVector({
+        id: p.id,
+        name: p.name,
+        description: p.description,
+        categoryName: p.category?.name ?? null,
+      });
+    } else if (prevStatus === 'AVAILABLE' && nextStatus !== 'AVAILABLE') {
+      await aiService.deleteProductVector(p.id);
+    }
+  } catch (err) {
+    console.error('[Qdrant] Error syncing AI vector database:', err);
   }
 
   const data = mapProduct(p);
@@ -570,7 +575,7 @@ export async function deleteProduct(id: number) {
   try {
     await prisma.product.delete({ where: { id } });
 
-    // Xóa Vector DB bên Qdrant
+    // Delete vector DB in Qdrant
     aiService.deleteProductVector(id).catch((err) => console.warn('[Qdrant] Delete on product delete failed:', err));
 
     // Best-effort cache invalidation.

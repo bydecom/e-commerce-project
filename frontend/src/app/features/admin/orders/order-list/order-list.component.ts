@@ -159,7 +159,7 @@ export class AdminOrderListComponent implements OnInit, OnDestroy   {
   private appliedSearch: string | undefined;
 
   page = 1;
-  // CHỈNH SỬA: Giới hạn 7 đơn hàng để khớp 1 màn hình
+  // Adjust: Limit 7 orders to match 1 screen
   readonly limit = 7;
 
   // ── In-memory cache ──────────────────────────────────────────────

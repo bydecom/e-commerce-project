@@ -162,7 +162,7 @@ export async function createFeedback(data: {
   });
   if (duplicate) throw httpError(409, 'Feedback has already been submitted for this product in this order');
 
-  // Validate typeId chỉ khi user tự truyền lên
+  // Validate typeId only when user explicitly passes it
   if (typeId !== undefined) {
     const feedbackType = await prisma.feedbackType.findUnique({ where: { id: typeId } });
     if (!feedbackType || !feedbackType.isActive) {
@@ -170,14 +170,14 @@ export async function createFeedback(data: {
     }
   }
 
-  // AI phân tích comment → resolvedTypeId + sentiment
+  // AI analyzes comment → resolvedTypeId + sentiment
   const analysis = comment?.trim()
     ? await analyzeFeedback(comment.trim())
     : { resolvedTypeId: null, sentiment: 'NEUTRAL' as const };
 
-  // Ưu tiên 1: AI tự phân tích được → dùng typeId của AI
-  // Ưu tiên 2: User tự chọn truyền lên
-  // Ưu tiên 3 (fallback): Lấy type active đầu tiên trong DB
+  // Priority 1: Use AI's resolved typeId
+  // Priority 2: User explicitly passes it
+  // Priority 3 (fallback): Use first active type in DB
   let finalTypeId = analysis.resolvedTypeId ?? typeId;
 
   if (!finalTypeId) {

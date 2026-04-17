@@ -45,15 +45,15 @@ export async function initQdrant(): Promise<void> {
     await qdrant.createCollection(COLLECTION_NAME, {
       vectors: { size: VECTOR_SIZE, distance: 'Cosine' },
     });
-    console.log(`✅ Qdrant: collection "${COLLECTION_NAME}" đã được tạo.`);
+    console.log(`✅ Qdrant: collection "${COLLECTION_NAME}" has been created.`);
   } else {
-    console.log(`ℹ️  Qdrant: collection "${COLLECTION_NAME}" đã tồn tại.`);
+    console.log(`ℹ️  Qdrant: collection "${COLLECTION_NAME}" already exists.`);
   }
 }
 
 /**
- * Sinh embedding và upsert một sản phẩm vào Qdrant.
- * Ném lỗi nếu Gemini không trả về vector (để sync script biết đếm lỗi).
+ * Generate embedding and upsert a product into Qdrant.
+ * Throw error if Gemini doesn't return vector (to let sync script count errors).
  */
 export async function upsertProductVector(product: {
   id: number;
@@ -71,7 +71,7 @@ export async function upsertProductVector(product: {
   const vector = await generateEmbedding(text, 'RETRIEVAL_DOCUMENT');
 
   if (!vector.length) {
-    throw new Error(`Không thể sinh embedding cho sản phẩm ID ${product.id}`);
+    throw new Error(`Cannot generate embedding for product ID ${product.id}`);
   }
 
   const qdrant = getQdrantClient();
@@ -90,8 +90,8 @@ export async function deleteProductVector(productId: number): Promise<void> {
 }
 
 /**
- * Tìm kiếm vector trong Qdrant theo keyword.
- * Trả về [] nếu Qdrant chưa chạy, collection chưa tồn tại, hoặc Gemini chưa cấu hình.
+ * Search vector database in Qdrant by keyword.
+ * Return [] if Qdrant is not running, collection does not exist, or Gemini is not configured.
  */
 export async function searchVectors(keyword: string, limit: number): Promise<{ id: number; score: number }[]> {
   try {

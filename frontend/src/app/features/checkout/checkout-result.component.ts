@@ -117,6 +117,12 @@ export class CheckoutResultComponent {
       return;
     }
 
+    try {
+      sessionStorage.removeItem('pendingCheckoutTxnRef');
+    } catch {
+    
+    }
+
     const qs = window.location.search || '';
     this.http
       .get<ApiSuccess<VerifyPayload>>(`${environment.apiUrl}/api/payments/vnpay/verify${qs}`)

@@ -3,6 +3,7 @@ import { success } from '../../utils/response';
 import { httpError } from '../../utils/http-error';
 import { getOrCreateTodayMiniAdvice } from './daily-advice/mini-advice.service';
 import { enhanceProductDescription } from './product/product-description-enhancer';
+import { processUserChat } from './chatbot/chat-orchestrator.service';
 
 export async function postEnhanceProductDescription(
   req: Request,
@@ -38,6 +39,20 @@ export async function getMiniAdvice(
     res.setHeader('Cache-Control', 'private, no-store, no-cache, must-revalidate');
     res.setHeader('Pragma', 'no-cache');
     res.json(success({ bullets }, 'Mini advice'));
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function postChat(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const body = req.body as { message?: unknown };
+    const message = typeof body?.message === 'string' ? body.message.trim() : '';
+    if (!message) throw httpError(400, 'Message is required');
+
+    const userId = req.auth?.userId;
+    const out = await processUserChat(userId, message);
+    res.json(success(out, 'OK'));
   } catch (err) {
     next(err);
   }

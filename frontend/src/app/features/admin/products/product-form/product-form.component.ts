@@ -288,7 +288,7 @@ export class AdminProductFormComponent implements OnInit {
 
   private productId: number | null = null;
 
-  /** Giá hiển thị dạng 1,000,000 (nhưng form lưu number). */
+  /** Display price as 1,000,000 (but form saves number). */
   priceDisplay = '';
   private priceFocused = false;
   stockFocused = false;
@@ -297,7 +297,7 @@ export class AdminProductFormComponent implements OnInit {
     name: ['', [Validators.required]],
     description: [''],
     price: [0, [Validators.required, Validators.min(0)]],
-    // Stock: không quăng lỗi khi âm, sẽ tự clamp về 0.
+    // Stock: don't throw error when negative, will clamp to 0 automatically.
     stock: [0, [Validators.required]],
     imageUrl: [''],
     categoryId: this.fb.control<number | null>(null, [Validators.required]),
@@ -320,9 +320,9 @@ export class AdminProductFormComponent implements OnInit {
       error: () => this.categories.set([]),
     });
 
-    // Khởi tạo hiển thị theo form value (chưa focus thì luôn show 0)
+    // Initialize display according to form value (when not focused, always show 0)
     this.priceDisplay = this.formatVnd(this.form.controls.price.value);
-    // stock hiển thị trực tiếp qua [value], không format
+    // stock display directly through [value], no formatting
 
     if (!this.isNew() && this.productId !== null) {
       this.loading.set(true);
@@ -358,16 +358,16 @@ export class AdminProductFormComponent implements OnInit {
     const dotCount = (input.match(/\./g) ?? []).length;
     const hasComma = input.includes(',');
 
-    // Rule: 2+ dấu "." hoặc trộn "." với "," => invalid, clear ngay
+    // Rule: 2+ "." or mixing "." with "," => invalid, clear immediately
     if (dotCount >= 2 || (dotCount === 1 && hasComma)) {
       this.form.controls.price.setValue(0, { emitEvent: false });
       this.priceDisplay = '';
       return;
     }
 
-    // Rule: có đúng 1 dấu "." => format phần integer bằng ",", giữ phần decimal nguyên
+    // Rule: there is exactly 1 "." => format integer part with ",", keep decimal part as is
     if (dotCount === 1) {
-      // strict: chỉ cho digits và đúng 1 dấu "."
+      // strict: only allow digits and exactly 1 "."
       if (!/^\d*\.\d*$/.test(input)) {
         this.form.controls.price.setValue(0, { emitEvent: false });
         this.priceDisplay = '';
@@ -385,7 +385,7 @@ export class AdminProductFormComponent implements OnInit {
       return;
     }
 
-    // Rule: không có "." => format bình thường với ","
+    // Rule: no "." => format normally with ","
     if (input !== '' && !/^[\d,]*$/.test(input)) {
       this.form.controls.price.setValue(0, { emitEvent: false });
       this.priceDisplay = '';
@@ -402,7 +402,7 @@ export class AdminProductFormComponent implements OnInit {
     this.priceFocused = false;
     const raw = (this.priceDisplay ?? '').trim();
     if (raw.includes('.')) {
-      // giữ nguyên nếu user đang nhập thập phân; dọn trường hợp "." ở cuối
+      // keep if user is typing decimal; clean "." at the end
       this.priceDisplay = raw.endsWith('.') ? raw.slice(0, -1) : raw;
       const n = this.priceDisplay === '' ? 0 : Number(this.priceDisplay.replace(/,/g, ''));
       this.form.controls.price.setValue(Number.isFinite(n) && n >= 0 ? n : 0, { emitEvent: false });
@@ -422,7 +422,7 @@ export class AdminProductFormComponent implements OnInit {
   }
 
   onStockInput(raw: string): void {
-    // chỉ nhận số nguyên, âm -> 0
+    // only allow integers, negative -> 0
     const digits = raw.replace(/[^\d]/g, '');
     const n = digits ? Number(digits) : 0;
     const safe = Number.isFinite(n) ? Math.max(0, Math.floor(n)) : 0;
@@ -483,7 +483,7 @@ export class AdminProductFormComponent implements OnInit {
 
     const imageUrl = v.imageUrl.trim() === '' ? null : v.imageUrl.trim();
     const stock = Math.max(0, Math.floor(Number(v.stock) || 0));
-    // Price có thể là số thập phân (nếu user nhập ".") => không tự ý làm tròn xuống.
+    // Price can be decimal (if user types ".") => don't round down automatically.
     const priceNum = Number(v.price);
     const price = Number.isFinite(priceNum) ? Math.max(0, priceNum) : 0;
 

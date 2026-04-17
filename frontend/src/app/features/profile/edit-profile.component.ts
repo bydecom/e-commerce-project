@@ -252,7 +252,7 @@ export class EditProfileComponent implements OnInit {
             .subscribe((res) => {
               if (res.success) {
                 this.wards.set(Array.isArray(res.data) ? res.data : []);
-                // Chỉ enable sau khi đã có danh sách wards để tránh dropdown trống
+                // Only enable after wards list is available to avoid empty dropdown
                 this.enableClean(this.form.controls.wardId);
               }
             });
@@ -289,7 +289,7 @@ export class EditProfileComponent implements OnInit {
     this.loading.set(true);
     this.loadError.set(null);
 
-    // Reset sạch trạng thái cascade trước khi patch để UI/validation không nhảy
+    // Reset clean cascade state before patch to avoid UI/validation jumping
     this.wards.set([]);
     this.form.controls.wardId.disable({ emitEvent: false });
 
@@ -315,19 +315,19 @@ export class EditProfileComponent implements OnInit {
   }
 
   private patchUserData(me: User): void {
-    // Backend có thể trả id dạng number; ép về string để match value trong <option>
+    // Backend can return id as number; cast to string to match value in <option>
     const provinceId    = me.provinceId != null ? String(me.provinceId) : '';
     const wardId        = me.wardId     != null ? String(me.wardId)     : '';
     const streetAddress = me.streetAddress ?? '';
 
-    // Patch các field không phụ thuộc cascade trước
+    // Patch fields that don't depend on cascade first
     this.form.patchValue(
       { name: me.name ?? '', phone: me.phone ?? '', streetAddress },
       { emitEvent: false }
     );
 
     if (!provinceId) {
-      // Không có địa chỉ: chỉ patch province rỗng rồi xong
+      // No address: just patch province empty and done
       this.form.patchValue({ provinceId: '' }, { emitEvent: false });
       this.form.markAsPristine();
       this.form.markAsUntouched();
@@ -335,7 +335,7 @@ export class EditProfileComponent implements OnInit {
       return;
     }
 
-    // Có province: patch province, fetch districts xong mới patch district
+    // Has province: patch province, fetch districts then patch district
     this.form.patchValue({ provinceId }, { emitEvent: false });
 
     this.http

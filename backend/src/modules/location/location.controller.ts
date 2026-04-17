@@ -2,7 +2,7 @@ import type { Request, Response } from 'express';
 import { success } from '../../utils/response';
 import { ensureRedisConnected, redisClient } from '../../config/redis';
 
-// Theo API 2025: không còn District, chỉ Province -> Ward
+// API 2025: no District, only Province -> Ward
 type LocationItem = { code: number; name: string };
 
 function apiBase(): string {
@@ -15,7 +15,7 @@ async function fetchJson<T>(url: string): Promise<T> {
   return (await r.json()) as T;
 }
 
-// TTL cache: 30 ngày
+// TTL cache: 30 days
 const CACHE_TTL = 30 * 24 * 60 * 60;
 
 function sortByName(items: LocationItem[]): LocationItem[] {

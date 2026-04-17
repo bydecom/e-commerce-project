@@ -78,7 +78,7 @@ export async function updateFeedbackType(
     if (existing.name === 'Unknown') {
       throw httpError(409, '"Unknown" is the system default type and cannot be deactivated');
     }
-    // Dùng transaction để tránh race condition: đếm và update trong cùng 1 lock
+    // Use transaction to avoid race condition: count and update in the same lock
     return prisma.$transaction(async (tx) => {
       const otherActiveCount = await tx.feedbackType.count({
         where: { isActive: true, NOT: { id } },

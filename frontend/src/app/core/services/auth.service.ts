@@ -89,7 +89,7 @@ export class AuthService {
     this.persistSession(token, user);
   }
 
-  /** Cập nhật snapshot user sau khi chỉnh profile. */
+  /** Update snapshot user after profile update. */
   updateCurrentUser(next: User): void {
     if (!isPlatformBrowser(this.platformId)) {
       this.userSignal.set(next);

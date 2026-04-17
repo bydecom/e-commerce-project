@@ -18,3 +18,6 @@ aiRouter.get(
   requireRole(['ADMIN']),
   aiController.getMiniAdvice
 );
+
+// Public demo endpoint (userId is optional: read from JWT if provided)
+aiRouter.post('/chat', aiController.postChat);

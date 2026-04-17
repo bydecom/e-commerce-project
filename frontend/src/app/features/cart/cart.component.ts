@@ -260,14 +260,14 @@ export class CartComponent implements OnInit, OnDestroy {
                   this.knownMaxStocks.update((m) => ({ ...m, [c.productId]: availableStock }));
                   this.lineErrors.update((m) => ({ ...m, [c.productId]: msg }));
 
-                  // Ép quantity trên UI về đúng max để không bị "kẹt" ở số vượt quá
+                  // Force quantity on UI to max to avoid "stuck" at over quantity
                   this.items.update((items) =>
                     items.map((it) =>
                       it.productId === c.productId ? { ...it, quantity: availableStock } : it
                     )
                   );
 
-                  // Tự sync lại lên server với số lượng đã được clamp (tránh re-entrancy)
+                  // Self-sync back to server with clamped quantity (avoid re-entrancy)
                   queueMicrotask(() => {
                     this.qtyChanges$.next({
                       productId: c.productId,

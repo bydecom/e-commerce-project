@@ -5,25 +5,25 @@ import * as aiService from '../modules/ai/ai.service';
 const delay = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
 export async function syncPostgresToQdrant() {
-  console.log('🚀 Bắt đầu đồng bộ dữ liệu từ PostgreSQL sang Qdrant...');
+  console.log('🚀 Start syncing data from PostgreSQL to Qdrant...');
 
-  // 1. Tạo collection nếu chưa có
+  // 1. Create collection if not exists
   await aiService.initQdrant();
 
-  // 2. Lấy tất cả sản phẩm AVAILABLE từ Postgres
+  // 2. Get all AVAILABLE products from Postgres
   const products = await prisma.product.findMany({
     where: { status: 'AVAILABLE' },
     select: { id: true, name: true, description: true, category: { select: { name: true } } },
   });
 
-  console.log(`📦 Tìm thấy ${products.length} sản phẩm cần đồng bộ.`);
+  console.log(`📦 Found ${products.length} products to sync.`);
 
   if (!products.length) {
-    console.log('⚠️  Không có sản phẩm nào để đồng bộ.');
+    console.log('⚠️  No products to sync.');
     return;
   }
 
-  // 3. Upsert từng sản phẩm, chờ 500ms giữa mỗi lần để tránh Gemini rate limit
+  // 3. Upsert each product, wait 500ms between each to avoid Gemini rate limit
   let successCount = 0;
   let errorCount = 0;
 
@@ -37,21 +37,21 @@ export async function syncPostgresToQdrant() {
         categoryName: product.category?.name ?? null,
       });
       successCount++;
-      process.stdout.write(`\r⏳ Đang xử lý: ${i + 1}/${products.length} (✓ ${successCount} | ✗ ${errorCount})`);
+      process.stdout.write(`\r⏳ Processing: ${i + 1}/${products.length} (✓ ${successCount} | ✗ ${errorCount})`);
       await delay(500);
     } catch (err) {
       errorCount++;
       const msg = err instanceof Error ? err.message : String(err);
-      process.stdout.write(`\n❌ Lỗi sản phẩm ID ${product.id}: ${msg}\n`);
+      process.stdout.write(`\n❌ Product ID ${product.id} error: ${msg}\n`);
     }
   }
 
   console.log('\n');
-  console.log('✅ Đồng bộ hoàn tất!');
-  console.log(`📊 Thành công: ${successCount} | Thất bại: ${errorCount}`);
+  console.log('✅ Sync completed!');
+  console.log(`📊 Success: ${successCount} | Failure: ${errorCount}`);
 }
 
-// Chạy độc lập: npx ts-node src/scripts/sync-qdrant.ts
+// Run independently: npx ts-node src/scripts/sync-qdrant.ts
 if (require.main === module) {
   syncPostgresToQdrant()
     .then(() => process.exit(0))

@@ -376,7 +376,7 @@ export class OrderListComponent implements OnInit {
           this.submittedByKey.update((m) => ({ ...m, [k]: true }));
           this.toast.show('Thanks! Your review has been submitted.', 'success');
 
-          // Sau 1.5s -> Ẩn item đi để nhường chỗ cho item tiếp theo
+          // After 1.5s -> Hide item to make room for next item
           setTimeout(() => {
             this.hiddenByKey.update((m) => ({ ...m, [k]: true }));
             this.closeIfAllSubmitted(orderId);
@@ -389,7 +389,7 @@ export class OrderListComponent implements OnInit {
             this.submittedByKey.update((m) => ({ ...m, [k]: true }));
             this.toast.show('You already submitted a review for this item.', 'info');
 
-            // Nếu đã submit từ trước, cũng cho delay rồi ẩn đi
+            // If already submitted before, also delay and hide it
             setTimeout(() => {
               this.hiddenByKey.update((m) => ({ ...m, [k]: true }));
               this.closeIfAllSubmitted(orderId);
@@ -404,7 +404,7 @@ export class OrderListComponent implements OnInit {
   private closeIfAllSubmitted(orderId: number): void {
     const o = this.orders().find((x) => x.id === orderId);
     if (!o) return;
-    // Đóng panel nếu danh sách hiển thị đã rỗng
+    // Close panel if the displayed list is empty
     if (this.getVisibleItems(o).length === 0) this.expandedOrderId.set(null);
   }
 }

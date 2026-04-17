@@ -303,7 +303,19 @@ export async function logoutSession(jti: string, exp: number): Promise<void> {
 export async function getMe(userId: number) {
   const u = await prisma.user.findUnique({
     where: { id: userId },
-    select: { id: true, name: true, email: true, role: true, phone: true, address: true, createdAt: true },
+    select: {
+      id: true,
+      name: true,
+      email: true,
+      role: true,
+      phone: true,
+      provinceId: true,
+      districtId: true,
+      wardId: true,
+      streetAddress: true,
+      fullAddress: true,
+      createdAt: true,
+    },
   });
   if (!u) throw httpError(404, 'User not found');
   return u;
