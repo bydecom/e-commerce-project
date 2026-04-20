@@ -8,6 +8,12 @@ import { randomBytes } from 'crypto';
 import { ensureRedisConnected, redisClient } from '../../config/redis';
 import { sendMail } from '../../utils/mail';
 import { blacklistJwt } from '../../utils/jwt-blacklist';
+import {
+  generateRefreshToken,
+  storeRefreshToken,
+  rotateRefreshToken,
+  revokeRefreshToken,
+} from '../../utils/refresh-token';
 import { buildVerifyEmailTemplate } from '../../utils/mail-templates';
 import { StoreSettingService } from '../store-setting/store-setting.service';
 
@@ -175,7 +181,11 @@ export async function login(input: { email: string; password: string }) {
   if (!secret) throw httpError(500, 'JWT secret is not configured');
 
   const jti = randomUUID();
-  const expiresIn = (process.env.JWT_EXPIRES_IN || '7d').trim() as jwt.SignOptions['expiresIn'];
+  const expiresIn = (
+    process.env.JWT_ACCESS_EXPIRES_IN ||
+    process.env.JWT_EXPIRES_IN ||
+    '15m'
+  ).trim() as jwt.SignOptions['expiresIn'];
   const token = jwt.sign(
     { userId: user.id, role: user.role },
     secret,
@@ -187,10 +197,43 @@ export async function login(input: { email: string; password: string }) {
     }
   );
 
+  const refreshToken = generateRefreshToken();
+  await storeRefreshToken(refreshToken, { userId: user.id, role: user.role });
+
   return {
     token,
+    refreshToken,
     user: mapUser({ id: user.id, name: user.name, email: user.email, role: user.role }),
   };
+}
+
+export async function refreshAccessToken(rawRefreshToken: string): Promise<{
+  token: string;
+  newRefreshToken: string;
+}> {
+  if (!rawRefreshToken) throw httpError(401, 'Refresh token missing');
+
+  const result = await rotateRefreshToken(rawRefreshToken);
+  if (!result) throw httpError(401, 'Refresh token invalid or expired');
+
+  const secret = process.env.JWT_SECRET;
+  if (!secret) throw httpError(500, 'JWT secret is not configured');
+
+  const { payload, newRaw } = result;
+  const expiresIn = (
+    process.env.JWT_ACCESS_EXPIRES_IN ||
+    process.env.JWT_EXPIRES_IN ||
+    '15m'
+  ).trim() as jwt.SignOptions['expiresIn'];
+
+  const jti = randomUUID();
+  const token = jwt.sign(
+    { userId: payload.userId, role: payload.role },
+    secret,
+    { algorithm: 'HS256', expiresIn, subject: String(payload.userId), jwtid: jti }
+  );
+
+  return { token, newRefreshToken: newRaw };
 }
 
 export async function verifyEmail(input: { token: string }) {
@@ -296,8 +339,11 @@ export async function resendVerification(input: { email: string }) {
   return { email, message: 'If the account exists, a verification email has been sent' };
 }
 
-export async function logoutSession(jti: string, exp: number): Promise<void> {
+export async function logoutSession(jti: string, exp: number, rawRefreshToken?: string): Promise<void> {
   await blacklistJwt(jti, exp);
+  if (rawRefreshToken) {
+    await revokeRefreshToken(rawRefreshToken);
+  }
 }
 
 export async function getMe(userId: number) {

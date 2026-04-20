@@ -85,6 +85,26 @@ export class AuthService {
       );
   }
 
+  refreshAccessToken(): Observable<string> {
+    return this.http
+      .post<ApiSuccess<{ token: string }>>(
+        `${environment.apiUrl}/api/auth/refresh`,
+        {},
+        { withCredentials: true }
+      )
+      .pipe(
+        map((res) => {
+          if (!res.success || !res.data?.token) {
+            throw new Error('Refresh failed');
+          }
+          if (isPlatformBrowser(this.platformId)) {
+            localStorage.setItem(TOKEN_KEY, res.data.token);
+          }
+          return res.data.token;
+        })
+      );
+  }
+
   loginStub(user: User, token: string): void {
     this.persistSession(token, user);
   }
@@ -118,7 +138,7 @@ export class AuthService {
       this.clearClientSession();
       return;
     }
-    this.http.post<ApiSuccess<null>>(`${environment.apiUrl}/api/auth/logout`, {}).subscribe({
+    this.http.post<ApiSuccess<null>>(`${environment.apiUrl}/api/auth/logout`, {}, { withCredentials: true }).subscribe({
       next: () => this.clearClientSession(),
       error: () => this.clearClientSession(),
     });
