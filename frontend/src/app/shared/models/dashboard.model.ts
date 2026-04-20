@@ -56,6 +56,18 @@ export interface DashboardRevenuePoint {
   revenue: number;
 }
 
+export interface DashboardRevenueComparison {
+  mode: 'WEEK' | 'MONTH' | 'QUARTER' | 'YEAR';
+  labels: string[];
+  current: number[];
+  previous: number[];
+  summary: {
+    currentTotal: number;
+    prevTotal: number;
+    changePercent: number | null;
+  };
+}
+
 /** Count of feedback rows per star rating (1–5). */
 export interface DashboardRatingDistribution {
   1: number;
@@ -65,12 +77,22 @@ export interface DashboardRatingDistribution {
   5: number;
 }
 
+export interface DashboardTopCustomer {
+  userId: number;
+  name: string | null;
+  email: string;
+  totalSpent: number;
+  orderCount: number;
+}
+
 export interface DashboardCharts {
   sentiment: DashboardSentimentDistribution;
   ratingDistribution: DashboardRatingDistribution;
   orderStatus: DashboardOrderStatusItem[];
   revenueLast7Days: DashboardRevenuePoint[];
+  revenueComparison: DashboardRevenueComparison;
   topProducts: { name: string; qty: number }[];
+  topCustomers: DashboardTopCustomer[];
   categoryBreakdown: { name: string; count: number }[];
 }
 

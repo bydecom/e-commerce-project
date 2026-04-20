@@ -7,3 +7,9 @@ export const dashboardRouter = Router();
 
 dashboardRouter.get('/export-pdf', authMiddleware, requireRole(['ADMIN']), dashboardController.exportPdf);
 dashboardRouter.get('/summary', authMiddleware, requireRole(['ADMIN']), dashboardController.getSummary);
+dashboardRouter.get(
+  '/revenue-comparison',
+  authMiddleware,
+  requireRole(['ADMIN']),
+  dashboardController.getRevenueComparison
+);

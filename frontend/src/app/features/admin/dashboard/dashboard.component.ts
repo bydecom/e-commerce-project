@@ -1,15 +1,19 @@
 import { DatePipe, DecimalPipe, isPlatformBrowser } from '@angular/common';
 import { HttpClient, HttpErrorResponse, HttpParams } from '@angular/common/http';
-import { Component, OnInit, PLATFORM_ID, computed, inject, signal } from '@angular/core';
+import { Component, ElementRef, OnDestroy, OnInit, PLATFORM_ID, ViewChild, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
+import { Chart, registerables } from 'chart.js';
 import { environment } from '../../../../environments/environment';
-import { DashboardApiService } from '../../../core/services/dashboard-api.service';
+import { DashboardApiService, type RevenueComparisonMode } from '../../../core/services/dashboard-api.service';
 import type {
   DashboardOrderStatusItem,
   DashboardRatingDistribution,
   DashboardSummary,
+  DashboardTopCustomer,
 } from '../../../shared/models/dashboard.model';
+
+Chart.register(...registerables);
 
 @Component({
   selector: 'app-admin-dashboard',
@@ -22,29 +26,66 @@ import type {
           <h1 class="text-2xl font-bold text-gray-900">Dashboard</h1>
           <p class="mt-1 text-sm text-gray-500">Real-time business insights and operational metrics.</p>
         </div>
-        <button
-          type="button"
-          (click)="load()"
-          [disabled]="loading()"
-          class="flex shrink-0 items-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
-        >
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            class="h-4 w-4"
-            [class.animate-spin]="loading()"
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
+        <div class="flex items-center gap-3">
+          <div class="inline-flex items-center rounded-lg bg-gray-100 p-1 ring-1 ring-gray-200">
+            <button
+              type="button"
+              (click)="setMode('WEEK')"
+              class="rounded-md px-3 py-1.5 text-xs font-medium transition-all"
+              [class]="globalMode() === 'WEEK' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'"
+            >
+              7 Days
+            </button>
+            <button
+              type="button"
+              (click)="setMode('MONTH')"
+              class="rounded-md px-3 py-1.5 text-xs font-medium transition-all"
+              [class]="globalMode() === 'MONTH' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'"
+            >
+              Month
+            </button>
+            <button
+              type="button"
+              (click)="setMode('QUARTER')"
+              class="rounded-md px-3 py-1.5 text-xs font-medium transition-all"
+              [class]="globalMode() === 'QUARTER' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'"
+            >
+              Quarter
+            </button>
+            <button
+              type="button"
+              (click)="setMode('YEAR')"
+              class="rounded-md px-3 py-1.5 text-xs font-medium transition-all"
+              [class]="globalMode() === 'YEAR' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'"
+            >
+              Year
+            </button>
+          </div>
+
+          <button
+            type="button"
+            (click)="load()"
+            [disabled]="loading()"
+            class="flex shrink-0 items-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
           >
-            <path
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              stroke-width="2"
-              d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
-            />
-          </svg>
-          {{ loading() ? 'Loading…' : 'Refresh' }}
-        </button>
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              class="h-4 w-4"
+              [class.animate-spin]="loading()"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+            >
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+              />
+            </svg>
+            {{ loading() ? 'Loading…' : 'Refresh' }}
+          </button>
+        </div>
       </div>
 
       <!-- PDF export (layout aligned with System traffic logs) -->
@@ -448,43 +489,85 @@ import type {
                 }
               </div>
 
-              <div class="relative z-10 mt-10 pt-4">
+              <div class="relative z-10 mt-2 pt-4">
                 <p class="text-[10px] leading-relaxed text-gray-400">
                   Powered by Gemini AI.
                 </p>
               </div>
             </div>
 
-            <div class="rounded-xl border border-gray-200 bg-white p-5 shadow-sm lg:flex-1">
-              <h2 class="text-sm font-semibold text-gray-800">Revenue — last 7 days</h2>
-              <div class="mt-8 flex h-48 items-end justify-between gap-2 lg:gap-4 px-2">
-                @if (revenueChartBars().length === 0) {
-                  <p class="w-full pb-10 text-center text-sm text-gray-400">No data</p>
-                } @else {
-                  @for (bar of revenueChartBars(); track bar.date) {
-                    <div class="group relative flex h-full flex-1 flex-col items-center justify-end">
-                      <span
-                        class="absolute -top-8 z-10 hidden whitespace-nowrap rounded bg-gray-800 px-2 py-1 text-xs text-white group-hover:block"
-                      >
-                        {{ bar.revenue | number : '1.0-0' }} VND
-                      </span>
-                      <div
-                        class="w-full max-w-[40px] rounded-t-md bg-indigo-500 shadow-sm transition-all duration-300 group-hover:bg-indigo-600"
-                        [style.height.%]="bar.heightPct"
-                        style="min-height: 4px"
-                      ></div>
-                      <span
-                        class="mt-2 w-full truncate text-center text-[10px] font-medium text-gray-500 sm:text-xs"
-                      >
-                        {{ bar.label }}
-                      </span>
+            <!-- Revenue comparison (global mode) -->
+            <div class="rounded-xl border border-gray-200 bg-white p-5 shadow-sm lg:flex-1 flex flex-col">
+              <div class="flex items-start justify-between flex-wrap gap-2">
+                <div>
+                  <h2 class="text-sm font-semibold text-gray-900">Revenue comparison</h2>
+                  <p class="mt-0.5 text-xs text-gray-500">
+                    {{ comparisonCaption() }}
+                  </p>
+                </div>
+              </div>
+
+              <div class="mt-4 grid grid-cols-3 gap-2">
+                <div class="rounded-md bg-gray-50 p-3">
+                  <div class="mb-1 text-[11px] text-gray-500">Current period</div>
+                  <div class="text-[17px] font-semibold text-gray-900">
+                    {{ formatCurrencyCompact(compSummary().currentTotal) }}
+                    <span class="ml-0.5 text-[11px] font-normal text-gray-500">VND</span>
+                  </div>
+                  @if (compSummary(); as s) {
+                    <div
+                      class="mt-1 flex items-center gap-1 text-[11px] font-medium"
+                      [class]="s.changePercent === null ? 'text-gray-400' : (s.changePercent >= 0 ? 'text-emerald-600' : 'text-red-600')"
+                    >
+                      @if (s.changePercent === null) {
+                        <span>No prior data</span>
+                      } @else {
+                        <span>{{ s.changePercent >= 0 ? '▲' : '▼' }}</span>
+                        <span>{{ (s.changePercent >= 0 ? '+' : '') + s.changePercent }}% vs prior</span>
+                      }
                     </div>
                   }
-                }
+                </div>
+
+                <div class="rounded-md bg-gray-50 p-3">
+                  <div class="mb-1 text-[11px] text-gray-500">Previous period</div>
+                  <div class="text-[17px] font-semibold text-gray-900">
+                    {{ formatCurrencyCompact(compSummary().prevTotal) }}
+                    <span class="ml-0.5 text-[11px] font-normal text-gray-500">VND</span>
+                  </div>
+                  <div class="mt-1 text-[11px] text-gray-500">Comparison base</div>
+                </div>
+
+                <div class="rounded-md bg-gray-50 p-3">
+                  <div class="mb-1 text-[11px] text-gray-500">Best period</div>
+                  <div class="text-[17px] font-semibold text-gray-900">
+                    {{ formatCurrencyCompact(compSummary().bestVal) }}
+                    <span class="ml-0.5 text-[11px] font-normal text-gray-500">VND</span>
+                  </div>
+                  <div class="mt-1 text-[11px] text-gray-500">{{ compSummary().bestLabel }}</div>
+                </div>
+              </div>
+
+              <div class="relative mt-5 h-[220px] w-full flex-1">
+                <canvas #compCanvas role="img" aria-label="Revenue comparison chart"></canvas>
+              </div>
+
+              <hr class="my-4 border-gray-100" />
+              <div class="flex items-center justify-between flex-wrap gap-2 text-[11px] text-gray-500">
+                <div class="flex gap-4">
+                  <span class="flex items-center gap-1.5">
+                    <span class="block h-2.5 w-2.5 rounded-sm bg-indigo-500"></span> Current
+                  </span>
+                  <span class="flex items-center gap-1.5">
+                    <span class="block h-2.5 w-2.5 rounded-sm bg-indigo-200"></span> Previous
+                  </span>
+                </div>
+                <div>Global filter applied</div>
               </div>
             </div>
           </div>
 
+          <div class="flex flex-col gap-6">
           <div class="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
             <div class="flex items-center justify-between border-b border-gray-100 pb-3">
               <h2 class="text-sm font-semibold text-gray-800">Review Sentiment</h2>
@@ -552,12 +635,69 @@ import type {
             </div>
           </div>
 
+          <!-- Top Customers -->
+          <div class="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+            <div class="flex items-center justify-between border-b border-gray-100 pb-3">
+              <div>
+                <h2 class="text-sm font-semibold text-gray-800">Top Customers</h2>
+                <p class="mt-0.5 text-[11px] text-gray-400">Highest spenders in selected period</p>
+              </div>
+              <span class="rounded-full bg-indigo-50 px-2 py-0.5 text-[10px] font-medium text-indigo-600">
+                Global filter applied
+              </span>
+            </div>
+
+            <ul class="mt-4 space-y-3">
+              @for (c of d.charts.topCustomers; track c.userId; let i = $index) {
+                <li class="flex items-center gap-3">
+                  <span
+                    class="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[11px] font-bold"
+                    [class]="i === 0 ? 'bg-amber-100 text-amber-700' : i === 1 ? 'bg-gray-100 text-gray-600' : i === 2 ? 'bg-orange-100 text-orange-700' : 'bg-gray-50 text-gray-400'"
+                  >
+                    {{ i + 1 }}
+                  </span>
+
+                  <div class="min-w-0 flex-1">
+                    <div class="flex items-center justify-between gap-2">
+                      <span class="truncate text-xs font-medium text-gray-800">
+                        {{ c.name ?? c.email }}
+                      </span>
+                      <span class="shrink-0 text-xs font-semibold text-gray-900">
+                        {{ formatCurrencyCompact(c.totalSpent) }}
+                        <span class="text-[10px] font-normal text-gray-400">VND</span>
+                      </span>
+                    </div>
+                    <div class="mt-0.5 flex items-center justify-between gap-2">
+                      <span class="truncate text-[11px] text-gray-400">{{ c.email }}</span>
+                      <span class="shrink-0 text-[11px] text-gray-400">{{ c.orderCount }} orders</span>
+                    </div>
+                    <div class="mt-1.5 h-1 w-full overflow-hidden rounded-full bg-gray-100">
+                      <div
+                        class="h-full rounded-full bg-indigo-400 transition-[width] duration-500 ease-out"
+                        [style.width.%]="topCustomerBarWidth(c.totalSpent, d.charts.topCustomers)"
+                      ></div>
+                    </div>
+                  </div>
+                </li>
+              } @empty {
+                <li class="py-4 text-center text-sm text-gray-400">No data for selected period</li>
+              }
+            </ul>
+          </div>
+          </div><!-- end right column wrapper -->
+
           <div class="col-span-full rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
-            <h2 class="text-sm font-semibold text-gray-800">Orders by status</h2>
+            <div class="flex items-center justify-between">
+              <h2 class="text-sm font-semibold text-gray-800">Orders by status</h2>
+              <span class="text-xs text-gray-400">{{ totalOrderCount(d.charts.orderStatus) }} total</span>
+            </div>
             <div class="mt-4 space-y-3">
               @for (item of d.charts.orderStatus; track item.status) {
                 <div class="flex items-center gap-3">
-                  <span class="w-28 shrink-0 text-xs font-medium text-gray-600">
+                  <span
+                    class="w-24 shrink-0 rounded px-2 py-0.5 text-center text-xs font-medium"
+                    [class]="statusBadgeClass(item.status)"
+                  >
                     {{ statusLabel(item.status) }}
                   </span>
                   <div class="flex-1 overflow-hidden rounded-full bg-gray-100">
@@ -567,7 +707,10 @@ import type {
                       [style.width.%]="orderBarWidth(item.count, d.charts.orderStatus)"
                     ></div>
                   </div>
-                  <span class="w-8 shrink-0 text-right text-xs text-gray-500">{{ item.count }}</span>
+                  <span class="w-12 shrink-0 text-right text-xs">
+                    <span class="font-medium text-gray-700">{{ item.count }}</span>
+                    <span class="ml-1 text-gray-400">{{ orderPct(item.count, d.charts.orderStatus) }}%</span>
+                  </span>
                 </div>
               } @empty {
                 <p class="text-sm text-gray-400">No data</p>
@@ -582,20 +725,22 @@ import type {
             <ul class="mt-4 space-y-3">
               @for (p of d.charts.topProducts; track p.name; let i = $index) {
                 <li class="flex items-center gap-3">
-                  <span
-                    class="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-indigo-100 text-xs font-bold text-indigo-600"
-                  >
-                    {{ i + 1 }}
-                  </span>
+                  <span class="w-5 shrink-0 text-right text-[11px] text-gray-400">#{{ i + 1 }}</span>
                   <div class="min-w-0 flex-1">
                     <div class="mb-1 flex justify-between text-xs">
                       <span class="truncate font-medium text-gray-700">{{ p.name }}</span>
-                      <span class="ml-2 shrink-0 font-bold text-indigo-600">{{ p.qty }}</span>
+                      <span class="ml-2 shrink-0 flex items-center gap-1">
+                        <span class="font-medium text-gray-800">{{ p.qty }}</span>
+                        <span class="text-[10px] text-gray-400">
+                          {{ topProductPct(p.qty, d.charts.topProducts) }}%
+                        </span>
+                      </span>
                     </div>
                     <div class="h-1.5 overflow-hidden rounded-full bg-gray-100">
                       <div
-                        class="h-full rounded-full bg-indigo-500 transition-[width] duration-500"
+                        class="h-full rounded-full transition-[width] duration-500"
                         [style.width.%]="topProductBarWidth(p.qty, d.charts.topProducts)"
+                        [style.background]="topProductBarColor(i)"
                       ></div>
                     </div>
                   </div>
@@ -614,11 +759,17 @@ import type {
                   <span class="w-28 shrink-0 truncate font-medium text-gray-600">{{ c.name }}</span>
                   <div class="h-1.5 flex-1 overflow-hidden rounded-full bg-gray-100">
                     <div
-                      class="h-full rounded-full bg-emerald-500 transition-[width] duration-500"
+                      class="h-full rounded-full transition-[width] duration-500"
                       [style.width.%]="categoryBarWidth(c.count, d.charts.categoryBreakdown)"
+                      [style.background]="categoryBarColor($index)"
                     ></div>
                   </div>
-                  <span class="w-6 shrink-0 text-right font-medium text-gray-500">{{ c.count }}</span>
+                  <span class="w-12 shrink-0 flex items-center justify-end gap-1 text-right">
+                    <span class="font-medium text-gray-700">{{ c.count }}</span>
+                    <span class="text-[10px] text-gray-400">
+                      {{ categoryPct(c.count, d.charts.categoryBreakdown) }}%
+                    </span>
+                  </span>
                 </li>
               } @empty {
                 <li class="py-4 text-center text-sm text-gray-400">No categories</li>
@@ -630,15 +781,43 @@ import type {
     </div>
   `,
 })
-export class AdminDashboardComponent implements OnInit {
+export class AdminDashboardComponent implements OnInit, OnDestroy {
   private readonly api = inject(DashboardApiService);
   private readonly http = inject(HttpClient);
   private readonly platformId = inject(PLATFORM_ID);
+
+  @ViewChild('compCanvas') compCanvas!: ElementRef<HTMLCanvasElement>;
+  private compChart: Chart | null = null;
+
+  readonly today = new Date();
 
   readonly loading = signal(false);
   readonly error = signal<string | null>(null);
   readonly data = signal<DashboardSummary | null>(null);
   readonly exporting = signal(false);
+
+  readonly globalMode = signal<RevenueComparisonMode>('WEEK');
+
+  readonly compSummary = computed(() => {
+    const rev = this.data()?.charts.revenueComparison;
+    if (!rev) {
+      return { currentTotal: 0, prevTotal: 0, changePercent: null as number | null, bestVal: 0, bestLabel: '–' };
+    }
+
+    const cur = Array.isArray(rev.current) ? rev.current : [];
+    const labels = Array.isArray(rev.labels) ? rev.labels : [];
+    const bestVal = cur.length > 0 ? Math.max(...cur, 0) : 0;
+    const bestIdx = bestVal > 0 ? cur.indexOf(bestVal) : -1;
+    const bestLabel = bestIdx >= 0 ? (labels[bestIdx] ?? '–') : '–';
+
+    return {
+      currentTotal: rev.summary?.currentTotal ?? 0,
+      prevTotal: rev.summary?.prevTotal ?? 0,
+      changePercent: rev.summary?.changePercent ?? null,
+      bestVal,
+      bestLabel,
+    };
+  });
 
   readonly adviceLoading = signal(false);
   readonly adviceError = signal<string | null>(null);
@@ -655,18 +834,6 @@ export class AdminDashboardComponent implements OnInit {
     start: '',
     end: '',
   };
-
-  readonly revenueChartBars = computed(() => {
-    const points = this.data()?.charts.revenueLast7Days ?? [];
-    if (points.length === 0) return [];
-    const max = Math.max(...points.map((p) => p.revenue), 1);
-    return points.map((p) => ({
-      date: p.date,
-      revenue: p.revenue,
-      heightPct: Math.round((p.revenue / max) * 100),
-      label: p.date.slice(5),
-    }));
-  });
 
   readonly sentimentSegments = computed(() => {
     const s = this.data()?.charts.sentiment;
@@ -694,19 +861,141 @@ export class AdminDashboardComponent implements OnInit {
     this.loadMiniAdvice();
   }
 
+  ngOnDestroy(): void {
+    this.compChart?.destroy();
+    this.compChart = null;
+  }
+
   load(): void {
     this.loading.set(true);
     this.error.set(null);
-    this.api.getSummary().subscribe({
+    this.api.getSummary(this.globalMode()).subscribe({
       next: (d) => {
         this.data.set(d);
         this.loading.set(false);
+        setTimeout(() => this.buildComparisonChart(), 0);
       },
       error: (err: Error) => {
         this.error.set(err.message || 'Could not load dashboard.');
         this.loading.set(false);
       },
     });
+  }
+
+  comparisonCaption(): string {
+    const m = this.globalMode();
+    if (m === 'MONTH') return 'Weekly breakdown — this month vs last month';
+    if (m === 'QUARTER') return 'Monthly breakdown — this quarter vs last quarter';
+    if (m === 'YEAR') return 'Monthly breakdown — this year vs last year';
+    return 'Daily breakdown — this week vs last week';
+  }
+
+  private buildComparisonChart(): void {
+    if (!isPlatformBrowser(this.platformId)) return;
+    const rev = this.data()?.charts.revenueComparison;
+    if (!rev || !this.compCanvas?.nativeElement) {
+      this.compChart?.destroy();
+      this.compChart = null;
+      return;
+    }
+
+    const labels = rev.labels ?? [];
+    const current = rev.current ?? [];
+    const previous = rev.previous ?? [];
+
+    const isDark = matchMedia('(prefers-color-scheme: dark)').matches;
+    const tick = isDark ? '#94A3B8' : '#6B7280';
+    const grid = isDark ? 'rgba(255,255,255,.06)' : 'rgba(0,0,0,.05)';
+    const tooltipBg = isDark ? '#1E293B' : '#1F2937';
+
+    this.compChart?.destroy();
+    this.compChart = new Chart(this.compCanvas.nativeElement, {
+      type: 'bar',
+      data: {
+        labels,
+        datasets: [
+          {
+            label: 'Current',
+            data: current,
+            backgroundColor: '#6366F1',
+            borderColor: '#4F46E5',
+            borderWidth: 1,
+            borderRadius: 5,
+            borderSkipped: false,
+            barPercentage: 0.9,
+            categoryPercentage: 0.6,
+            order: 1,
+          },
+          {
+            label: 'Previous',
+            data: previous,
+            backgroundColor: isDark ? '#3730A3' : '#C7D2FE',
+            borderColor: isDark ? '#4338CA' : '#A5B4FC',
+            borderWidth: 1,
+            borderRadius: 5,
+            borderSkipped: false,
+            barPercentage: 0.9,
+            categoryPercentage: 0.6,
+            order: 2,
+          },
+        ],
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        animation: { duration: 500, easing: 'easeOutQuart' as any },
+        interaction: { mode: 'index', intersect: false },
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            backgroundColor: tooltipBg,
+            titleColor: '#F9FAFB',
+            bodyColor: '#D1D5DB',
+            padding: 12,
+            cornerRadius: 8,
+            callbacks: {
+              title: (ctx: any) => ctx?.[0]?.label,
+              label: (ctx: any) => {
+                const v = Number(ctx?.parsed?.y ?? 0);
+                const prefix = ctx?.dataset?.label === 'Previous' ? '  Previous: ' : '  Current:  ';
+                return `${prefix}${this.formatCurrencyCompact(v)} VND`;
+              },
+              afterBody: (ctx: any) => {
+                const cur = Number(ctx?.find((c: any) => c.dataset?.label === 'Current')?.parsed?.y ?? 0);
+                const prev = Number(ctx?.find((c: any) => c.dataset?.label === 'Previous')?.parsed?.y ?? 0);
+                if (!prev) return '';
+                const diff = (((cur - prev) / prev) * 100).toFixed(1);
+                return `  Change:    ${cur >= prev ? '+' : ''}${diff}%`;
+              },
+            },
+          },
+        },
+        scales: {
+          x: {
+            grid: { display: false },
+            border: { display: false },
+            ticks: { color: tick, font: { size: 11 }, autoSkip: false, maxRotation: 0 },
+          },
+          y: {
+            border: { display: false, dash: [4, 4] },
+            grid: { color: grid },
+            ticks: {
+              color: tick,
+              font: { size: 10 },
+              maxTicksLimit: 5,
+              callback: (v: any) => this.formatCurrencyCompact(Number(v)),
+            },
+            min: 0,
+          },
+        },
+      },
+    });
+  }
+
+  setMode(mode: RevenueComparisonMode): void {
+    if (this.globalMode() === mode) return;
+    this.globalMode.set(mode);
+    this.load();
   }
 
   loadMiniAdvice(): void {
@@ -799,14 +1088,54 @@ export class AdminDashboardComponent implements OnInit {
     return map[status] ?? 'bg-gray-300';
   }
 
+  totalOrderCount(items: DashboardOrderStatusItem[]): number {
+    return items.reduce((s, i) => s + i.count, 0);
+  }
+
+  orderPct(count: number, items: DashboardOrderStatusItem[]): string {
+    const total = this.totalOrderCount(items);
+    return total > 0 ? ((count / total) * 100).toFixed(0) : '0';
+  }
+
+  statusBadgeClass(status: string): string {
+    const map: Record<string, string> = {
+      PENDING: 'bg-amber-50 text-amber-700',
+      CONFIRMED: 'bg-blue-50 text-blue-700',
+      SHIPPING: 'bg-indigo-50 text-indigo-700',
+      DONE: 'bg-emerald-50 text-emerald-700',
+      CANCELLED: 'bg-slate-100 text-slate-600',
+    };
+    return map[status] ?? 'bg-gray-100 text-gray-600';
+  }
+
   orderBarWidth(count: number, items: DashboardOrderStatusItem[]): number {
     const max = Math.max(...items.map((i) => i.count), 1);
     return Math.round((count / max) * 100);
   }
 
+  topProductPct(qty: number, list: { qty: number }[]): string {
+    const total = list.reduce((s, p) => s + p.qty, 0);
+    return total > 0 ? ((qty / total) * 100).toFixed(0) : '0';
+  }
+
+  topProductBarColor(index: number): string {
+    const colors = ['#6366F1', '#818CF8', '#A5B4FC', '#C7D2FE', '#E0E7FF'];
+    return colors[index] ?? '#E0E7FF';
+  }
+
   topProductBarWidth(qty: number, list: { qty: number }[]): number {
     const max = Math.max(...list.map((p) => p.qty), 1);
     return Math.round((qty / max) * 100);
+  }
+
+  categoryPct(count: number, list: { count: number }[]): string {
+    const total = list.reduce((s, c) => s + c.count, 0);
+    return total > 0 ? ((count / total) * 100).toFixed(0) : '0';
+  }
+
+  categoryBarColor(index: number): string {
+    const colors = ['#10B981', '#34D399', '#6EE7B7', '#6EE7B7', '#A7F3D0', '#D1FAE5'];
+    return colors[index] ?? '#D1FAE5';
   }
 
   categoryBarWidth(count: number, list: { count: number }[]): number {
@@ -834,5 +1163,20 @@ export class AdminDashboardComponent implements OnInit {
     if (!distribution) return 0;
     const k = stars as keyof DashboardRatingDistribution;
     return distribution[k] ?? 0;
+  }
+
+  topCustomerBarWidth(spent: number, customers: DashboardTopCustomer[]): number {
+    const max = Math.max(...customers.map((c) => c.totalSpent), 1);
+    return Math.round((spent / max) * 100);
+  }
+
+  formatCurrencyCompact(value: number): string {
+    if (!Number.isFinite(value)) return '0';
+    const v = Math.abs(value);
+    const sign = value < 0 ? '-' : '';
+    if (v >= 1_000_000_000) return sign + (v / 1_000_000_000).toFixed(1).replace(/\.0$/, '') + 'B';
+    if (v >= 1_000_000) return sign + (v / 1_000_000).toFixed(1).replace(/\.0$/, '') + 'M';
+    if (v >= 1_000) return sign + (v / 1_000).toFixed(1).replace(/\.0$/, '') + 'K';
+    return sign + Math.round(v).toString();
   }
 }

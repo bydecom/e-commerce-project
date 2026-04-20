@@ -104,9 +104,29 @@ export async function getExportData(query: Record<string, unknown>) {
   };
 }
 
-export async function getDashboardSummary() {
-  const sevenDaysAgo = new Date();
-  sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+export async function getDashboardSummary(query: Record<string, unknown> = {}) {
+  const now = new Date();
+  const rawMode = getQueryString(query, 'mode');
+  const mode = (rawMode ?? 'WEEK').toUpperCase();
+
+  let gte: Date;
+  const lte = now;
+
+  if (mode === 'MONTH') {
+    gte = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
+  } else if (mode === 'QUARTER') {
+    const q = Math.floor(now.getMonth() / 3);
+    gte = new Date(now.getFullYear(), q * 3, 1, 0, 0, 0, 0);
+  } else if (mode === 'YEAR') {
+    gte = new Date(now.getFullYear(), 0, 1, 0, 0, 0, 0);
+  } else {
+    // WEEK default: last 7 days (including today)
+    gte = new Date(now.getTime() - 6 * 86400000);
+    gte.setHours(0, 0, 0, 0);
+  }
+
+  const dateWhere = { createdAt: { gte, lte } };
+  const doneWhere = { status: 'DONE' as const, ...dateWhere };
 
   const [
     revenueResult,
@@ -124,9 +144,10 @@ export async function getDashboardSummary() {
     orderCountPerUser,
     topProductsRaw,
     categoryBreakdown,
+    topCustomersRaw,
   ] = await Promise.all([
-    prisma.order.aggregate({ where: { status: 'DONE' }, _sum: { total: true } }),
-    prisma.order.count(),
+    prisma.order.aggregate({ where: doneWhere, _sum: { total: true } }),
+    prisma.order.count({ where: dateWhere }),
     prisma.product.count({ where: { status: 'AVAILABLE' } }),
     prisma.user.count({ where: { role: 'USER' } }),
 
@@ -148,22 +169,23 @@ export async function getDashboardSummary() {
       orderBy: { stock: 'asc' },
     }),
 
-    prisma.feedback.groupBy({ by: ['sentiment'], _count: { _all: true } }),
-    prisma.order.groupBy({ by: ['status'], _count: { _all: true } }),
+    prisma.feedback.groupBy({ by: ['sentiment'], where: { order: dateWhere }, _count: { _all: true } }),
+    prisma.order.groupBy({ by: ['status'], where: dateWhere, _count: { _all: true } }),
     prisma.order.findMany({
-      where: { status: 'DONE', createdAt: { gte: sevenDaysAgo } },
+      where: doneWhere,
       select: { total: true, createdAt: true },
     }),
-    prisma.feedback.groupBy({ by: ['rating'], _count: { _all: true } }),
+    prisma.feedback.groupBy({ by: ['rating'], where: { order: dateWhere }, _count: { _all: true } }),
 
-    prisma.order.findMany({ where: { status: 'DONE' }, select: { total: true } }),
+    prisma.order.findMany({ where: doneWhere, select: { total: true } }),
     prisma.order.groupBy({
       by: ['userId'],
-      where: { status: 'DONE' },
+      where: doneWhere,
       _count: { id: true },
     }),
     prisma.orderItem.groupBy({
       by: ['productId'],
+      where: { order: doneWhere },
       _sum: { quantity: true },
       orderBy: { _sum: { quantity: 'desc' } },
       take: 5,
@@ -175,13 +197,72 @@ export async function getDashboardSummary() {
       },
       orderBy: { products: { _count: 'desc' } },
     }),
+    prisma.order.groupBy({
+      by: ['userId'],
+      where: doneWhere,
+      _sum: { total: true },
+      _count: { id: true },
+      orderBy: { _sum: { total: 'desc' } },
+      take: 10,
+    }),
   ]);
 
-  const revenueByDate: Record<string, number> = {};
-  recentDoneOrders.forEach((o) => {
-    const d = o.createdAt.toISOString().split('T')[0];
-    revenueByDate[d] = (revenueByDate[d] || 0) + o.total;
-  });
+  // Top customers: join userId → user info
+  const topCustomerUserIds = topCustomersRaw.map((r) => r.userId);
+  const topCustomerUsers =
+    topCustomerUserIds.length > 0
+      ? await prisma.user.findMany({
+          where: { id: { in: topCustomerUserIds } },
+          select: { id: true, name: true, email: true },
+        })
+      : [];
+  const userById = new Map(topCustomerUsers.map((u) => [u.id, u]));
+  const topCustomers = topCustomersRaw.map((r) => ({
+    userId: r.userId,
+    name: userById.get(r.userId)?.name ?? null,
+    email: userById.get(r.userId)?.email ?? '',
+    totalSpent: r._sum.total ?? 0,
+    orderCount: r._count.id,
+  }));
+
+  // Revenue comparison for the same global mode (current vs previous period)
+  const revenueComparison = await getRevenueComparison({ mode });
+
+  // Build revenue series for the selected mode, filling empty buckets with 0.
+  const revenueMap: Record<string, number> = {};
+  for (const o of recentDoneOrders) {
+    let key: string;
+    if (mode === 'YEAR' || mode === 'QUARTER') {
+      key = o.createdAt.toLocaleString('en-US', { month: 'short' });
+    } else if (mode === 'MONTH') {
+      const d = o.createdAt.getDate();
+      key = d <= 7 ? 'Week 1 (1-7)' : d <= 14 ? 'Week 2 (8-14)' : d <= 21 ? 'Week 3 (15-21)' : 'Week 4 (22+)';
+    } else {
+      key = o.createdAt.toISOString().split('T')[0];
+    }
+    revenueMap[key] = (revenueMap[key] ?? 0) + o.total;
+  }
+
+  let revenueLabels: string[] = [];
+  if (mode === 'YEAR') {
+    revenueLabels = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  } else if (mode === 'QUARTER') {
+    const q = Math.floor(now.getMonth() / 3);
+    revenueLabels = [0, 1, 2].map((i) => new Date(now.getFullYear(), q * 3 + i, 1).toLocaleString('en-US', { month: 'short' }));
+  } else if (mode === 'MONTH') {
+    revenueLabels = ['Week 1 (1-7)', 'Week 2 (8-14)', 'Week 3 (15-21)', 'Week 4 (22+)'];
+  } else {
+    // WEEK => daily labels from gte..lte (inclusive by day)
+    const start = new Date(gte);
+    start.setHours(0, 0, 0, 0);
+    const end = new Date(lte);
+    end.setHours(0, 0, 0, 0);
+    const days = Math.max(1, Math.round((end.getTime() - start.getTime()) / 86400000) + 1);
+    revenueLabels = Array.from({ length: days }, (_, i) => {
+      const d = new Date(start.getTime() + i * 86400000);
+      return d.toISOString().split('T')[0];
+    });
+  }
 
   const avgOrderValue =
     doneOrders.length > 0
@@ -229,8 +310,10 @@ export async function getDashboardSummary() {
         5: ratingGroup.find((r) => r.rating === 5)?._count._all || 0,
       },
       orderStatus: orderStatusGroup.map((g) => ({ status: g.status, count: g._count._all })),
-      revenueLast7Days: Object.entries(revenueByDate).map(([date, revenue]) => ({ date, revenue })),
+      revenueLast7Days: revenueLabels.map((date) => ({ date, revenue: revenueMap[date] ?? 0 })),
+      revenueComparison,
       topProducts,
+      topCustomers,
       categoryBreakdown: categoryBreakdown.map((c) => ({
         name: c.name,
         count: c._count.products,
@@ -270,5 +353,144 @@ export async function getWeeklyStatsComparison(): Promise<WeeklyStatsComparison>
   return {
     thisWeek: { revenue: thisWeekRev._sum.total || 0, orders: thisWeekOrders },
     lastWeek: { revenue: lastWeekRev._sum.total || 0, orders: lastWeekOrders },
+  };
+}
+
+export type RevenueComparisonMode = 'WEEK' | 'MONTH' | 'QUARTER' | 'YEAR';
+
+export type RevenueComparisonDto = {
+  mode: RevenueComparisonMode;
+  labels: string[];
+  current: number[];
+  previous: number[];
+  summary: {
+    currentTotal: number;
+    prevTotal: number;
+    changePercent: number | null;
+  };
+};
+
+function getQueryString(q: Record<string, unknown>, key: string): string | undefined {
+  const v = q[key];
+  if (typeof v === 'string') return v;
+  if (Array.isArray(v) && typeof v[0] === 'string') return v[0];
+  return undefined;
+}
+
+function startOfDay(d: Date): Date {
+  const x = new Date(d);
+  x.setHours(0, 0, 0, 0);
+  return x;
+}
+
+function endOfDay(d: Date): Date {
+  const x = new Date(d);
+  x.setHours(23, 59, 59, 999);
+  return x;
+}
+
+function isoDate(d: Date): string {
+  return d.toISOString().split('T')[0];
+}
+
+export async function getRevenueComparison(query: Record<string, unknown>): Promise<RevenueComparisonDto> {
+  const rawMode = (getQueryString(query, 'mode') ?? 'WEEK').toUpperCase();
+  const mode: RevenueComparisonMode =
+    rawMode === 'MONTH' || rawMode === 'QUARTER' || rawMode === 'YEAR' ? (rawMode as RevenueComparisonMode) : 'WEEK';
+
+  const now = new Date();
+
+  let currentGte: Date;
+  let currentLte: Date;
+  let prevGte: Date;
+  let prevLte: Date;
+  let labels: string[] = [];
+
+  if (mode === 'WEEK') {
+    // Current: last 7 days (including today). Previous: 7 days right before that.
+    const today = startOfDay(now);
+    currentGte = new Date(today.getTime() - 6 * 86400000);
+    currentLte = endOfDay(now);
+
+    prevLte = new Date(currentGte.getTime() - 1);
+    prevGte = new Date(startOfDay(prevLte).getTime() - 6 * 86400000);
+
+    labels = Array.from({ length: 7 }, (_, i) => isoDate(new Date(currentGte.getTime() + i * 86400000)));
+  } else if (mode === 'MONTH') {
+    // Group by 4 fixed weeks: W4 absorbs day 22 to end-of-month.
+    const y = now.getFullYear();
+    const m = now.getMonth();
+    currentGte = new Date(y, m, 1, 0, 0, 0, 0);
+    currentLte = new Date(y, m + 1, 0, 23, 59, 59, 999);
+    prevGte    = new Date(y, m - 1, 1, 0, 0, 0, 0);
+    prevLte    = new Date(y, m, 0, 23, 59, 59, 999);
+
+    labels = ['Week 1 (1-7)', 'Week 2 (8-14)', 'Week 3 (15-21)', 'Week 4 (22+)'];
+  } else if (mode === 'QUARTER') {
+    const y = now.getFullYear();
+    const q = Math.floor(now.getMonth() / 3); // 0..3
+    currentGte = new Date(y, q * 3, 1, 0, 0, 0, 0);
+    currentLte = new Date(y, q * 3 + 3, 0, 23, 59, 59, 999);
+
+    prevGte = new Date(y, (q - 1) * 3, 1, 0, 0, 0, 0);
+    prevLte = new Date(y, q * 3, 0, 23, 59, 59, 999);
+
+    labels = [0, 1, 2].map((i) =>
+      new Date(y, q * 3 + i, 1).toLocaleString('en-US', { month: 'short' })
+    );
+  } else {
+    // YEAR
+    const y = now.getFullYear();
+    currentGte = new Date(y, 0, 1, 0, 0, 0, 0);
+    currentLte = new Date(y, 11, 31, 23, 59, 59, 999);
+
+    prevGte = new Date(y - 1, 0, 1, 0, 0, 0, 0);
+    prevLte = new Date(y - 1, 11, 31, 23, 59, 59, 999);
+
+    labels = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  }
+
+  const [currentOrders, prevOrders] = await Promise.all([
+    prisma.order.findMany({
+      where: { status: 'DONE', createdAt: { gte: currentGte, lte: currentLte } },
+      select: { total: true, createdAt: true },
+    }),
+    prisma.order.findMany({
+      where: { status: 'DONE', createdAt: { gte: prevGte, lte: prevLte } },
+      select: { total: true, createdAt: true },
+    }),
+  ]);
+
+  function groupByLabel(orders: { total: number; createdAt: Date }[], m: RevenueComparisonMode): Record<string, number> {
+    const map: Record<string, number> = {};
+    for (const o of orders) {
+      let key: string;
+      if (m === 'YEAR' || m === 'QUARTER') {
+        key = o.createdAt.toLocaleString('en-US', { month: 'short' });
+      } else if (m === 'MONTH') {
+        const d = o.createdAt.getDate();
+        key = d <= 7 ? 'Week 1 (1-7)' : d <= 14 ? 'Week 2 (8-14)' : d <= 21 ? 'Week 3 (15-21)' : 'Week 4 (22+)';
+      } else {
+        key = isoDate(o.createdAt);
+      }
+      map[key] = (map[key] ?? 0) + o.total;
+    }
+    return map;
+  }
+
+  const currentMap = groupByLabel(currentOrders, mode);
+  const prevMap    = groupByLabel(prevOrders, mode);
+
+  const currentTotal = currentOrders.reduce((s, o) => s + o.total, 0);
+  const prevTotal = prevOrders.reduce((s, o) => s + o.total, 0);
+  const changePercent =
+    prevTotal > 0 ? Math.round((((currentTotal - prevTotal) / prevTotal) * 100) * 10) / 10 : null;
+
+  return {
+    mode,
+    labels,
+    current: labels.map((l) => currentMap[l] ?? 0),
+    previous: labels.map((l) => prevMap[l] ?? 0),
+    summary: { currentTotal, prevTotal, changePercent },
   };
 }
