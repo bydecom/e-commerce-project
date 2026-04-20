@@ -27,6 +27,12 @@ import { startReservationCleanupLoop } from './modules/inventory/stock-reservati
 
 export const app = express();
 
+// If running behind a reverse proxy (Nginx/Traefik/Cloudflare), set TRUST_PROXY=true
+// so `req.protocol` and secure cookies work correctly.
+if (String(process.env.TRUST_PROXY ?? '').toLowerCase() === 'true') {
+  app.set('trust proxy', 1);
+}
+
 /** Allow localhost and 127.0.0.1 (any port) during local development to avoid CORS mismatches. */
 app.use(
   cors({
