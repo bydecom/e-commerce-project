@@ -3,9 +3,11 @@
   import { FormsModule } from '@angular/forms';
   import { Router, RouterLink } from '@angular/router';
   import { ChatbotService, type ChatAction as ApiChatAction } from '../../../core/services/chatbot.service';
+  import { ServerCartService } from '../../../core/services/server-cart.service';
+  import { OrderStatusBadgeComponent } from '../order-status-badge/order-status-badge.component';
 
   interface ChatAction {
-    type: 'NAVIGATE_TO' | 'SUGGEST_OPTIONS' | 'SHOW_ORDERS' | 'SHOW_PRODUCTS';
+    type: 'NAVIGATE_TO' | 'SUGGEST_OPTIONS' | 'SHOW_ORDERS' | 'SHOW_PRODUCTS' | 'REFRESH_CART';
     payload?: unknown;
   }
 
@@ -20,7 +22,7 @@
   @Component({
     selector: 'app-chatbot',
     standalone: true,
-    imports: [CommonModule, FormsModule, RouterLink],
+    imports: [CommonModule, FormsModule, RouterLink, OrderStatusBadgeComponent],
     template: `
       <div class="fixed bottom-6 right-8 z-[9999]">
         @if (showChat()) {
@@ -135,6 +137,32 @@
                       </div>
                     }
 
+                    @if (!msg.isUser && msg.orders && msg.orders.length > 0) {
+                      <div class="mt-2 grid w-full max-w-[85%] grid-cols-1 gap-2">
+                        @for (order of msg.orders; track order.id) {
+                          <div
+                            class="flex flex-col rounded-xl border border-gray-200 bg-white p-3 shadow-sm transition hover:border-indigo-300"
+                          >
+                            <div class="mb-1 flex items-center justify-between gap-2">
+                              <span class="text-xs font-bold text-gray-700">Order #{{ order.id }}</span>
+                              <app-order-status-badge [status]="order.status" size="sm" />
+                            </div>
+                            <div class="mt-1 flex items-center justify-between">
+                              <span class="text-xs text-gray-500">{{ order.date | date: 'dd/MM/yyyy' }}</span>
+                              <span class="text-sm font-bold text-indigo-600">{{ order.total | number: '1.0-0' }} VND</span>
+                            </div>
+                            <a
+                              [routerLink]="['/orders', order.id]"
+                              (click)="closeChat()"
+                              class="mt-2 text-center text-[11px] font-semibold text-indigo-500 hover:text-indigo-700"
+                            >
+                              View details &rarr;
+                            </a>
+                          </div>
+                        }
+                      </div>
+                    }
+
                     @if (!msg.isUser && msg.options && msg.options.length > 0) {
                       <div class="mt-2 flex max-w-[85%] flex-wrap gap-2">
                         @for (opt of msg.options; track opt) {
@@ -175,7 +203,7 @@
                   <textarea
                     [(ngModel)]="inputText"
                     (keyup.enter)="handleEnter($event)"
-                    placeholder="Hỏi tôi bất cứ điều gì..."
+                    placeholder="Ask me anything..."
                     class="hide-scrollbar min-h-[44px] max-h-[100px] flex-1 resize-none rounded-xl border border-gray-200 bg-gray-50 px-4 py-2.5 text-[14px] focus:border-transparent focus:outline-none focus:ring-2 focus:ring-indigo-500"
                     rows="1"
                   ></textarea>
@@ -258,6 +286,7 @@
   export class ChatbotComponent implements OnInit, AfterViewChecked {
     private readonly router = inject(Router);
     private readonly chatbotApi = inject(ChatbotService);
+    private readonly serverCart = inject(ServerCartService);
     @ViewChild('messagesContainer') private messagesContainer!: ElementRef<HTMLElement>;
 
     readonly showChat = signal(false);
@@ -267,6 +296,9 @@
     inputText = '';
 
     readonly messages = signal<ChatMessage[]>([]);
+
+    /** Last products from SHOW_PRODUCTS — sent to the API as context on the next message. */
+    private lastShownProductsCtx: Array<{ id: number; name: string }> = [];
 
     ngOnInit(): void {
       this.fetchInitialGreeting();
@@ -308,7 +340,7 @@
 
     private fetchInitialGreeting(): void {
       this.isTyping.set(true);
-      this.chatbotApi.sendMessage('xin chào').subscribe({
+      this.chatbotApi.sendMessage('hello').subscribe({
         next: (res) => {
           this.isTyping.set(false);
           if (!res?.success) return;
@@ -332,42 +364,42 @@
 
     sendQuickReply(option: string): void {
       const lowerOpt = option.toLowerCase();
-    const isLocalIntercept =
-      lowerOpt.includes('cart') || lowerOpt.includes('orders') || lowerOpt.includes('find products');
+      const isLocalIntercept =
+        lowerOpt.includes('cart') || lowerOpt.includes('orders') || lowerOpt.includes('find products');
 
-    if (isLocalIntercept) {
-      this.messages.update((msgs) => [...msgs, { text: option, isUser: true }]);
+      if (isLocalIntercept) {
+        this.messages.update((msgs) => [...msgs, { text: option, isUser: true }]);
 
-      if (lowerOpt.includes('cart')) {
+        if (lowerOpt.includes('cart')) {
+          this.messages.update((msgs) => [
+            ...msgs,
+            { text: 'I will take you to the cart page right now!', isUser: false },
+          ]);
+          void this.router.navigate(['/cart']);
+          return;
+        }
+
+        if (lowerOpt.includes('orders')) {
+          this.messages.update((msgs) => [
+            ...msgs,
+            { text: 'I will take you to the orders page right now!', isUser: false },
+          ]);
+          void this.router.navigate(['/orders']);
+          return;
+        }
+
         this.messages.update((msgs) => [
           ...msgs,
-          { text: 'I will take you to the cart page right now!', isUser: false },
+          {
+            text: 'What product do you want to find? Please enter the keyword (e.g. "acer", "iphone", "laptop") into the chat box!',
+            isUser: false,
+          },
         ]);
-        void this.router.navigate(['/cart']);
         return;
       }
 
-      if (lowerOpt.includes('orders')) {
-        this.messages.update((msgs) => [
-          ...msgs,
-          { text: 'I will take you to the orders page right now!', isUser: false },
-        ]);
-        void this.router.navigate(['/orders']);
-        return;
-      }
-
-      this.messages.update((msgs) => [
-        ...msgs,
-        {
-          text: 'What product do you want to find? Please enter the keyword (e.g. "acer", "iphone", "laptop") into the chat box!',
-          isUser: false,
-        },
-      ]);
-      return;
-    }
-
-    this.inputText = option;
-    this.sendMessage();
+      this.inputText = option;
+      this.sendMessage();
     }
 
     sendMessage(): void {
@@ -378,32 +410,47 @@
       this.inputText = '';
 
       this.isTyping.set(true);
-      this.chatbotApi.sendMessage(text).subscribe({
-        next: (res) => {
-          this.isTyping.set(false);
-          if (!res?.success) {
-            this.messages.update((msgs) => [...msgs, { text: 'Sorry, I don\'t understand your request.', isUser: false }]);
-            return;
-          }
+      this.chatbotApi
+        .sendMessage(
+          text,
+          this.lastShownProductsCtx.length > 0 ? { lastShownProducts: this.lastShownProductsCtx } : undefined
+        )
+        .subscribe({
+          next: (res) => {
+            this.isTyping.set(false);
+            if (!res?.success) {
+              this.messages.update((msgs) => [
+                ...msgs,
+                { text: "Sorry, I don't understand your request.", isUser: false },
+              ]);
+              return;
+            }
 
-          const botMsg: ChatMessage = { text: res.data.text, isUser: false };
-          const actions = Array.isArray(res.data.actions) ? (res.data.actions as ApiChatAction[]) : [];
-          if (actions.length) this.executeActions(actions, botMsg);
-          this.messages.update((msgs) => [...msgs, botMsg]);
-        },
-        error: () => {
-          this.isTyping.set(false);
-          this.messages.update((msgs) => [
-            ...msgs,
-            { text: 'Sorry, the AI server is busy. Please try again later!', isUser: false },
-          ]);
-        },
-      });
+            const botMsg: ChatMessage = { text: res.data.text, isUser: false };
+            const actions = Array.isArray(res.data.actions) ? (res.data.actions as ApiChatAction[]) : [];
+            if (actions.length) this.executeActions(actions, botMsg);
+            this.messages.update((msgs) => [...msgs, botMsg]);
+          },
+          error: () => {
+            this.isTyping.set(false);
+            this.messages.update((msgs) => [
+              ...msgs,
+              { text: 'Sorry, the AI server is busy. Please try again later!', isUser: false },
+            ]);
+          },
+        });
     }
 
     private executeActions(actions: ApiChatAction[], botMessage: ChatMessage): void {
+      // Reload cart from API before NAVIGATE_TO so header/badge updates even when the next action changes route.
+      if (actions.some((a) => a.type === 'REFRESH_CART')) {
+        void this.serverCart.refresh().subscribe();
+      }
+
       for (const action of actions) {
         switch (action.type) {
+          case 'REFRESH_CART':
+            break;
           case 'NAVIGATE_TO': {
             const path = action.payload?.path;
             if (path) void this.router.navigate([path]);
@@ -418,7 +465,9 @@
             break;
           }
           case 'SHOW_PRODUCTS': {
-            botMessage.products = Array.isArray(action.payload?.products) ? action.payload.products : [];
+            const list = Array.isArray(action.payload?.products) ? action.payload.products : [];
+            botMessage.products = list;
+            this.lastShownProductsCtx = list.slice(0, 20).map((p) => ({ id: p.id, name: p.name }));
             break;
           }
         }

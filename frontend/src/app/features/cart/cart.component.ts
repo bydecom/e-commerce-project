@@ -238,6 +238,12 @@ export class CartComponent implements OnInit, OnDestroy {
     this.loadPricing();
 
     this.sub.add(
+      this.serverCart.cartUpdated$.subscribe(() => {
+        this.loadPricing();
+      })
+    );
+
+    this.sub.add(
       this.qtyChanges$
         .pipe(
           debounceTime(300),
@@ -406,7 +412,7 @@ export class CartComponent implements OnInit, OnDestroy {
     if (!data) return;
     this.items.set(data.items);
     this.total.set(data.total);
-    this.serverCart.refresh().subscribe();
+    this.serverCart.refresh({ silent: true }).subscribe();
     this.loading.set(false);
     this.error.set(null);
   }

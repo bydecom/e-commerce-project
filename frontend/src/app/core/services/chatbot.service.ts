@@ -8,19 +8,29 @@ export type ChatAction =
   | { type: 'NAVIGATE_TO'; payload: { path: string } }
   | { type: 'SUGGEST_OPTIONS'; payload: { options: string[] } }
   | { type: 'SHOW_ORDERS'; payload: { orders: Array<{ id: number; status: string; total: number; date: string }> } }
-  | { type: 'SHOW_PRODUCTS'; payload: { products: Array<{ id: number; name: string; price: number; imageUrl: string | null }> } };
+  | { type: 'SHOW_PRODUCTS'; payload: { products: Array<{ id: number; name: string; price: number; imageUrl: string | null }> } }
+  | { type: 'REFRESH_CART' };
 
 export interface ChatResponse {
   text: string;
   actions: ChatAction[];
 }
 
+/** Gửi kèm POST /api/ai/chat để BE giải quyết đại từ (vd. "cái thứ 2") theo list sản phẩm vừa hiển thị. */
+export interface ChatApiContext {
+  lastShownProducts: Array<{ id: number; name: string }>;
+}
+
 @Injectable({ providedIn: 'root' })
 export class ChatbotService {
   private readonly http = inject(HttpClient);
 
-  sendMessage(message: string): Observable<ApiSuccess<ChatResponse>> {
-    return this.http.post<ApiSuccess<ChatResponse>>(`${environment.apiUrl}/api/ai/chat`, { message });
+  sendMessage(message: string, context?: ChatApiContext): Observable<ApiSuccess<ChatResponse>> {
+    const body: { message: string; context?: ChatApiContext } = { message };
+    if (context?.lastShownProducts?.length) {
+      body.context = { lastShownProducts: context.lastShownProducts };
+    }
+    return this.http.post<ApiSuccess<ChatResponse>>(`${environment.apiUrl}/api/ai/chat`, body);
   }
 }
 

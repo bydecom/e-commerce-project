@@ -40,3 +40,48 @@ export async function authMiddleware(req: Request, res: Response, next: NextFunc
     res.status(401).json({ success: false, message: 'Unauthorized' });
   }
 }
+
+/**
+ * Gắn `req.auth` khi có Bearer JWT hợp lệ và không blacklist; nếu không có token / token lỗi / hết hạn thì bỏ qua (không 401).
+ * Dùng cho endpoint vừa cho khách vừa cần nhận user khi đã đăng nhập (vd. POST /api/ai/chat).
+ */
+export async function optionalAuthMiddleware(
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> {
+  const header = req.headers.authorization;
+  if (!header?.startsWith('Bearer ')) {
+    next();
+    return;
+  }
+  const token = header.slice('Bearer '.length).trim();
+  const secret = process.env.JWT_SECRET;
+  if (!secret) {
+    next();
+    return;
+  }
+  try {
+    const decoded = jwt.verify(token, secret, { algorithms: ['HS256'] }) as jwt.JwtPayload;
+    const userId = decoded.userId;
+    const role = decoded.role;
+    const jti = decoded.jti;
+    const exp = decoded.exp;
+    if (typeof userId !== 'number' || (role !== 'USER' && role !== 'ADMIN')) {
+      next();
+      return;
+    }
+    if (typeof jti !== 'string' || typeof exp !== 'number') {
+      next();
+      return;
+    }
+    if (await isJwtBlacklisted(jti)) {
+      next();
+      return;
+    }
+    req.auth = { userId, role, jti, exp };
+    next();
+  } catch {
+    next();
+  }
+}

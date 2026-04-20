@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { authMiddleware } from '../../middlewares/auth.middleware';
+import { authMiddleware, optionalAuthMiddleware } from '../../middlewares/auth.middleware';
 import { requireRole } from '../../middlewares/role.middleware';
 import * as aiController from './ai.controller';
 
@@ -19,5 +19,5 @@ aiRouter.get(
   aiController.getMiniAdvice
 );
 
-// Public demo endpoint (userId is optional: read from JWT if provided)
-aiRouter.post('/chat', aiController.postChat);
+// Khách vẫn chat được; nếu gửi Bearer hợp lệ thì optionalAuthMiddleware gắn req.auth (userId) cho add-to-cart / orders.
+aiRouter.post('/chat', optionalAuthMiddleware, aiController.postChat);

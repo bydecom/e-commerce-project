@@ -1,6 +1,7 @@
 import { ensureRedisConnected, redisClient } from '../../config/redis';
 import { httpError } from '../../utils/http-error';
 import { prisma } from '../../db';
+import { cancelOrderSystem } from '../order/order.service';
 
 export type CartItem = {
   productId: number;
@@ -44,6 +45,28 @@ function safeParseStored(raw: string): StoredCartItem | null {
     return { quantity, name };
   } catch {
     return null;
+  }
+}
+
+/**
+ * Giỏ đổi → hủy các đơn chưa thanh toán (tránh VNPay / checkout treo lệch với Redis cart).
+ * Chỉ đơn status PENDING **và** paymentStatus PENDING — không đụng đơn đã PAID dù shop chưa CONFIRMED.
+ */
+async function invalidatePendingUnpaidOrdersForUser(userId: number): Promise<void> {
+  try {
+    const rows = await prisma.order.findMany({
+      where: { userId, status: 'PENDING', paymentStatus: 'PENDING' },
+      select: { id: true },
+    });
+    for (const { id } of rows) {
+      await cancelOrderSystem(id).catch((err) => {
+        // eslint-disable-next-line no-console
+        console.error(`[CartService] cancelOrderSystem failed for order ${id}:`, err);
+      });
+    }
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.error(`[CartService] Error invalidating pending unpaid orders for user ${userId}:`, err);
   }
 }
 
@@ -125,6 +148,10 @@ export async function upsertItemWithStock(input: {
       // Transaction aborted due to WATCH change.
       throw new Error('WATCH conflict');
     }
+    void invalidatePendingUnpaidOrdersForUser(userId).catch((err) => {
+      // eslint-disable-next-line no-console
+      console.error('[CartService] invalidatePendingUnpaidOrdersForUser:', err);
+    });
     return { productId, quantity: desiredQty, name: nextName };
   });
 }
@@ -159,6 +186,12 @@ export async function removeItem(input: { userId: number; productId: number }): 
   const redis = redisClient();
   const key = cartKey(userId);
   const removedCount = await redis.hDel(key, String(productId));
+  if (removedCount > 0) {
+    void invalidatePendingUnpaidOrdersForUser(userId).catch((err) => {
+      // eslint-disable-next-line no-console
+      console.error('[CartService] invalidatePendingUnpaidOrdersForUser:', err);
+    });
+  }
   return { removed: removedCount > 0 };
 }
 
@@ -167,6 +200,10 @@ export async function clearCart(userId: number): Promise<void> {
   await ensureRedisConnected();
   const redis = redisClient();
   await redis.del(cartKey(userId));
+  void invalidatePendingUnpaidOrdersForUser(userId).catch((err) => {
+    // eslint-disable-next-line no-console
+    console.error('[CartService] invalidatePendingUnpaidOrdersForUser:', err);
+  });
 }
 
 export async function getCartWithPricing(userId: number): Promise<{ items: CartPricedItem[]; total: number }> {

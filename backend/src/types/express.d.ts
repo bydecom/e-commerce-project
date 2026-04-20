@@ -5,7 +5,7 @@ export {};
 declare global {
   namespace Express {
     interface Request {
-      /** Populated by `authMiddleware` after a valid, non-blacklisted JWT. */
+      /** Populated by `authMiddleware` / `optionalAuthMiddleware` after a valid, non-blacklisted JWT. */
       auth?: {
         userId: number;
         role: Role;

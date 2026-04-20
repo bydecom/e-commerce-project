@@ -22,12 +22,11 @@ export class LocalAIProvider implements IAIProvider {
         '\n\nCRITICAL INSTRUCTION: You MUST return EXACTLY ONE valid JSON object. Do not include any markdown formatting (like ```json). Do not add any conversational text before or after the JSON.';
     }
 
+    const combinedPrompt = `${systemPrompt}\n\n---\n\nUser request:\n${input.user}`;
+
     const bodyPayload: any = {
       model: input.model ?? this.defaultModel,
-      messages: [
-        { role: 'system', content: systemPrompt },
-        { role: 'user', content: input.user },
-      ],
+      messages: [{ role: 'user', content: combinedPrompt }],
       temperature: input.temperature ?? 0.2,
       max_tokens: input.maxTokens ?? 1000,
     };

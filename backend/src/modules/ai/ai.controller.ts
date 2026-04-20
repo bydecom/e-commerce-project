@@ -46,12 +46,12 @@ export async function getMiniAdvice(
 
 export async function postChat(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
-    const body = req.body as { message?: unknown };
+    const body = req.body as { message?: unknown; context?: unknown };
     const message = typeof body?.message === 'string' ? body.message.trim() : '';
     if (!message) throw httpError(400, 'Message is required');
 
     const userId = req.auth?.userId;
-    const out = await processUserChat(userId, message);
+    const out = await processUserChat(userId, message, body.context);
     res.json(success(out, 'OK'));
   } catch (err) {
     next(err);
