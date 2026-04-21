@@ -2,6 +2,7 @@ import 'dotenv/config';
 import express from 'express';
 import type { Request, Response } from 'express';
 import cors from 'cors';
+import cookieParser from 'cookie-parser';
 import { prisma } from './db';
 
 import { authRouter } from './modules/auth/auth.route';
@@ -27,9 +28,16 @@ import { startReservationCleanupLoop } from './modules/inventory/stock-reservati
 
 export const app = express();
 
+// If running behind a reverse proxy (Nginx/Traefik/Cloudflare), set TRUST_PROXY=true
+// so `req.protocol` and secure cookies work correctly.
+if (String(process.env.TRUST_PROXY ?? '').toLowerCase() === 'true') {
+  app.set('trust proxy', 1);
+}
+
 /** Allow localhost and 127.0.0.1 (any port) during local development to avoid CORS mismatches. */
 app.use(
   cors({
+    credentials: true,
     origin: (origin, cb) => {
       if (!origin) {
         cb(null, true);
@@ -45,6 +53,7 @@ app.use(
   })
 );
 app.use(express.json());
+app.use(cookieParser());
 app.use(dbLoggerMiddleware);
 
 setupSwagger(app);

@@ -3,6 +3,34 @@ import { success } from '../../utils/response';
 import { httpError } from '../../utils/http-error';
 import * as authService from './auth.service';
 
+function refreshTtlMs(): number {
+  const s = Number(process.env.REFRESH_TOKEN_TTL_SECONDS?.trim() || '604800');
+  return (Number.isFinite(s) && s > 0 ? s : 604800) * 1000;
+}
+
+function isSecure(): boolean {
+  return process.env.NODE_ENV === 'production' || String(process.env.HTTPS_ENABLED).toLowerCase() === 'true';
+}
+
+function setRefreshCookie(res: Response, token: string): void {
+  res.cookie('refresh_token', token, {
+    httpOnly: true,
+    secure: isSecure(),
+    sameSite: 'strict',
+    maxAge: refreshTtlMs(),
+    path: '/api/auth',
+  });
+}
+
+function clearRefreshCookie(res: Response): void {
+  res.clearCookie('refresh_token', {
+    httpOnly: true,
+    secure: isSecure(),
+    sameSite: 'strict',
+    path: '/api/auth',
+  });
+}
+
 export async function register(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
     const b = req.body as Record<string, unknown>;
@@ -23,8 +51,12 @@ export async function login(req: Request, res: Response, next: NextFunction): Pr
     const email = typeof b.email === 'string' ? b.email : '';
     const password = typeof b.password === 'string' ? b.password : '';
 
-    const data = await authService.login({ email, password });
-    res.json(success(data));
+    const oldRefreshToken = typeof req.cookies?.refresh_token === 'string'
+      ? req.cookies.refresh_token
+      : undefined;
+    const data = await authService.login({ email, password, oldRefreshToken });
+    setRefreshCookie(res, data.refreshToken);
+    res.json(success({ token: data.token, user: data.user }));
   } catch (err) {
     next(err);
   }
@@ -94,9 +126,27 @@ export async function logout(req: Request, res: Response, next: NextFunction): P
       next(httpError(500, 'Auth context missing'));
       return;
     }
-    await authService.logoutSession(auth.jti, auth.exp);
+    const rawRefreshToken = typeof req.cookies?.refresh_token === 'string'
+      ? req.cookies.refresh_token
+      : undefined;
+    await authService.logoutSession(auth.jti, auth.exp, rawRefreshToken);
+    clearRefreshCookie(res);
     res.json(success(null, 'Logged out'));
   } catch (err) {
+    next(err);
+  }
+}
+
+export async function refresh(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const rawRefreshToken = typeof req.cookies?.refresh_token === 'string'
+      ? req.cookies.refresh_token
+      : '';
+    const data = await authService.refreshAccessToken(rawRefreshToken);
+    setRefreshCookie(res, data.newRefreshToken);
+    res.json(success({ token: data.token }));
+  } catch (err) {
+    clearRefreshCookie(res);
     next(err);
   }
 }
