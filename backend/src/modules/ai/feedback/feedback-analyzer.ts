@@ -2,9 +2,15 @@ import { Type } from '@google/genai';
 import { prisma } from '../../../db';
 import { getAIProvider } from '../providers/ai.factory';
 
+export interface SuggestedActionPlan {
+  title: string;
+  description: string;
+}
+
 export interface FeedbackAnalysis {
   resolvedTypeId: number | null;
   sentiment: 'POSITIVE' | 'NEUTRAL' | 'NEGATIVE';
+  suggestedActionPlans: SuggestedActionPlan[];
 }
 
 export interface FeedbackAnalysisDemo extends FeedbackAnalysis {
@@ -15,6 +21,7 @@ export interface FeedbackAnalysisDemo extends FeedbackAnalysis {
 const FALLBACK: FeedbackAnalysis = {
   resolvedTypeId: null,
   sentiment: 'NEUTRAL',
+  suggestedActionPlans: [],
 };
 
 type FeedbackTypeRow = { id: number; name: string; description: string | null };
@@ -44,7 +51,7 @@ export async function analyzeFeedbackWithTypes(
       properties: {
         response: {
           type: Type.OBJECT,
-          required: ['feedbacktype', 'sentiment'],
+          required: ['feedbacktype', 'sentiment', 'suggestedActionPlans'],
           properties: {
             feedbacktype: {
               type: Type.STRING,
@@ -54,32 +61,54 @@ export async function analyzeFeedbackWithTypes(
               type: Type.STRING,
               enum: ['POSITIVE', 'NEUTRAL', 'NEGATIVE'],
             },
+            suggestedActionPlans: {
+              type: Type.ARRAY,
+              description: 'List of 1-2 actionable steps for the admin based on this feedback',
+              items: {
+                type: Type.OBJECT,
+                required: ['title', 'description'],
+                properties: {
+                  title: {
+                    type: Type.STRING,
+                    description: "Short, actionable title (e.g., 'Gọi điện xin lỗi khách')",
+                  },
+                  description: {
+                    type: Type.STRING,
+                    description: 'Detailed steps on how to resolve or respond to the feedback',
+                  },
+                },
+              },
+            },
           },
         },
       },
     };
 
     const systemPrompt =
-      `You are an e-commerce feedback classifier.\n` +
+      `You are an e-commerce feedback classifier and customer success advisor.\n` +
       `Given the customer review below, determine:\n` +
       `1. The most fitting feedback category from the list below (choose the name exactly as shown):\n` +
       `${typeDescriptions}\n\n` +
-      `2. The overall sentiment: POSITIVE, NEUTRAL, or NEGATIVE`;
+      `2. The overall sentiment: POSITIVE, NEUTRAL, or NEGATIVE\n\n` +
+      `3. Generate 1 to 2 concrete action plans (title and description) for the store admin to handle this feedback. ` +
+      `If negative, suggest compensation, checking stock, or apologizing. ` +
+      `If positive, suggest thanking the user or upselling. ` +
+      `Write action plan title and description in English.`;
 
     const userPrompt = `Customer review: "${comment}"`;
 
-    const parsed = await ai.generateJson<{ response: { feedbacktype: string; sentiment: string } }>({
+    const parsed = await ai.generateJson<{
+      response: { feedbacktype: string; sentiment: string; suggestedActionPlans: SuggestedActionPlan[] };
+    }>({
       system: systemPrompt,
       user: userPrompt,
       responseSchema,
     });
 
-    const { feedbacktype, sentiment } = parsed.response;
+    const { feedbacktype, sentiment, suggestedActionPlans } = parsed.response;
 
     const validSentiments = ['POSITIVE', 'NEUTRAL', 'NEGATIVE'] as const;
-    const resolvedSentiment = validSentiments.includes(
-      sentiment as (typeof validSentiments)[number]
-    )
+    const resolvedSentiment = validSentiments.includes(sentiment as (typeof validSentiments)[number])
       ? (sentiment as 'POSITIVE' | 'NEUTRAL' | 'NEGATIVE')
       : 'NEUTRAL';
 
@@ -90,6 +119,7 @@ export async function analyzeFeedbackWithTypes(
     return {
       resolvedTypeId: matchedType?.id ?? null,
       sentiment: resolvedSentiment,
+      suggestedActionPlans: Array.isArray(suggestedActionPlans) ? suggestedActionPlans : [],
       rawJson: JSON.stringify(parsed),
     };
   } catch (err) {
@@ -114,5 +144,9 @@ export async function analyzeFeedback(comment: string): Promise<FeedbackAnalysis
   if (activeTypes.length === 0) return FALLBACK;
 
   const result = await analyzeFeedbackWithTypes(comment, activeTypes);
-  return { resolvedTypeId: result.resolvedTypeId, sentiment: result.sentiment };
+  return {
+    resolvedTypeId: result.resolvedTypeId,
+    sentiment: result.sentiment,
+    suggestedActionPlans: result.suggestedActionPlans,
+  };
 }

@@ -5,6 +5,20 @@ import { environment } from '../../../environments/environment';
 import type { ApiSuccess } from '../../shared/models/api-response.model';
 import type { DashboardSummary } from '../../shared/models/dashboard.model';
 
+export type RevenueComparisonMode = 'WEEK' | 'MONTH' | 'QUARTER' | 'YEAR';
+
+export type RevenueComparisonDto = {
+  mode: RevenueComparisonMode;
+  labels: string[];
+  current: number[];
+  previous: number[];
+  summary: {
+    currentTotal: number;
+    prevTotal: number;
+    changePercent: number | null;
+  };
+};
+
 function mapHttpError(err: HttpErrorResponse) {
   const body = err.error as { message?: string } | undefined;
   const msg = typeof body?.message === 'string' ? body.message : err.message;
@@ -17,8 +31,20 @@ export class DashboardApiService {
   private readonly baseUrl = `${environment.apiUrl}/api/dashboard`;
   private readonly aiBaseUrl = `${environment.apiUrl}/api/ai`;
 
-  getSummary(): Observable<DashboardSummary> {
-    return this.http.get<ApiSuccess<DashboardSummary>>(`${this.baseUrl}/summary`).pipe(
+  getSummary(mode: RevenueComparisonMode = 'WEEK'): Observable<DashboardSummary> {
+    const params = new HttpParams().set('mode', mode);
+    return this.http.get<ApiSuccess<DashboardSummary>>(`${this.baseUrl}/summary`, { params }).pipe(
+      map((r) => {
+        if (!r.success) throw new Error(r.message);
+        return r.data;
+      }),
+      catchError(mapHttpError)
+    );
+  }
+
+  getRevenueComparison(mode: RevenueComparisonMode): Observable<RevenueComparisonDto> {
+    const params = new HttpParams().set('mode', mode);
+    return this.http.get<ApiSuccess<RevenueComparisonDto>>(`${this.baseUrl}/revenue-comparison`, { params }).pipe(
       map((r) => {
         if (!r.success) throw new Error(r.message);
         return r.data;

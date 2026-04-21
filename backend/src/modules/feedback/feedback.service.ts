@@ -1,13 +1,21 @@
-import type { Prisma, SentimentLabel } from '@prisma/client';
+import type { ActionPlanStatus, Prisma, SentimentLabel } from '@prisma/client';
 import { prisma } from '../../db';
 import { parsePagination } from '../../utils/pagination';
 import { httpError } from '../../utils/http-error';
 import { analyzeFeedback } from '../ai/feedback/feedback-analyzer';
 
+const actionPlanInclude = {
+  assignee: { select: { id: true, name: true } },
+} as const;
+
 const adminListInclude = {
   user: { select: { id: true, email: true, name: true } },
   product: { select: { id: true, name: true } },
   type: { select: { id: true, name: true } },
+  actionPlans: {
+    include: actionPlanInclude,
+    orderBy: { createdAt: 'desc' as const },
+  },
 } as const;
 
 function parseSentiment(v: string | undefined): SentimentLabel | undefined {
@@ -30,6 +38,19 @@ function parseTypeId(v: string | undefined): number | undefined {
   return n;
 }
 
+export type ActionPlanItem = {
+  id: number;
+  feedbackId: number;
+  title: string;
+  description: string | null;
+  status: ActionPlanStatus;
+  resolution: string | null;
+  assigneeId: number | null;
+  createdAt: Date;
+  updatedAt: Date;
+  assignee: { id: number; name: string | null } | null;
+};
+
 export type AdminFeedbackListItem = {
   id: number;
   userId: number;
@@ -42,6 +63,7 @@ export type AdminFeedbackListItem = {
   user: { id: number; email: string; name: string | null };
   product: { id: number; name: string };
   type: { id: number; name: string };
+  actionPlans: ActionPlanItem[];
 };
 
 export async function listAdminFeedbacks(query: {
@@ -146,23 +168,19 @@ export async function createFeedback(data: {
     throw httpError(400, 'Rating must be an integer between 1 and 5');
   }
 
-  // Verify order exists and belongs to this user
   const order = await prisma.order.findUnique({ where: { id: orderId } });
   if (!order) throw httpError(404, 'Order not found');
   if (order.userId !== userId) throw httpError(403, 'Forbidden: this order does not belong to you');
   if (order.status !== 'DONE') throw httpError(400, 'Feedback can only be submitted for completed orders');
 
-  // Verify the product is part of the order
   const orderItem = await prisma.orderItem.findFirst({ where: { orderId, productId } });
   if (!orderItem) throw httpError(400, 'This product was not found in the specified order');
 
-  // Check for duplicate (unique constraint: orderId + productId)
   const duplicate = await prisma.feedback.findUnique({
     where: { orderId_productId: { orderId, productId } },
   });
   if (duplicate) throw httpError(409, 'Feedback has already been submitted for this product in this order');
 
-  // Validate typeId only when user explicitly passes it
   if (typeId !== undefined) {
     const feedbackType = await prisma.feedbackType.findUnique({ where: { id: typeId } });
     if (!feedbackType || !feedbackType.isActive) {
@@ -170,14 +188,10 @@ export async function createFeedback(data: {
     }
   }
 
-  // AI analyzes comment → resolvedTypeId + sentiment
   const analysis = comment?.trim()
     ? await analyzeFeedback(comment.trim())
-    : { resolvedTypeId: null, sentiment: 'NEUTRAL' as const };
+    : { resolvedTypeId: null, sentiment: 'NEUTRAL' as const, suggestedActionPlans: [] };
 
-  // Priority 1: Use AI's resolved typeId
-  // Priority 2: User explicitly passes it
-  // Priority 3 (fallback): Use first active type in DB
   let finalTypeId = analysis.resolvedTypeId ?? typeId;
 
   if (!finalTypeId) {
@@ -197,13 +211,72 @@ export async function createFeedback(data: {
       rating,
       comment: comment?.trim() ?? null,
       sentiment: analysis.sentiment,
+      ...(analysis.suggestedActionPlans.length > 0
+        ? {
+            actionPlans: {
+              create: analysis.suggestedActionPlans.map((plan) => ({
+                title: plan.title,
+                description: plan.description,
+                status: 'PENDING' as const,
+              })),
+            },
+          }
+        : {}),
     },
     include: {
       type: { select: { id: true, name: true } },
       product: { select: { id: true, name: true } },
       user: { select: { id: true, name: true, email: true } },
+      actionPlans: true,
     },
   });
 
   return created;
+}
+
+// ── Action Plan CRUD (Admin) ────────────────────────────────────────────────
+
+export async function createFeedbackActionPlan(
+  feedbackId: number,
+  adminId: number,
+  data: { title: string; description?: string }
+) {
+  const feedback = await prisma.feedback.findUnique({ where: { id: feedbackId } });
+  if (!feedback) throw httpError(404, 'Feedback not found');
+
+  return prisma.feedbackActionPlan.create({
+    data: {
+      feedbackId,
+      title: data.title,
+      description: data.description ?? null,
+      assigneeId: adminId,
+      status: 'PENDING',
+    },
+    include: actionPlanInclude,
+  });
+}
+
+export async function updateFeedbackActionPlan(
+  planId: number,
+  data: { status?: ActionPlanStatus; resolution?: string; assigneeId?: number }
+) {
+  const plan = await prisma.feedbackActionPlan.findUnique({ where: { id: planId } });
+  if (!plan) throw httpError(404, 'Action plan not found');
+
+  return prisma.feedbackActionPlan.update({
+    where: { id: planId },
+    data: {
+      ...(data.status !== undefined ? { status: data.status } : {}),
+      ...(data.resolution !== undefined ? { resolution: data.resolution } : {}),
+      ...(data.assigneeId !== undefined ? { assigneeId: data.assigneeId } : {}),
+    },
+    include: actionPlanInclude,
+  });
+}
+
+export async function deleteFeedbackActionPlan(planId: number) {
+  const plan = await prisma.feedbackActionPlan.findUnique({ where: { id: planId } });
+  if (!plan) throw httpError(404, 'Action plan not found');
+
+  await prisma.feedbackActionPlan.delete({ where: { id: planId } });
 }

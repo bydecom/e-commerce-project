@@ -27,6 +27,7 @@ async function main() {
   console.log('🌱 Starting RICH E-commerce database seeding (VND)...');
 
   // ── 1. CLEANUP ──────────────────────────────────────────────────────────────
+  await prisma.feedbackActionPlan.deleteMany();
   await prisma.feedback.deleteMany();
   await prisma.feedbackType.deleteMany();
   await prisma.orderItem.deleteMany();
@@ -60,7 +61,7 @@ async function main() {
   console.log('✅ Feedback types created.');
 
   // ── 4. USERS — 1 admin + 20 customers ──────────────────────────────────────
-  await prisma.user.create({
+  const adminUser = await prisma.user.create({
     data: { email: 'admin@example.com', password: 'hashed_pw_admin', name: 'Administrator', role: 'ADMIN' },
   });
 
@@ -105,14 +106,6 @@ async function main() {
   console.log(`✅ Created ${customers.length} customers + 1 admin.`);
 
   // ── 5. CATEGORIES — 6 independent, single-concept categories ────────────────
-  //
-  //  1. Smartphone   — smart phone brands
-  //  2. Laptop       — laptop
-  //  3. Tablet       — tablet
-  //  4. Headphone    — headphone (wireless / wired)
-  //  5. Smartwatch   — smartwatch
-  //  6. Charger      — backup charger, phone charger, charging cable
-  //
   const [
     catSmartphone,
     catLaptop,
@@ -273,7 +266,7 @@ async function main() {
   }
   console.log('✅ Created 120 orders in chronological order (oldest → newest).');
 
-  // ── 8. FEEDBACKS on DONE orders (~70 % coverage) ────────────────────────────
+  // ── 8. FEEDBACKS & ACTION PLANS on DONE orders (~70% coverage) ──────────────
   const doneOrdersFromDb = await prisma.order.findMany({
     where: { status: 'DONE' },
     orderBy: { createdAt: 'asc' },
@@ -318,10 +311,15 @@ async function main() {
     ...Array<'NEGATIVE'>(15).fill('NEGATIVE'),
   ];
 
+  type ActionPlanStatus = 'PENDING' | 'IN_PROGRESS' | 'DONE' | 'REJECTED';
+
   let feedbackCount = 0;
+  let actionPlanCount = 0;
+
   for (const order of doneOrdersFromDb) {
     if (Math.random() > 0.70) continue;
     const itemsToReview = [...order.items].sort(() => 0.5 - Math.random()).slice(0, ri(1, 2));
+
     for (const item of itemsToReview) {
       const sentiment = pick(sentimentPool);
       const rating =
@@ -332,7 +330,8 @@ async function main() {
         sentiment === 'POSITIVE' ? pick(positiveComments) :
         sentiment === 'NEUTRAL'  ? pick(neutralComments)  :
         pick(negativeComments);
-      await prisma.feedback.create({
+
+      const fb = await prisma.feedback.create({
         data: {
           userId:    order.userId,
           orderId:   order.id,
@@ -344,14 +343,51 @@ async function main() {
         },
       });
       feedbackCount++;
+
+      if (sentiment === 'NEGATIVE' || (sentiment === 'NEUTRAL' && Math.random() > 0.5)) {
+        const planStatus: ActionPlanStatus = pick(['PENDING', 'IN_PROGRESS', 'DONE', 'REJECTED']);
+
+        let title = '';
+        let description = '';
+        let resolution: string | null = null;
+
+        if (sentiment === 'NEGATIVE') {
+          title = 'Call customer to apologize and offer compensation';
+          description = 'Customer had a poor experience. Call immediately to apologize, review the delivery process, and offer a 100k voucher.';
+        } else {
+          title = 'Review packaging process';
+          description = 'Feedback about dented box. Notify the shipping partner and warehouse to add extra bubble wrap.';
+        }
+
+        if (planStatus === 'DONE') {
+          resolution = sentiment === 'NEGATIVE'
+            ? 'Called to apologize. Successfully sent a 100k discount code via email.'
+            : 'Held meeting with warehouse team. Requested 2 extra layers of bubble wrap going forward.';
+        } else if (planStatus === 'REJECTED') {
+          resolution = 'Called 3 times but customer did not answer. Closing task.';
+        }
+
+        await prisma.feedbackActionPlan.create({
+          data: {
+            feedbackId: fb.id,
+            title,
+            description,
+            status: planStatus,
+            resolution,
+            assigneeId: adminUser.id,
+          },
+        });
+        actionPlanCount++;
+      }
     }
   }
-  console.log(`✅ Created ${feedbackCount} feedbacks on DONE orders.`);
+  console.log(`✅ Created ${feedbackCount} feedbacks and ${actionPlanCount} action plans.`);
 
   // ── 9. SUMMARY ──────────────────────────────────────────────────────────────
-  const totalOrders  = await prisma.order.count();
-  const totalRevenue = await prisma.order.aggregate({ where: { status: 'DONE' }, _sum: { total: true } });
+  const totalOrders    = await prisma.order.count();
+  const totalRevenue   = await prisma.order.aggregate({ where: { status: 'DONE' }, _sum: { total: true } });
   const totalFeedbacks = await prisma.feedback.count();
+  const totalActionPlans = await prisma.feedbackActionPlan.count();
 
   console.log('\n🎉 SEED COMPLETE!');
   console.log(`   👤 Customers : ${customers.length} + 1 admin`);
@@ -359,6 +395,7 @@ async function main() {
   console.log(`   🛒 Orders    : ${totalOrders} (oldest → newest)`);
   console.log(`   💰 Revenue   : ${totalRevenue._sum.total?.toLocaleString('en-US')} VND (DONE)`);
   console.log(`   ⭐ Reviews   : ${totalFeedbacks} (60% positive / 25% neutral / 15% negative)`);
+  console.log(`   🛠️  Plans     : ${totalActionPlans} action plans generated for admin to review`);
 
   // ── 10. SYNC VECTORS TO QDRANT ───────────────────────────────────────────────
   console.log('\n🤖 Bắt đầu đồng bộ vector AI sang Qdrant...');

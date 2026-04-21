@@ -5,10 +5,19 @@ import * as dashboardService from './dashboard.service';
 
 type PDFKitDoc = InstanceType<typeof PDFDocument>;
 
-export async function getSummary(_req: Request, res: Response, next: NextFunction): Promise<void> {
+export async function getSummary(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
-    const data = await dashboardService.getDashboardSummary();
+    const data = await dashboardService.getDashboardSummary(req.query);
     res.json(success(data, 'Summary fetched successfully'));
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function getRevenueComparison(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const data = await dashboardService.getRevenueComparison(req.query);
+    res.json(success(data, 'Revenue comparison fetched'));
   } catch (err) {
     next(err);
   }
