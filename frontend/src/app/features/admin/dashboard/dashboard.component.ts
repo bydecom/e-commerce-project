@@ -26,175 +26,188 @@ Chart.register(...registerables);
           <h1 class="text-2xl font-bold text-gray-900">Dashboard</h1>
           <p class="mt-1 text-sm text-gray-500">Real-time business insights and operational metrics.</p>
         </div>
+
         <div class="flex items-center gap-3">
+          <!-- Mode switcher -->
           <div class="inline-flex items-center rounded-lg bg-gray-100 p-1 ring-1 ring-gray-200">
-            <button
-              type="button"
-              (click)="setMode('WEEK')"
-              class="rounded-md px-3 py-1.5 text-xs font-medium transition-all"
-              [class]="globalMode() === 'WEEK' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'"
-            >
-              7 Days
-            </button>
-            <button
-              type="button"
-              (click)="setMode('MONTH')"
-              class="rounded-md px-3 py-1.5 text-xs font-medium transition-all"
-              [class]="globalMode() === 'MONTH' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'"
-            >
-              Month
-            </button>
-            <button
-              type="button"
-              (click)="setMode('QUARTER')"
-              class="rounded-md px-3 py-1.5 text-xs font-medium transition-all"
-              [class]="globalMode() === 'QUARTER' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'"
-            >
-              Quarter
-            </button>
-            <button
-              type="button"
-              (click)="setMode('YEAR')"
-              class="rounded-md px-3 py-1.5 text-xs font-medium transition-all"
-              [class]="globalMode() === 'YEAR' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'"
-            >
-              Year
-            </button>
+            @for (m of modes; track m.value) {
+              <button
+                type="button"
+                (click)="setMode(m.value)"
+                class="rounded-md px-3 py-1.5 text-xs font-medium transition-all"
+                [class]="globalMode() === m.value ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'"
+              >
+                {{ m.label }}
+              </button>
+            }
           </div>
 
+          <!-- Export PDF dropdown -->
+          <div class="relative">
+            <button
+              type="button"
+              (click)="exportOpen.set(!exportOpen())"
+              class="flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+            >
+              <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                  d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+              </svg>
+              Export PDF
+              <svg
+                class="h-3.5 w-3.5 transition-transform duration-200"
+                [class.rotate-180]="exportOpen()"
+                fill="none" stroke="currentColor" viewBox="0 0 24 24"
+              >
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+              </svg>
+            </button>
+
+            @if (exportOpen()) {
+              <!-- Click-outside backdrop -->
+              <div class="fixed inset-0 z-20" (click)="exportOpen.set(false)"></div>
+
+              <!-- Dropdown panel -->
+              <div
+                class="absolute right-0 top-full z-30 mt-2 w-80 rounded-xl border border-gray-200 bg-white p-4 shadow-lg"
+                (click)="$event.stopPropagation()"
+              >
+                <p class="mb-3 text-xs font-semibold text-gray-700">Export PDF report</p>
+
+                <div class="flex flex-col gap-3">
+                  <div>
+                    <label class="block text-xs font-medium text-gray-500">Time range</label>
+                    <select
+                      [(ngModel)]="pdfFilter.type"
+                      class="mt-1 w-full rounded border border-gray-300 bg-white px-3 py-1.5 text-sm"
+                    >
+                      <option value="ALL">All time</option>
+                      <option value="MONTH">By month</option>
+                      <option value="QUARTER">By quarter</option>
+                      <option value="YEAR">By year</option>
+                      <option value="CUSTOM">Date range</option>
+                    </select>
+                  </div>
+
+                  @if (pdfFilter.type === 'MONTH') {
+                    <div class="flex gap-2">
+                      <div class="flex-1">
+                        <label class="block text-xs font-medium text-gray-500">Month</label>
+                        <select
+                          [(ngModel)]="pdfFilter.month"
+                          class="mt-1 w-full rounded border border-gray-300 bg-white px-2 py-1.5 text-sm"
+                        >
+                          @for (m of monthOptions; track m) {
+                            <option [ngValue]="m">{{ m }}</option>
+                          }
+                        </select>
+                      </div>
+                      <div class="flex-1">
+                        <label class="block text-xs font-medium text-gray-500">Year</label>
+                        <input
+                          type="number"
+                          [(ngModel)]="pdfFilter.year"
+                          min="2000" max="2100"
+                          class="mt-1 w-full rounded border border-gray-300 bg-white px-2 py-1.5 text-sm"
+                        />
+                      </div>
+                    </div>
+                  }
+
+                  @if (pdfFilter.type === 'QUARTER') {
+                    <div class="flex gap-2">
+                      <div class="flex-1">
+                        <label class="block text-xs font-medium text-gray-500">Quarter</label>
+                        <select
+                          [(ngModel)]="pdfFilter.quarter"
+                          class="mt-1 w-full rounded border border-gray-300 bg-white px-2 py-1.5 text-sm"
+                        >
+                          @for (q of quarterOptions; track q) {
+                            <option [ngValue]="q">Q{{ q }}</option>
+                          }
+                        </select>
+                      </div>
+                      <div class="flex-1">
+                        <label class="block text-xs font-medium text-gray-500">Year</label>
+                        <input
+                          type="number"
+                          [(ngModel)]="pdfFilter.year"
+                          min="2000" max="2100"
+                          class="mt-1 w-full rounded border border-gray-300 bg-white px-2 py-1.5 text-sm"
+                        />
+                      </div>
+                    </div>
+                  }
+
+                  @if (pdfFilter.type === 'YEAR') {
+                    <div>
+                      <label class="block text-xs font-medium text-gray-500">Year</label>
+                      <input
+                        type="number"
+                        [(ngModel)]="pdfFilter.year"
+                        min="2000" max="2100"
+                        class="mt-1 w-full rounded border border-gray-300 bg-white px-2 py-1.5 text-sm"
+                      />
+                    </div>
+                  }
+
+                  @if (pdfFilter.type === 'CUSTOM') {
+                    <div class="flex gap-2">
+                      <div class="flex-1">
+                        <label class="block text-xs font-medium text-gray-500">From</label>
+                        <input
+                          type="date"
+                          [(ngModel)]="pdfFilter.start"
+                          class="mt-1 w-full rounded border border-gray-300 bg-white px-2 py-1.5 text-sm"
+                        />
+                      </div>
+                      <div class="flex-1">
+                        <label class="block text-xs font-medium text-gray-500">To</label>
+                        <input
+                          type="date"
+                          [(ngModel)]="pdfFilter.end"
+                          class="mt-1 w-full rounded border border-gray-300 bg-white px-2 py-1.5 text-sm"
+                        />
+                      </div>
+                    </div>
+                  }
+                </div>
+
+                <div class="mt-3 flex items-center justify-between gap-3 border-t border-gray-100 pt-3">
+                  <p class="text-[11px] text-gray-400">Exports DONE orders only</p>
+                  <button
+                    type="button"
+                    (click)="exportPdf()"
+                    [disabled]="exporting()"
+                    class="flex items-center gap-1.5 rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-indigo-700 disabled:opacity-50"
+                  >
+                    <svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
+                    </svg>
+                    {{ exporting() ? 'Building…' : 'Download PDF' }}
+                  </button>
+                </div>
+              </div>
+            }
+          </div>
+
+          <!-- Refresh -->
           <button
             type="button"
             (click)="load()"
             [disabled]="loading()"
-            class="flex shrink-0 items-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+            class="flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
           >
             <svg
-              xmlns="http://www.w3.org/2000/svg"
               class="h-4 w-4"
               [class.animate-spin]="loading()"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
+              fill="none" viewBox="0 0 24 24" stroke="currentColor"
             >
-              <path
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                stroke-width="2"
-                d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
-              />
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
             </svg>
             {{ loading() ? 'Loading…' : 'Refresh' }}
-          </button>
-        </div>
-      </div>
-
-      <!-- PDF export (layout aligned with System traffic logs) -->
-      <div class="rounded-xl border border-indigo-100 bg-indigo-50/50 p-4 shadow-sm">
-        <div class="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
-          <div class="flex-1 space-y-3">
-            <p class="text-sm font-semibold text-indigo-900">Export PDF report</p>
-            <div class="flex flex-wrap gap-3">
-              <div class="w-full min-w-[140px] sm:w-40">
-                <label class="block text-xs font-medium text-gray-600">Time range</label>
-                <select
-                  [(ngModel)]="pdfFilter.type"
-                  class="mt-1 w-full rounded border border-gray-300 bg-white px-3 py-2 text-sm"
-                >
-                  <option value="ALL">All time</option>
-                  <option value="MONTH">By month</option>
-                  <option value="QUARTER">By quarter</option>
-                  <option value="YEAR">By year</option>
-                  <option value="CUSTOM">Date range</option>
-                </select>
-              </div>
-              @if (pdfFilter.type === 'MONTH') {
-                <div class="w-24">
-                  <label class="block text-xs font-medium text-gray-600">Month</label>
-                  <select
-                    [(ngModel)]="pdfFilter.month"
-                    class="mt-1 w-full rounded border border-gray-300 bg-white px-2 py-2 text-sm"
-                  >
-                    @for (m of monthOptions; track m) {
-                      <option [ngValue]="m">{{ m }}</option>
-                    }
-                  </select>
-                </div>
-                <div class="w-28">
-                  <label class="block text-xs font-medium text-gray-600">Year</label>
-                  <input
-                    type="number"
-                    [(ngModel)]="pdfFilter.year"
-                    min="2000"
-                    max="2100"
-                    class="mt-1 w-full rounded border border-gray-300 bg-white px-2 py-2 text-sm"
-                  />
-                </div>
-              }
-              @if (pdfFilter.type === 'QUARTER') {
-                <div class="w-24">
-                  <label class="block text-xs font-medium text-gray-600">Quarter</label>
-                  <select
-                    [(ngModel)]="pdfFilter.quarter"
-                    class="mt-1 w-full rounded border border-gray-300 bg-white px-2 py-2 text-sm"
-                  >
-                    @for (q of quarterOptions; track q) {
-                      <option [ngValue]="q">Q{{ q }}</option>
-                    }
-                  </select>
-                </div>
-                <div class="w-28">
-                  <label class="block text-xs font-medium text-gray-600">Year</label>
-                  <input
-                    type="number"
-                    [(ngModel)]="pdfFilter.year"
-                    min="2000"
-                    max="2100"
-                    class="mt-1 w-full rounded border border-gray-300 bg-white px-2 py-2 text-sm"
-                  />
-                </div>
-              }
-              @if (pdfFilter.type === 'YEAR') {
-                <div class="w-32">
-                  <label class="block text-xs font-medium text-gray-600">Year</label>
-                  <input
-                    type="number"
-                    [(ngModel)]="pdfFilter.year"
-                    min="2000"
-                    max="2100"
-                    class="mt-1 w-full rounded border border-gray-300 bg-white px-2 py-2 text-sm"
-                  />
-                </div>
-              }
-              @if (pdfFilter.type === 'CUSTOM') {
-                <div class="w-40">
-                  <label class="block text-xs font-medium text-gray-600">From</label>
-                  <input
-                    type="date"
-                    [(ngModel)]="pdfFilter.start"
-                    class="mt-1 w-full rounded border border-gray-300 bg-white px-2 py-2 text-sm"
-                  />
-                </div>
-                <div class="w-40">
-                  <label class="block text-xs font-medium text-gray-600">To</label>
-                  <input
-                    type="date"
-                    [(ngModel)]="pdfFilter.end"
-                    class="mt-1 w-full rounded border border-gray-300 bg-white px-2 py-2 text-sm"
-                  />
-                </div>
-              }
-            </div>
-            <p class="text-xs text-gray-500">
-              The exported PDF uses the time range above for the business summary.
-            </p>
-          </div>
-          <button
-            type="button"
-            (click)="exportPdf()"
-            [disabled]="exporting()"
-            class="shrink-0 rounded-lg bg-indigo-600 px-5 py-2.5 text-sm font-medium text-white hover:bg-indigo-700 disabled:opacity-50"
-          >
-            {{ exporting() ? 'Building PDF…' : 'Download PDF' }}
           </button>
         </div>
       </div>
@@ -562,7 +575,6 @@ Chart.register(...registerables);
                     <span class="block h-2.5 w-2.5 rounded-sm bg-indigo-200"></span> Previous
                   </span>
                 </div>
-                <div>Global filter applied</div>
               </div>
             </div>
           </div>
@@ -642,9 +654,6 @@ Chart.register(...registerables);
                 <h2 class="text-sm font-semibold text-gray-800">Top Customers</h2>
                 <p class="mt-0.5 text-[11px] text-gray-400">Highest spenders in selected period</p>
               </div>
-              <span class="rounded-full bg-indigo-50 px-2 py-0.5 text-[10px] font-medium text-indigo-600">
-                Global filter applied
-              </span>
             </div>
 
             <ul class="mt-4 space-y-3">
@@ -795,8 +804,16 @@ export class AdminDashboardComponent implements OnInit, OnDestroy {
   readonly error = signal<string | null>(null);
   readonly data = signal<DashboardSummary | null>(null);
   readonly exporting = signal(false);
+  readonly exportOpen = signal(false);
 
   readonly globalMode = signal<RevenueComparisonMode>('WEEK');
+
+  readonly modes: { value: RevenueComparisonMode; label: string }[] = [
+    { value: 'WEEK',    label: '7 Days'  },
+    { value: 'MONTH',   label: 'Month'   },
+    { value: 'QUARTER', label: 'Quarter' },
+    { value: 'YEAR',    label: 'Year'    },
+  ];
 
   readonly compSummary = computed(() => {
     const rev = this.data()?.charts.revenueComparison;
@@ -1014,6 +1031,7 @@ export class AdminDashboardComponent implements OnInit, OnDestroy {
   }
 
   exportPdf(): void {
+    this.exportOpen.set(false);
     if (this.pdfFilter.type === 'CUSTOM' && (!this.pdfFilter.start || !this.pdfFilter.end)) {
       alert('Please select both start and end dates.');
       return;
