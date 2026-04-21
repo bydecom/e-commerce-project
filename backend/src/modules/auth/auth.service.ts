@@ -161,7 +161,7 @@ export async function register(input: { name: string; email: string; password: s
   return { email, message: 'Verification email sent' };
 }
 
-export async function login(input: { email: string; password: string }) {
+export async function login(input: { email: string; password: string; oldRefreshToken?: string }) {
   const email = normalizeEmail(input.email);
   const password = input.password;
 
@@ -183,7 +183,6 @@ export async function login(input: { email: string; password: string }) {
   const jti = randomUUID();
   const expiresIn = (
     process.env.JWT_ACCESS_EXPIRES_IN ||
-    process.env.JWT_EXPIRES_IN ||
     '15m'
   ).trim() as jwt.SignOptions['expiresIn'];
   const token = jwt.sign(
@@ -196,6 +195,10 @@ export async function login(input: { email: string; password: string }) {
       jwtid: jti,
     }
   );
+
+  if (input.oldRefreshToken) {
+    await revokeRefreshToken(input.oldRefreshToken);
+  }
 
   const refreshToken = generateRefreshToken();
   await storeRefreshToken(refreshToken, { userId: user.id, role: user.role });
@@ -222,7 +225,6 @@ export async function refreshAccessToken(rawRefreshToken: string): Promise<{
   const { payload, newRaw } = result;
   const expiresIn = (
     process.env.JWT_ACCESS_EXPIRES_IN ||
-    process.env.JWT_EXPIRES_IN ||
     '15m'
   ).trim() as jwt.SignOptions['expiresIn'];
 

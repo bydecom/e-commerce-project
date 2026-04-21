@@ -51,7 +51,10 @@ export async function login(req: Request, res: Response, next: NextFunction): Pr
     const email = typeof b.email === 'string' ? b.email : '';
     const password = typeof b.password === 'string' ? b.password : '';
 
-    const data = await authService.login({ email, password });
+    const oldRefreshToken = typeof req.cookies?.refresh_token === 'string'
+      ? req.cookies.refresh_token
+      : undefined;
+    const data = await authService.login({ email, password, oldRefreshToken });
     setRefreshCookie(res, data.refreshToken);
     res.json(success({ token: data.token, user: data.user }));
   } catch (err) {

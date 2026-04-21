@@ -7,11 +7,21 @@ export const authInterceptor: HttpInterceptorFn = (req, next) => {
   const auth = inject(AuthService);
   const token = auth.getToken();
   const api = environment.apiUrl;
-  if (!token || !req.url.startsWith(api)) {
+
+  if (!req.url.startsWith(api)) {
     return next(req);
   }
+
+  // Always include credentials so the browser stores Set-Cookie on login
+  // and sends the refresh_token cookie on subsequent auth requests.
+  const credentialed = req.clone({ withCredentials: true });
+
+  if (!token) {
+    return next(credentialed);
+  }
+
   return next(
-    req.clone({
+    credentialed.clone({
       setHeaders: { Authorization: `Bearer ${token}` },
     })
   );
