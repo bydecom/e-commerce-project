@@ -7,6 +7,15 @@
     </main>
   </div>
 
+  <app-checkout-confirm-modal
+    [open]="modalState().isOpen"
+    [phase]="modalState().phase || 'confirm'"
+    [message]="modalState().message"
+    (cancel)="onModalCancel()"
+    (continue)="onModalContinue()"
+    (ok)="onModalOk()"
+  />
+
   <app-chatbot />
   <app-footer />
 </div>

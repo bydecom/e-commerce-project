@@ -214,10 +214,14 @@ export async function refreshAccessToken(rawRefreshToken: string): Promise<{
   token: string;
   newRefreshToken: string;
 }> {
-  if (!rawRefreshToken) throw httpError(401, 'Refresh token missing');
+  if (!rawRefreshToken) {
+    throw httpError(401, 'Refresh token missing', { code: 'AUTH_REFRESH_INVALID_OR_EXPIRED' });
+  }
 
   const result = await rotateRefreshToken(rawRefreshToken);
-  if (!result) throw httpError(401, 'Refresh token invalid or expired');
+  if (!result) {
+    throw httpError(401, 'Refresh token invalid or expired', { code: 'AUTH_REFRESH_INVALID_OR_EXPIRED' });
+  }
 
   const secret = process.env.JWT_SECRET;
   if (!secret) throw httpError(500, 'JWT secret is not configured');

@@ -31,7 +31,8 @@ function handle401WithRefresh(
   req: HttpRequest<unknown>,
   next: HttpHandlerFn,
   auth: AuthService,
-  toast: ToastService
+  toast: ToastService,
+  router: Router
 ): Observable<HttpEvent<unknown>> {
   if (isRefreshing) {
     // Another request is already refreshing — queue this one until the new token arrives.
@@ -55,7 +56,7 @@ function handle401WithRefresh(
       isRefreshing = false;
       refreshSubject.next(null);
       toast.show('Session expired. Please sign in again.', 'error');
-      auth.logout();
+      auth.logout({ returnUrl: router.url, reason: 'session_expired' });
       return throwError(() => refreshErr);
     })
   );
@@ -72,6 +73,15 @@ export const errorInterceptor: HttpInterceptorFn = (req, next) => {
       const isLogout = url.includes('/api/auth/logout');
       const isRefresh = url.includes('/api/auth/refresh');
       const isOrdersApi = url.includes('/api/orders');
+      const errorCode = (() => {
+        const body = err.error as unknown;
+        if (!body || typeof body !== 'object') return null;
+        const maybeErrors = (body as { errors?: unknown }).errors;
+        if (!maybeErrors || typeof maybeErrors !== 'object') return null;
+        const code = (maybeErrors as { code?: unknown }).code;
+        return typeof code === 'string' ? code : null;
+      })();
+      const isRefreshInvalidOrExpired = errorCode === 'AUTH_REFRESH_INVALID_OR_EXPIRED';
 
       if (isOrdersApi && (err.status === 403 || err.status === 404)) {
         toast.show('You do not have permission to view this order or it does not exist.', 'error');
@@ -80,11 +90,17 @@ export const errorInterceptor: HttpInterceptorFn = (req, next) => {
       }
 
       if (err.status === 401 && req.headers.has('Authorization') && !isLogout && !isRefresh) {
-        return handle401WithRefresh(req, next, auth, toast);
+        return handle401WithRefresh(req, next, auth, toast, router);
       }
 
       if (err.status === 401 && (isLogout || isRefresh)) {
-        auth.logout();
+        if ((isRefreshInvalidOrExpired || isRefresh) && !isRefreshing) {
+          toast.show('Session expired. Please sign in again.', 'error');
+        }
+        auth.logout({
+          returnUrl: router.url,
+          ...(isRefreshInvalidOrExpired || isRefresh ? { reason: 'session_expired' } : null),
+        });
         return throwError(() => err);
       }
 

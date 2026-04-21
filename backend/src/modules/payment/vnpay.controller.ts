@@ -134,16 +134,26 @@ export async function initCheckout(req: Request, res: Response, next: NextFuncti
     }
 
     const b = req.body as Record<string, unknown>;
+    const providedTxnRef = typeof b.txnRef === 'string' ? b.txnRef.trim() : '';
     const shippingAddress = typeof b.shippingAddress === 'string' ? b.shippingAddress.trim() : '';
     if (!shippingAddress) throw httpError(400, 'shippingAddress is required');
 
     const cartPricing = await cartService.getCartWithPricing(auth.userId);
     if (cartPricing.items.length === 0) throw httpError(422, 'Cart is empty');
 
-    const txnRef = `u${auth.userId}-${Date.now()}`;
+    const txnRef = providedTxnRef || `u${auth.userId}-${Date.now()}`;
 
     const ttlSecondsRaw = (process.env.CHECKOUT_RESERVATION_TTL_SECONDS || '').trim();
-    const ttlSeconds = Math.min(60 * 60, Math.max(60, parseInt(ttlSecondsRaw || '900', 10) || 900));
+    let ttlSeconds = Math.min(60 * 60, Math.max(60, parseInt(ttlSecondsRaw || '900', 10) || 900));
+    if (providedTxnRef) {
+      const payload = await getReservationPayload(txnRef);
+      if (payload?.expiresAtMs) {
+        const remaining = Math.ceil((payload.expiresAtMs - Date.now()) / 1000);
+        if (Number.isFinite(remaining) && remaining > 0) {
+          ttlSeconds = Math.min(ttlSeconds, remaining);
+        }
+      }
+    }
 
     const items = cartPricing.items.map((i) => ({ productId: i.productId, quantity: i.quantity }));
     const productIds = items.map((i) => i.productId);
@@ -191,6 +201,47 @@ export async function initCheckout(req: Request, res: Response, next: NextFuncti
       await releaseReservationBestEffort(txnRef, items);
       throw e;
     }
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function reserveCheckout(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const auth = req.auth;
+    if (!auth) {
+      res.status(401).json({ success: false, message: 'Unauthorized', errors: null });
+      return;
+    }
+
+    const cartPricing = await cartService.getCartWithPricing(auth.userId);
+    if (cartPricing.items.length === 0) throw httpError(422, 'Cart is empty');
+
+    const txnRef = `u${auth.userId}-${Date.now()}`;
+
+    const ttlSecondsRaw = (process.env.CHECKOUT_RESERVATION_TTL_SECONDS || '').trim();
+    const ttlSeconds = Math.min(60 * 60, Math.max(60, parseInt(ttlSecondsRaw || '900', 10) || 900));
+
+    const items = cartPricing.items.map((i) => ({ productId: i.productId, quantity: i.quantity }));
+    const productIds = items.map((i) => i.productId);
+    const products = await prisma.product.findMany({
+      where: { id: { in: productIds } },
+      select: { id: true, stock: true, status: true, name: true },
+    });
+    const stockById = new Map(products.map((p) => [p.id, p.stock]));
+    const statusById = new Map(products.map((p) => [p.id, p.status]));
+    const nameById = new Map(products.map((p) => [p.id, p.name]));
+    for (const it of items) {
+      const status = statusById.get(it.productId);
+      if (!status) throw httpError(400, `Product ${it.productId} not found`);
+      if (status !== 'AVAILABLE') {
+        throw httpError(422, `Product "${nameById.get(it.productId) || it.productId}" is not available for sale`);
+      }
+    }
+
+    await reserveStockOrThrow({ txnRef, items, stockByProductId: stockById, ttlSeconds });
+
+    res.json(success({ txnRef, ttlSeconds }, 'OK'));
   } catch (err) {
     next(err);
   }

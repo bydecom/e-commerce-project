@@ -128,19 +128,19 @@ export class AuthService {
    * Calls `POST /api/auth/logout` to blacklist the JWT server-side, then clears client session.
    * If there is no token (or outside browser), only clears local state.
    */
-  logout(): void {
+  logout(opts?: { returnUrl?: string; reason?: string }): void {
     if (!isPlatformBrowser(this.platformId)) {
       this.userSignal.set(null);
       return;
     }
     const token = localStorage.getItem(TOKEN_KEY);
     if (!token) {
-      this.clearClientSession();
+      this.clearClientSession({ returnUrl: opts?.returnUrl, reason: opts?.reason });
       return;
     }
     this.http.post<ApiSuccess<null>>(`${environment.apiUrl}/api/auth/logout`, {}, { withCredentials: true }).subscribe({
-      next: () => this.clearClientSession(),
-      error: () => this.clearClientSession(),
+      next: () => this.clearClientSession({ returnUrl: opts?.returnUrl, reason: opts?.reason }),
+      error: () => this.clearClientSession({ returnUrl: opts?.returnUrl, reason: opts?.reason }),
     });
   }
 
@@ -160,13 +160,30 @@ export class AuthService {
       );
   }
 
-  private clearClientSession(): void {
+  private clearClientSession(opts?: { returnUrl?: string; reason?: string }): void {
     if (isPlatformBrowser(this.platformId)) {
       localStorage.removeItem(TOKEN_KEY);
       localStorage.removeItem(USER_KEY);
     }
     this.userSignal.set(null);
-    this.router.navigate(['/login']);
+
+    const current = this.router.url;
+    const fallbackReturnUrl = typeof current === 'string' && current.startsWith('/') ? current : '/';
+    const returnUrl = (opts?.returnUrl ?? fallbackReturnUrl).startsWith('/') ? (opts?.returnUrl ?? fallbackReturnUrl) : '/';
+
+    if (current === '/login') {
+      return;
+    }
+    if (returnUrl === '/login') {
+      void this.router.navigate(['/login']);
+      return;
+    }
+    void this.router.navigate(['/login'], {
+      queryParams: {
+        returnUrl,
+        ...(opts?.reason ? { reason: opts.reason } : null),
+      },
+    });
   }
 
   private persistSession(token: string, user: User): void {
