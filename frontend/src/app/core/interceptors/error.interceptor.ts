@@ -19,6 +19,36 @@ import {
 import { AuthService } from '../services/auth.service';
 import { ToastService } from '../services/toast.service';
 
+// Typed error codes — kept in sync with backend src/utils/prisma-error.ts
+export type PrismaErrorCode =
+  | 'UNIQUE_CONSTRAINT_VIOLATION'
+  | 'FOREIGN_KEY_VIOLATION'
+  | 'RECORD_NOT_FOUND'
+  | 'NULL_CONSTRAINT_VIOLATION'
+  | 'PRISMA_VALIDATION_ERROR'
+  | 'INTERNAL_DB_ERROR';
+
+// Auth error codes — set explicitly in backend auth.service.ts
+export type AuthErrorCode = 'AUTH_REFRESH_INVALID_OR_EXPIRED';
+
+export type ApiErrorCode = PrismaErrorCode | AuthErrorCode;
+
+export interface ApiErrorBody {
+  success: false;
+  message: string;
+  errors: { code: ApiErrorCode } | null;
+}
+
+/** Extracts the typed error code from an HttpErrorResponse body, or null. */
+export function getApiErrorCode(err: HttpErrorResponse): ApiErrorCode | null {
+  const body = err.error as unknown;
+  if (!body || typeof body !== 'object') return null;
+  const errors = (body as { errors?: unknown }).errors;
+  if (!errors || typeof errors !== 'object') return null;
+  const code = (errors as { code?: unknown }).code;
+  return typeof code === 'string' ? (code as ApiErrorCode) : null;
+}
+
 // Module-level singletons — shared across all interceptor invocations for the lifetime of the app.
 let isRefreshing = false;
 const refreshSubject = new BehaviorSubject<string | null>(null);
@@ -73,14 +103,7 @@ export const errorInterceptor: HttpInterceptorFn = (req, next) => {
       const isLogout = url.includes('/api/auth/logout');
       const isRefresh = url.includes('/api/auth/refresh');
       const isOrdersApi = url.includes('/api/orders');
-      const errorCode = (() => {
-        const body = err.error as unknown;
-        if (!body || typeof body !== 'object') return null;
-        const maybeErrors = (body as { errors?: unknown }).errors;
-        if (!maybeErrors || typeof maybeErrors !== 'object') return null;
-        const code = (maybeErrors as { code?: unknown }).code;
-        return typeof code === 'string' ? code : null;
-      })();
+      const errorCode = getApiErrorCode(err);
       const isRefreshInvalidOrExpired = errorCode === 'AUTH_REFRESH_INVALID_OR_EXPIRED';
 
       if (isOrdersApi && (err.status === 403 || err.status === 404)) {

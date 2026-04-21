@@ -1,5 +1,4 @@
 import bcrypt from 'bcrypt';
-import { Prisma } from '@prisma/client';
 import { prisma } from '../../db';
 import { httpError } from '../../utils/http-error';
 import * as jwt from 'jsonwebtoken';
@@ -262,32 +261,25 @@ export async function verifyEmail(input: { token: string }) {
     throw httpError(500, 'Corrupted pending registration');
   }
 
-  try {
-    const u = await prisma.user.create({
-      data: {
-        email: pending.email,
-        password: pending.passwordHash,
-        name: pending.name,
-        role: 'USER',
-      },
-      select: { id: true, name: true, email: true, role: true },
-    });
+  const u = await prisma.user.create({
+    data: {
+      email: pending.email,
+      password: pending.passwordHash,
+      name: pending.name,
+      role: 'USER',
+    },
+    select: { id: true, name: true, email: true, role: true },
+  });
 
-    // Cleanup keys (best-effort).
-    const latestToken = await redis.get(redisKeyEmail(email));
-    const keysToDelete = [redisKeyPending(email), redisKeyEmail(email), redisKeyToken(token)];
-    if (latestToken && latestToken !== token) {
-      keysToDelete.push(redisKeyToken(latestToken));
-    }
-    await redis.del(keysToDelete);
-
-    return { user: mapUser(u) };
-  } catch (e) {
-    if (e instanceof Prisma.PrismaClientKnownRequestError) {
-      if (e.code === 'P2002') throw httpError(409, 'Email already exists');
-    }
-    throw e;
+  // Cleanup keys (best-effort).
+  const latestToken = await redis.get(redisKeyEmail(email));
+  const keysToDelete = [redisKeyPending(email), redisKeyEmail(email), redisKeyToken(token)];
+  if (latestToken && latestToken !== token) {
+    keysToDelete.push(redisKeyToken(latestToken));
   }
+  await redis.del(keysToDelete);
+
+  return { user: mapUser(u) };
 }
 
 export async function resendVerification(input: { email: string }) {
