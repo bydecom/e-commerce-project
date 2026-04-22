@@ -74,6 +74,13 @@ export const ADMIN_ROUTES: Routes = [
             (m) => m.AdminSystemLogComponent
           ),
       },
+      {
+        path: 'system-config',
+        loadComponent: () =>
+          import('./system-config/system-config.component').then(
+            (m) => m.AdminSystemConfigComponent
+          ),
+      },
     ],
   },
 ];

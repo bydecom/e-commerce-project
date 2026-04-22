@@ -28,7 +28,7 @@ async function sendOrderCompletedEmail(order: {
 }): Promise<void> {
   const setting = await StoreSettingService.getSetting();
   const shopName = setting?.name?.trim() || 'Shop';
-  const orderUrl = `${process.env.CLIENT_URL?.trim() || 'http://localhost:4200'}/orders/${order.id}`;
+  const orderUrl = `${process.env.CLIENT_URL?.trim() || 'https://localhost:4200'}/orders/${order.id}`;
   const customerName = order.user.name?.trim() || 'bạn';
 
   const totalVnd = new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(order.total);

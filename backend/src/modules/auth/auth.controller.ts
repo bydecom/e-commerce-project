@@ -2,22 +2,24 @@ import type { NextFunction, Request, Response } from 'express';
 import { success } from '../../utils/response';
 import { httpError } from '../../utils/http-error';
 import * as authService from './auth.service';
+import { getConfigInt } from '../system-config/system-config.service';
 
-function refreshTtlMs(): number {
-  const s = Number(process.env.REFRESH_TOKEN_TTL_SECONDS?.trim() || '604800');
-  return (Number.isFinite(s) && s > 0 ? s : 604800) * 1000;
+async function refreshTtlMs(): Promise<number> {
+  const s = await getConfigInt('refresh_token_ttl_seconds', 604800);
+  const bounded = Math.min(60 * 60 * 24 * 30, Math.max(60, Math.floor(s)));
+  return bounded * 1000;
 }
 
 function isSecure(): boolean {
   return process.env.NODE_ENV === 'production' || String(process.env.HTTPS_ENABLED).toLowerCase() === 'true';
 }
 
-function setRefreshCookie(res: Response, token: string): void {
+async function setRefreshCookie(res: Response, token: string): Promise<void> {
   res.cookie('refresh_token', token, {
     httpOnly: true,
     secure: isSecure(),
     sameSite: 'strict',
-    maxAge: refreshTtlMs(),
+    maxAge: await refreshTtlMs(),
     path: '/api/auth',
   });
 }
@@ -55,7 +57,7 @@ export async function login(req: Request, res: Response, next: NextFunction): Pr
       ? req.cookies.refresh_token
       : undefined;
     const data = await authService.login({ email, password, oldRefreshToken });
-    setRefreshCookie(res, data.refreshToken);
+    await setRefreshCookie(res, data.refreshToken);
     res.json(success({ token: data.token, user: data.user }));
   } catch (err) {
     next(err);
@@ -143,7 +145,7 @@ export async function refresh(req: Request, res: Response, next: NextFunction): 
       ? req.cookies.refresh_token
       : '';
     const data = await authService.refreshAccessToken(rawRefreshToken);
-    setRefreshCookie(res, data.newRefreshToken);
+    await setRefreshCookie(res, data.newRefreshToken);
     res.json(success({ token: data.token }));
   } catch (err) {
     clearRefreshCookie(res);

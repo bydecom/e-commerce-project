@@ -9,7 +9,8 @@ export type ChatAction =
   | { type: 'SUGGEST_OPTIONS'; payload: { options: string[] } }
   | { type: 'SHOW_ORDERS'; payload: { orders: Array<{ id: number; status: string; total: number; date: string }> } }
   | { type: 'SHOW_PRODUCTS'; payload: { products: Array<{ id: number; name: string; price: number; imageUrl: string | null }> } }
-  | { type: 'REFRESH_CART' };
+  | { type: 'REFRESH_CART' }
+  | { type: 'SUGGEST_PROMPTS'; payload: { prompts: string[] } };
 
 export interface ChatResponse {
   text: string;

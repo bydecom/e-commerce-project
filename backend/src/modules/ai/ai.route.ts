@@ -21,3 +21,10 @@ aiRouter.get(
 
 // Khách vẫn chat được; nếu gửi Bearer hợp lệ thì optionalAuthMiddleware gắn req.auth (userId) cho add-to-cart / orders.
 aiRouter.post('/chat', optionalAuthMiddleware, aiController.postChat);
+
+aiRouter.post(
+  '/admin/chat',
+  authMiddleware,
+  requireRole(['ADMIN']),
+  aiController.postAdminChat,
+);

@@ -1,5 +1,6 @@
 import { createHash, randomBytes } from 'crypto';
 import { ensureRedisConnected, redisClient } from '../config/redis';
+import { getConfigInt } from '../modules/system-config/system-config.service';
 
 export interface RefreshTokenPayload {
   userId: number;
@@ -14,12 +15,10 @@ function redisKey(hash: string): string {
   return `refresh:token:${hash}`;
 }
 
-function refreshTtlSeconds(): number {
-  const raw = process.env.REFRESH_TOKEN_TTL_SECONDS?.trim();
-  if (!raw) return 604800; // 7 days
-  const n = Number(raw);
-  if (!Number.isFinite(n) || n <= 0) return 604800;
-  return Math.floor(n);
+async function refreshTtlSeconds(): Promise<number> {
+  const ttl = await getConfigInt('refresh_token_ttl_seconds', 604800);
+  // Safety bounds: min 60s, max 30 days
+  return Math.min(60 * 60 * 24 * 30, Math.max(60, Math.floor(ttl)));
 }
 
 export function generateRefreshToken(): string {
@@ -31,7 +30,7 @@ export async function storeRefreshToken(
   payload: RefreshTokenPayload
 ): Promise<void> {
   await ensureRedisConnected();
-  const ttl = refreshTtlSeconds();
+  const ttl = await refreshTtlSeconds();
   await redisClient().set(redisKey(hashToken(raw)), JSON.stringify(payload), { EX: ttl });
 }
 

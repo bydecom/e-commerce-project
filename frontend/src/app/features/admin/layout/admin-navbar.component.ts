@@ -41,6 +41,12 @@ import { StoreSettingService } from '../../../core/services/store-setting.servic
               <a routerLink="/admin/settings" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
                 >Shop Settings</a
               >
+              <a
+                routerLink="/admin/system-config"
+                class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
+              >
+                System Config
+              </a>
               <hr class="my-1 border-gray-100" />
               <button
                 type="button"

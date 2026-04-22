@@ -36,7 +36,27 @@ async function main() {
   await prisma.category.deleteMany();
   await prisma.storeSetting.deleteMany();
   await prisma.user.deleteMany();
+  // Lưu ý: Không deleteMany bảng SystemConfig để tránh làm mất config admin đã chỉnh
   console.log('🧹 Cleared existing records.');
+
+  // ── 2. SYSTEM CONFIG (skip duplicates) ─────────────────────────────────────
+  const systemConfigs = [
+    { key: 'jwt_access_expires_in', value: '14m', description: 'Access token lifetime (e.g. 14m, 1h)' },
+    { key: 'refresh_token_ttl_seconds', value: '900', description: 'Refresh token lifetime in seconds' },
+    { key: 'verify_token_ttl_seconds', value: '180', description: 'Email verification link lifetime in seconds' },
+    { key: 'pending_register_ttl_seconds', value: '1800', description: 'Pending registration cleanup TTL in seconds' },
+    { key: 'product_cache_ttl_seconds', value: '5', description: 'Product detail Redis cache TTL in seconds (max 3600)' },
+    { key: 'checkout_reservation_ttl_seconds', value: '900', description: 'Stock reservation hold time at checkout in seconds (60–3600)' },
+    { key: 'use_gemini', value: 'false', description: 'Use Gemini AI instead of local LLM (true/false)' },
+    { key: 'gemini_api_key', value: '', description: 'Gemini API key (leave empty to use local LLM)' },
+    { key: 'vnp_return_url', value: 'https://localhost:4200', description: 'VNPay redirect URL after payment' },
+  ] as const;
+
+  await (prisma as any).systemConfig.createMany({
+    data: systemConfigs,
+    skipDuplicates: true,
+  });
+  console.log('✅ System configs seeded (skipped existing).');
 
   // ── 2. STORE SETTINGS ───────────────────────────────────────────────────────
   await prisma.storeSetting.create({

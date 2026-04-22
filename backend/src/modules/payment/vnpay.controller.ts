@@ -12,6 +12,7 @@ import {
   reserveStockOrThrow,
   releaseReservationBestEffort,
 } from '../inventory/stock-reservation.service';
+import { getConfigInt } from '../system-config/system-config.service';
 
 function getClientIp(req: Request): string {
   const xf = req.headers['x-forwarded-for'];
@@ -47,10 +48,9 @@ export async function createPayment(req: Request, res: Response, next: NextFunct
 
     // Reserve stock at "Checkout" time so only one user can proceed to payment.
     // DB remains the final source of truth when creating the order.
-    const ttlSecondsRaw = (process.env.CHECKOUT_RESERVATION_TTL_SECONDS || '').trim();
     const ttlSeconds = Math.min(
       60 * 60,
-      Math.max(60, parseInt(ttlSecondsRaw || '900', 10) || 900)
+      Math.max(60, await getConfigInt('checkout_reservation_ttl_seconds', 900))
     ); // default 15 minutes, cap 1 hour, min 60s
 
     const items = cartPricing.items.map((i) => ({ productId: i.productId, quantity: i.quantity }));
@@ -110,7 +110,7 @@ export async function createPayment(req: Request, res: Response, next: NextFunct
       throw e;
     }
 
-    const { paymentUrl, vnp_Params } = vnpay.createVnpayPaymentUrl({
+    const { paymentUrl, vnp_Params } = await vnpay.createVnpayPaymentUrl({
       amountVnd,
       ipAddr: getClientIp(req),
       orderInfo,
@@ -276,7 +276,7 @@ export async function payCheckout(req: Request, res: Response, next: NextFunctio
     if (order.status !== 'PENDING') throw httpError(422, 'Order is not payable');
 
     const amountVnd = Math.round(order.total);
-    const { paymentUrl, vnp_Params } = vnpay.createVnpayPaymentUrl({
+    const { paymentUrl, vnp_Params } = await vnpay.createVnpayPaymentUrl({
       amountVnd,
       ipAddr: getClientIp(req),
       orderInfo,

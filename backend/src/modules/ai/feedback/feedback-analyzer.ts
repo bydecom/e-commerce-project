@@ -43,7 +43,7 @@ export async function analyzeFeedbackWithTypes(
     .join('\n');
 
   try {
-    const ai = getAIProvider();
+    const ai = await getAIProvider();
 
     const responseSchema = {
       type: Type.OBJECT,

@@ -27,7 +27,7 @@ export async function enhanceProductDescription(
       : `There is no draft yet — write a short professional description based only on the product name.\n`);
 
   try {
-    const ai = getAIProvider();
+    const ai = await getAIProvider();
 
     const responseSchema = {
       type: Type.OBJECT,

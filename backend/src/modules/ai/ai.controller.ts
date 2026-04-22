@@ -4,6 +4,7 @@ import { httpError } from '../../utils/http-error';
 import { getOrCreateTodayMiniAdvice } from './daily-advice/mini-advice.service';
 import { enhanceProductDescription } from './product/product-description-enhancer';
 import { processUserChat } from './chatbot/chat-orchestrator.service';
+import { processAdminChat } from './chatbot/admin-chat-orchestrator.service';
 
 export async function postEnhanceProductDescription(
   req: Request,
@@ -52,6 +53,20 @@ export async function postChat(req: Request, res: Response, next: NextFunction):
 
     const userId = req.auth?.userId;
     const out = await processUserChat(userId, message, body.context);
+    res.json(success(out, 'OK'));
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function postAdminChat(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const body = req.body as { message?: unknown };
+    const message = typeof body?.message === 'string' ? body.message.trim() : '';
+    if (!message) throw httpError(400, 'Message is required');
+
+    const adminId = req.auth!.userId;
+    const out = await processAdminChat(adminId, message);
     res.json(success(out, 'OK'));
   } catch (err) {
     next(err);

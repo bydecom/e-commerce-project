@@ -15,6 +15,7 @@ import {
 } from '../../utils/refresh-token';
 import { buildVerifyEmailTemplate } from '../../utils/mail-templates';
 import { StoreSettingService } from '../store-setting/store-setting.service';
+import { getConfig, getConfigInt } from '../system-config/system-config.service';
 
 function normalizeEmail(email: string): string {
   return email.trim().toLowerCase();
@@ -48,20 +49,12 @@ function redisKeyEmail(email: string): string {
   return `verify:email:${email}`;
 }
 
-function tokenTtlSeconds(): number {
-  const raw = process.env.VERIFY_TOKEN_TTL_SECONDS?.trim();
-  if (!raw) return 180;
-  const n = Number(raw);
-  if (!Number.isFinite(n) || n <= 0) throw httpError(500, 'VERIFY_TOKEN_TTL_SECONDS must be a positive number');
-  return Math.floor(n);
+async function tokenTtlSeconds(): Promise<number> {
+  return getConfigInt('verify_token_ttl_seconds', 180);
 }
 
-function pendingTtlSeconds(): number {
-  const raw = process.env.PENDING_REGISTER_TTL_SECONDS?.trim();
-  if (!raw) return 1800; // 30 minutes
-  const n = Number(raw);
-  if (!Number.isFinite(n) || n <= 0) throw httpError(500, 'PENDING_REGISTER_TTL_SECONDS must be a positive number');
-  return Math.floor(n);
+async function pendingTtlSeconds(): Promise<number> {
+  return getConfigInt('pending_register_ttl_seconds', 1800);
 }
 
 function nowIso(): string {
@@ -90,7 +83,7 @@ function verifyLink(token: string): string {
 }
 
 async function issueVerificationEmail(email: string, token: string, name: string | null): Promise<void> {
-  const ttl = tokenTtlSeconds();
+  const ttl = await tokenTtlSeconds();
   const link = verifyLink(token);
   const minutes = Math.max(1, Math.round(ttl / 60));
 
@@ -143,17 +136,18 @@ export async function register(input: { name: string; email: string; password: s
   };
 
   // Store pending registration (longer TTL than token).
-  await redis.set(redisKeyPending(email), JSON.stringify(pending), { EX: pendingTtlSeconds() });
+  await redis.set(redisKeyPending(email), JSON.stringify(pending), { EX: await pendingTtlSeconds() });
 
   // Issue a verification token (3 minutes) and send email.
   const token = newToken();
-  await redis.set(redisKeyToken(token), email, { EX: tokenTtlSeconds() });
-  await redis.set(redisKeyEmail(email), token, { EX: tokenTtlSeconds() });
+  const tokenTtl = await tokenTtlSeconds();
+  await redis.set(redisKeyToken(token), email, { EX: tokenTtl });
+  await redis.set(redisKeyEmail(email), token, { EX: tokenTtl });
 
   // Update pending with "sent" bookkeeping.
   pending.lastSentAt = nowIso();
   pending.resendCount = 1;
-  await redis.set(redisKeyPending(email), JSON.stringify(pending), { EX: pendingTtlSeconds() });
+  await redis.set(redisKeyPending(email), JSON.stringify(pending), { EX: await pendingTtlSeconds() });
 
   await issueVerificationEmail(email, token, name);
 
@@ -180,10 +174,7 @@ export async function login(input: { email: string; password: string; oldRefresh
   if (!secret) throw httpError(500, 'JWT secret is not configured');
 
   const jti = randomUUID();
-  const expiresIn = (
-    process.env.JWT_ACCESS_EXPIRES_IN ||
-    '15m'
-  ).trim() as jwt.SignOptions['expiresIn'];
+  const expiresIn = (await getConfig('jwt_access_expires_in')) as jwt.SignOptions['expiresIn'];
   const token = jwt.sign(
     { userId: user.id, role: user.role },
     secret,
@@ -226,10 +217,7 @@ export async function refreshAccessToken(rawRefreshToken: string): Promise<{
   if (!secret) throw httpError(500, 'JWT secret is not configured');
 
   const { payload, newRaw } = result;
-  const expiresIn = (
-    process.env.JWT_ACCESS_EXPIRES_IN ||
-    '15m'
-  ).trim() as jwt.SignOptions['expiresIn'];
+  const expiresIn = (await getConfig('jwt_access_expires_in')) as jwt.SignOptions['expiresIn'];
 
   const jti = randomUUID();
   const token = jwt.sign(
@@ -325,12 +313,13 @@ export async function resendVerification(input: { email: string }) {
   }
 
   const token = newToken();
-  await redis.set(redisKeyToken(token), email, { EX: tokenTtlSeconds() });
-  await redis.set(redisKeyEmail(email), token, { EX: tokenTtlSeconds() });
+  const tokenTtl = await tokenTtlSeconds();
+  await redis.set(redisKeyToken(token), email, { EX: tokenTtl });
+  await redis.set(redisKeyEmail(email), token, { EX: tokenTtl });
 
   pending.lastSentAt = nowIso();
   pending.resendCount = pending.resendCount + 1;
-  await redis.set(redisKeyPending(email), JSON.stringify(pending), { EX: pendingTtlSeconds() });
+  await redis.set(redisKeyPending(email), JSON.stringify(pending), { EX: await pendingTtlSeconds() });
 
   await issueVerificationEmail(email, token, pending.name);
 

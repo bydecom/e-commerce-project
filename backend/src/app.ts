@@ -15,6 +15,7 @@ import { feedbackTypeRouter } from './modules/feedback/feedback-type.route';
 import { dashboardRouter } from './modules/dashboard/dashboard.route';
 import { aiRouter } from './modules/ai/ai.route';
 import { storeSettingRoute } from './modules/store-setting/store-setting.route';
+import { systemConfigRouter } from './modules/system-config/system-config.route';
 
 import { errorMiddleware } from './middlewares/error.middleware';
 import { dbLoggerMiddleware } from './middlewares/logger.middleware';
@@ -96,6 +97,7 @@ app.use('/api/feedback-types', feedbackTypeRouter);
 app.use('/api/dashboard', dashboardRouter);
 app.use('/api/ai', aiRouter);
 app.use('/api/store-settings', storeSettingRoute);
+app.use('/api/system-config', systemConfigRouter);
 app.use('/api/system-logs', systemLogRouter);
 app.use('/api/cart', cartRouter);
 app.use('/api/payments', paymentRouter);

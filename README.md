@@ -13,7 +13,7 @@ A full-stack e-commerce monorepo: **Express + TypeScript + Prisma** on the backe
 - [Database & Prisma](#database--prisma)
 - [Docker services](#docker-services)
 - [Environment variables](#environment-variables)
-- [Verification checklist](#verification-checklist)
+- [Verification checklist](#verifVication-checklist)
 - [License](#license)
 
 ---
@@ -210,6 +210,13 @@ Copy `backend/.env.example` to `backend/.env` and adjust values. Typical keys:
 `DATABASE_URL`, `REDIS_URL`, `JWT_SECRET`, `JWT_EXPIRES_IN`, `MAIL_HOST`, `MAIL_PORT`, `GEMINI_API_KEY`, `PORT`, `CLIENT_URL`.
 
 ---
+
+## System configuration (DB-backed)
+
+Admin có thể cấu hình các thông số runtime trong bảng `SystemConfig` (API admin-only: `/api/system-config`) mà **không cần sửa `.env`**.
+
+- **Fallback**: nếu DB chưa có key, backend sẽ fallback sang `process.env` rồi tới giá trị mặc định an toàn.
+- **Seed mặc định**: chạy SQL tại `backend/prisma/migration.sql` (idempotent nhờ `ON CONFLICT DO NOTHING`).
 
 ## Verification checklist
 

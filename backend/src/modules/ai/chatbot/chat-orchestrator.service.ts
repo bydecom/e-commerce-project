@@ -19,7 +19,9 @@ import type {
   ToolResult,
 } from './chat.types';
 
-const ai = getAIProvider();
+async function getAI() {
+  return await getAIProvider();
+}
 
 function sanitizeChatTurnContext(raw: unknown): ChatTurnContext {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return {};
@@ -129,7 +131,7 @@ async function extractIntent(userMessage: string, context: ChatTurnContext): Pro
         : '';
     const userPrompt = `${userMessage}${contextBlock}`;
 
-    const parsed = (await ai.generateJson({
+    const parsed = (await (await getAI()).generateJson({
       system: EXTRACT_INTENT_SYSTEM_PROMPT,
       user: userPrompt,
       temperature: 0.1,
@@ -348,7 +350,7 @@ async function runToolsForIntent(
 
 async function generateFinalResponse(userMessage: string, tool: ToolResult): Promise<ChatBotResponse> {
   try {
-    const parsed = (await ai.generateJson({
+    const parsed = (await (await getAI()).generateJson({
       system: buildGenerateFinalResponseSystemPrompt(tool),
       user: userMessage,
       temperature: 0.2,

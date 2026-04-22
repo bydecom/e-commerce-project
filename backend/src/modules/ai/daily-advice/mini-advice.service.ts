@@ -51,7 +51,7 @@ function heuristicMiniAdvice(stats: WeeklyStatsComparison): string[] {
     );
   }
 
-  return bullets.slice(0, 3);
+  return bullets.slice(0, 6);
 }
 
 async function generateBulletsWithGemini(stats: WeeklyStatsComparison): Promise<string[]> {
@@ -62,12 +62,12 @@ async function generateBulletsWithGemini(stats: WeeklyStatsComparison): Promise<
     `Data (revenue = DONE orders only; order count = all statuses):\n` +
     `- Last 7 days: revenue ${Math.round(stats.thisWeek.revenue)} VND, total orders ${stats.thisWeek.orders}.\n` +
     `- Previous 7 days: revenue ${Math.round(stats.lastWeek.revenue)} VND, total orders ${stats.lastWeek.orders}.\n\n` +
-    `Return exactly 1–3 strings in the bullets array (each one short sentence, max ~160 characters).\n` +
+    `Return exactly 6 (IMPORTANT) strings in the bullets array (each one short sentence, max ~160 characters).\n` +
     `Describe the trend vs the prior period and one concrete action. Use English only.\n` +
     `No greetings, no headings, no markdown, no numbering inside the strings.`;
 
   const config = {
-    responseMimeType: 'application/json',
+    responseMimeType: 'application/json', 
     responseSchema: {
       type: Type.OBJECT,
       required: ['bullets'],
@@ -94,7 +94,7 @@ async function generateBulletsWithGemini(stats: WeeklyStatsComparison): Promise<
 }
 
 function normalizeBullets(b: string[]): string[] {
-  const out = b.map((s) => s.trim()).filter(Boolean).slice(0, 3);
+  const out = b.map((s) => s.trim()).filter(Boolean).slice(0, 6);
   if (out.length > 0) return out;
   return [
     'Not enough signal to analyze yet — keep monitoring revenue and orders on the dashboard.',

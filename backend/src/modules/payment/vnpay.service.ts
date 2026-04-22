@@ -1,4 +1,5 @@
 import crypto from 'crypto';
+import { getConfig } from '../system-config/system-config.service';
 
 type VnpParams = Record<string, string>;
 
@@ -66,11 +67,11 @@ export type CreateVnpayPaymentResult = {
   vnp_Params: VnpParams;
 };
 
-export function createVnpayPaymentUrl(input: CreateVnpayPaymentInput): CreateVnpayPaymentResult {
+export async function createVnpayPaymentUrl(input: CreateVnpayPaymentInput): Promise<CreateVnpayPaymentResult> {
   const vnp_TmnCode = process.env.VNP_TMN_CODE?.trim();
   const vnp_HashSecret = process.env.VNP_HASH_SECRET?.trim();
   const vnp_Url = process.env.VNP_URL?.trim();
-  const defaultReturnUrl = process.env.VNP_RETURN_URL?.trim();
+  const defaultReturnUrl = (await getConfig('vnp_return_url')).trim() || process.env.VNP_RETURN_URL?.trim();
 
   if (!vnp_TmnCode) throw new Error('VNP_TMN_CODE is not configured');
   if (!vnp_HashSecret) throw new Error('VNP_HASH_SECRET is not configured');

@@ -4,6 +4,7 @@ import { ensureRedisConnected, redisClient } from '../../config/redis';
 import { parsePagination } from '../../utils/pagination';
 import { httpError } from '../../utils/http-error';
 import * as aiService from '../ai/ai.service';
+import { getConfigInt } from '../system-config/system-config.service';
 
 function toTitleUnaccent(input: string): string {
   const n = input.normalize('NFD').replace(/\p{M}/gu, '');
@@ -32,12 +33,9 @@ function productDetailCacheKey(id: number): string {
   return `product:detail:${id}`;
 }
 
-function productDetailCacheTtlSeconds(): number {
-  const raw = (process.env.PRODUCT_DETAIL_CACHE_TTL_SECONDS || '').trim();
-  const n = raw ? parseInt(raw, 10) : NaN;
-  // Demo-friendly default: keep cache short to reflect stock changes quickly.
-  if (!Number.isFinite(n) || n <= 0) return 5;
-  return Math.min(60 * 60, n); // cap at 1 hour
+async function productDetailCacheTtlSeconds(): Promise<number> {
+  const ttl = await getConfigInt('product_cache_ttl_seconds', 5);
+  return Math.min(60 * 60, Math.max(1, Math.floor(ttl))); // cap 1h, min 1s
 }
 
 function safeParseCachedProduct(raw: string): ReturnType<typeof mapProduct> | null {
@@ -435,7 +433,7 @@ export async function getProductById(id: number) {
   const data = mapProduct(p);
 
   // Best-effort cache fill.
-  await redis.set(key, JSON.stringify(data), { EX: productDetailCacheTtlSeconds() });
+  await redis.set(key, JSON.stringify(data), { EX: await productDetailCacheTtlSeconds() });
   return data;
 }
 
