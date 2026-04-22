@@ -112,9 +112,13 @@ import {
                   @if (meta.min !== undefined || meta.max !== undefined) {
                     <p class="mt-1 text-xs text-gray-400">
                       Range:
-                      @if (meta.min !== undefined) { min {{ meta.min }} }
+                      @if (meta.unit === 'seconds') {
+                        {{ toHumanRange(meta.min, meta.max) }}
+                      } @else {
+                        @if (meta.min !== undefined) { min {{ meta.min }} }
                       @if (meta.min !== undefined && meta.max !== undefined) { – }
-                      @if (meta.max !== undefined) { max {{ meta.max }} }
+                        @if (meta.max !== undefined) { max {{ meta.max }} }
+                      }
                     </p>
                   }
                 </div>
@@ -143,11 +147,13 @@ import {
                       <input
                         [id]="meta.key"
                         [type]="showSecret[meta.key] ? 'text' : 'password'"
-                        [value]="getDraftValue(meta.key)"
+                        [value]="showSecret[meta.key] && getDraftValue(meta.key) === '__MASKED_SECRET__' ? 'Enter API key' : getDraftValue(meta.key)"
                         (input)="onInput(meta.key, $event)"
+                        (focus)="$any($event.target).select()"
                         autocomplete="off"
                         placeholder="Enter API key..."
                         class="block w-full rounded-lg border border-gray-300 bg-gray-50 px-3 py-2 pr-10 text-sm text-gray-900 placeholder-gray-400 focus:border-gray-900 focus:bg-white focus:outline-none focus:ring-1 focus:ring-gray-900"
+                        [readonly]="showSecret[meta.key] && getDraftValue(meta.key) === '__MASKED_SECRET__'"
                       />
                       <button
                         type="button"
@@ -169,6 +175,37 @@ import {
                         }
                       </button>
                     </div>
+                  } @else if (meta.type === 'number') {
+                    <input
+                      [id]="meta.key"
+                      type="number"
+                      [value]="getDraftValue(meta.key)"
+                      (input)="onInput(meta.key, $event)"
+                      placeholder="Enter a number"
+                      class="block w-full rounded-lg border border-gray-300 bg-gray-50 px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:border-gray-900 focus:bg-white focus:outline-none focus:ring-1 focus:ring-gray-900"
+                      [ngClass]="validationErrors[meta.key] ? 'border-red-400 focus:ring-red-400' : ''"
+                    />
+                    @if (meta.unit === 'seconds' && getDraftValue(meta.key)) {
+                      <p class="mt-1 text-xs text-blue-500">≈ {{ toHumanReadable(+getDraftValue(meta.key)) }}</p>
+                    }
+                    @if (validationErrors[meta.key]) {
+                      <p class="mt-1 text-xs text-red-600">{{ validationErrors[meta.key] }}</p>
+                    }
+                  } @else if (meta.type === 'duration') {
+                    <input
+                      [id]="meta.key"
+                      type="text"
+                      [value]="getDraftValue(meta.key)"
+                      (input)="onInput(meta.key, $event)"
+                      (blur)="onDurationBlur(meta.key, $event)"
+                      placeholder="e.g. 14m, 1h, 30m"
+                      class="block w-full rounded-lg border border-gray-300 bg-gray-50 px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:border-gray-900 focus:bg-white focus:outline-none focus:ring-1 focus:ring-gray-900"
+                      [ngClass]="validationErrors[meta.key] ? 'border-red-400 focus:ring-red-400' : ''"
+                    />
+                    <p class="mt-1 text-xs text-gray-400">Supported: s, m, h (single unit, e.g. 14m)</p>
+                    @if (validationErrors[meta.key]) {
+                      <p class="mt-1 text-xs text-red-600">{{ validationErrors[meta.key] }}</p>
+                    }
                   } @else {
                     <input
                       [id]="meta.key"
@@ -214,12 +251,12 @@ export class AdminSystemConfigComponent implements OnInit {
 
   readonly activeGroupConfigs = computed(() => CONFIG_META_FE.filter((m) => m.group === this.activeGroup()));
 
-  readonly isDirty = computed(() => {
+  isDirty(): boolean {
     for (const [key, val] of this.draft) {
       if (this.original.get(key) !== val) return true;
     }
     return false;
-  });
+  }
 
   ngOnInit(): void {
     this.load();
@@ -257,6 +294,14 @@ export class AdminSystemConfigComponent implements OnInit {
     const value = (event.target as HTMLInputElement).value;
     this.draft.set(key, value);
     delete this.validationErrors[key];
+  }
+
+  onDurationBlur(key: string, event: Event): void {
+    const raw = (event.target as HTMLInputElement).value;
+    const normalized = this.normalizeDuration(raw);
+    if (normalized !== raw) {
+      this.draft.set(key, normalized);
+    }
   }
 
   toggleBool(key: string): void {
@@ -304,7 +349,7 @@ export class AdminSystemConfigComponent implements OnInit {
 
   getPlaceholder(meta: SystemConfigMeta): string {
     const map: Record<string, string> = {
-      duration: 'e.g. 14m, 1h',
+      duration: 'e.g. 14m, 1h, 30m',
       number: 'Enter a number',
       url: 'https://...',
       text: 'Enter value',
@@ -312,6 +357,46 @@ export class AdminSystemConfigComponent implements OnInit {
       boolean: '',
     };
     return map[meta.type] ?? '';
+  }
+
+  toHumanReadable(seconds: number): string {
+    if (!Number.isFinite(seconds) || seconds <= 0) return '';
+
+    const units: Array<{ name: 'day' | 'hour' | 'minute'; seconds: number }> = [
+      { name: 'day', seconds: 86_400 },
+      { name: 'hour', seconds: 3_600 },
+      { name: 'minute', seconds: 60 },
+    ];
+
+    const format1dp = (n: number) => {
+      const r = Math.round(n * 10) / 10;
+      return Number.isInteger(r) ? String(r) : r.toFixed(1);
+    };
+
+    for (const u of units) {
+      if (seconds >= u.seconds) {
+        const n = seconds / u.seconds;
+        const text = format1dp(n);
+        return `${text} ${u.name}${text === '1' ? '' : 's'}`;
+      }
+    }
+
+    return `${seconds} second${seconds === 1 ? '' : 's'}`;
+  }
+
+  toHumanRange(min?: number, max?: number): string {
+    const a = min !== undefined ? this.toHumanReadable(min) : '';
+    const b = max !== undefined ? this.toHumanReadable(max) : '';
+    if (a && b) return `${a} – ${b}`;
+    if (a) return `min ${a}`;
+    if (b) return `max ${b}`;
+    return '';
+  }
+
+  private normalizeDuration(value: string): string {
+    const v = value.trim();
+    if (/^\d+$/.test(v)) return `${v}s`;
+    return v;
   }
 }
 

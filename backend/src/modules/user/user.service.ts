@@ -2,20 +2,6 @@ import type { Role } from '@prisma/client';
 import { prisma } from '../../db';
 import { httpError } from '../../utils/http-error';
 
-const userListSelect = {
-  id: true,
-  email: true,
-  name: true,
-  phone: true,
-  provinceId: true,
-  districtId: true,
-  wardId: true,
-  streetAddress: true,
-  fullAddress: true,
-  role: true,
-  createdAt: true,
-} as const;
-
 const userMeSelect = {
   id: true,
   email: true,
@@ -30,20 +16,22 @@ const userMeSelect = {
   createdAt: true,
 } as const;
 
-export async function listUsers(params: { page: number; limit: number; search?: string }) {
+export async function listUsers(params: { page: number; limit: number; search?: string; role?: Role }) {
   const page = Math.max(1, params.page);
   const limit = Math.min(100, Math.max(1, params.limit));
   const skip = (page - 1) * limit;
   const q = params.search?.trim();
-  const where =
-    q && q.length > 0
+  const where = {
+    ...(q && q.length > 0
       ? {
           OR: [
             { email: { contains: q, mode: 'insensitive' as const } },
             { name: { contains: q, mode: 'insensitive' as const } },
           ],
         }
-      : {};
+      : {}),
+    ...(params.role ? { role: params.role } : {}),
+  };
 
   const [total, rows] = await Promise.all([
     prisma.user.count({ where }),
@@ -51,13 +39,36 @@ export async function listUsers(params: { page: number; limit: number; search?: 
       where,
       skip,
       take: limit,
-      orderBy: { createdAt: 'desc' },
-      select: userListSelect,
+      orderBy: [{ role: 'desc' }, { createdAt: 'desc' }],
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        phone: true,
+        role: true,
+        createdAt: true,
+        _count: { select: { orders: true } },
+        orders: {
+          where: { paymentStatus: 'PAID' },
+          select: { total: true, createdAt: true },
+          orderBy: { createdAt: 'desc' },
+        },
+      },
     }),
   ]);
 
   return {
-    data: rows,
+    data: rows.map((u) => ({
+      id: u.id,
+      email: u.email,
+      name: u.name,
+      phone: u.phone,
+      role: u.role,
+      createdAt: u.createdAt,
+      orderCount: u._count.orders,
+      totalSpent: u.orders.reduce((sum, o) => sum + o.total, 0),
+      lastOrderAt: u.orders[0]?.createdAt ?? null,
+    })),
     meta: {
       page,
       limit,
@@ -65,30 +76,6 @@ export async function listUsers(params: { page: number; limit: number; search?: 
       totalPages: Math.max(1, Math.ceil(total / limit)),
     },
   };
-}
-
-export async function updateUserRole(targetId: number, newRole: Role) {
-  if (newRole !== 'USER' && newRole !== 'ADMIN') {
-    throw httpError(400, 'Invalid role');
-  }
-
-  const target = await prisma.user.findUnique({ where: { id: targetId } });
-  if (!target) {
-    throw httpError(404, 'User not found');
-  }
-
-  if (target.role === 'ADMIN' && newRole === 'USER') {
-    const adminCount = await prisma.user.count({ where: { role: 'ADMIN' } });
-    if (adminCount <= 1) {
-      throw httpError(409, 'Cannot remove the last administrator');
-    }
-  }
-
-  return prisma.user.update({
-    where: { id: targetId },
-    data: { role: newRole },
-    select: userListSelect,
-  });
 }
 
 export async function getMe(userId: number) {

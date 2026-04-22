@@ -174,7 +174,8 @@ export async function login(input: { email: string; password: string; oldRefresh
   if (!secret) throw httpError(500, 'JWT secret is not configured');
 
   const jti = randomUUID();
-  const expiresIn = (await getConfig('jwt_access_expires_in')) as jwt.SignOptions['expiresIn'];
+  const rawExpiresIn = (await getConfig('jwt_access_expires_in')).trim();
+  const expiresIn = (/^\d+$/.test(rawExpiresIn) ? parseInt(rawExpiresIn, 10) : rawExpiresIn) as jwt.SignOptions['expiresIn'];
   const token = jwt.sign(
     { userId: user.id, role: user.role },
     secret,
@@ -217,7 +218,8 @@ export async function refreshAccessToken(rawRefreshToken: string): Promise<{
   if (!secret) throw httpError(500, 'JWT secret is not configured');
 
   const { payload, newRaw } = result;
-  const expiresIn = (await getConfig('jwt_access_expires_in')) as jwt.SignOptions['expiresIn'];
+  const rawExpiresIn = (await getConfig('jwt_access_expires_in')).trim();
+  const expiresIn = (/^\d+$/.test(rawExpiresIn) ? parseInt(rawExpiresIn, 10) : rawExpiresIn) as jwt.SignOptions['expiresIn'];
 
   const jti = randomUUID();
   const token = jwt.sign(

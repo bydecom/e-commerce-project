@@ -41,7 +41,7 @@ async function main() {
 
   // ── 2. SYSTEM CONFIG (skip duplicates) ─────────────────────────────────────
   const systemConfigs = [
-    { key: 'jwt_access_expires_in', value: '14m', description: 'Access token lifetime (e.g. 14m, 1h)' },
+    { key: 'jwt_access_expires_in', value: '840', description: 'Access token lifetime (seconds)' },
     { key: 'refresh_token_ttl_seconds', value: '900', description: 'Refresh token lifetime in seconds' },
     { key: 'verify_token_ttl_seconds', value: '180', description: 'Email verification link lifetime in seconds' },
     { key: 'pending_register_ttl_seconds', value: '1800', description: 'Pending registration cleanup TTL in seconds' },

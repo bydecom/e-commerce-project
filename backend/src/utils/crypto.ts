@@ -1,6 +1,6 @@
 import crypto from 'crypto';
 
-const ENCRYPTION_KEY = process.env.APP_ENCRYPTION_KEY;
+const ENCRYPTION_KEY = process.env.APP_ENCRYPTION_KEY as string;
 const ALGORITHM = 'aes-256-gcm';
 const ENCRYPTED_PREFIX = 'enc:v1:';
 
@@ -41,4 +41,3 @@ export function decryptValue(text: string): string {
     throw new Error('CRITICAL: Decryption failed. The APP_ENCRYPTION_KEY might have been changed or data is corrupted.');
   }
 }
-

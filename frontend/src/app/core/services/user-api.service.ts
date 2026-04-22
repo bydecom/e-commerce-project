@@ -51,12 +51,16 @@ export class UserApiService {
   getUsers(
     page = 1,
     limit = 20,
-    search?: string
+    search?: string,
+    role?: Role
   ): Observable<{ data: User[]; meta: PaginationMeta }> {
     let params = new HttpParams().set('page', String(page)).set('limit', String(limit));
     const q = search?.trim();
     if (q) {
       params = params.set('search', q);
+    }
+    if (role) {
+      params = params.set('role', role);
     }
     return this.http.get<ApiSuccess<User[]>>(this.baseUrl, { params }).pipe(
       map((r) => {
@@ -64,18 +68,6 @@ export class UserApiService {
           throw new Error(r.message);
         }
         return { data: r.data, meta: r.meta };
-      }),
-      catchError(mapHttpError)
-    );
-  }
-
-  updateRole(id: number, role: Role): Observable<User> {
-    return this.http.patch<ApiSuccess<User>>(`${this.baseUrl}/${id}/role`, { role }).pipe(
-      map((r) => {
-        if (!r.success) {
-          throw new Error(r.message);
-        }
-        return r.data;
       }),
       catchError(mapHttpError)
     );

@@ -13,4 +13,8 @@ export interface User {
   role: Role;
   /** ISO string from API when backend exposes `createdAt` */
   createdAt?: string;
+  // Admin list stats (may be omitted in other endpoints)
+  orderCount?: number;
+  totalSpent?: number;
+  lastOrderAt?: string | null;
 }

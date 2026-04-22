@@ -1,4 +1,4 @@
-import { DatePipe } from '@angular/common';
+import { CommonModule, DatePipe } from '@angular/common';
 import { Component, OnInit, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { UserApiService } from '../../../core/services/user-api.service';
@@ -8,7 +8,7 @@ import type { Role, User } from '../../../shared/models/user.model';
 @Component({
   selector: 'app-admin-user-list',
   standalone: true,
-  imports: [FormsModule, DatePipe],
+  imports: [CommonModule, FormsModule, DatePipe],
   template: `
     <div class="mx-auto w-full max-w-6xl pb-10">
       <div class="flex flex-col gap-4 border-b border-gray-200 pb-5 sm:flex-row sm:items-center sm:justify-between">
@@ -38,6 +38,15 @@ import type { Role, User } from '../../../shared/models/user.model';
               placeholder="Search by name or email..."
             />
           </div>
+          <select
+            [(ngModel)]="roleFilter"
+            (change)="search()"
+            class="rounded-lg border-0 py-2 pl-3 pr-8 text-sm ring-1 ring-gray-300"
+          >
+            <option value="">All roles</option>
+            <option value="USER">USER</option>
+            <option value="ADMIN">ADMIN</option>
+          </select>
           <button
             type="button"
             (click)="search()"
@@ -59,8 +68,10 @@ import type { Role, User } from '../../../shared/models/user.model';
               <tr>
                 <th class="px-6 py-4 font-semibold text-gray-700">Account</th>
                 <th class="px-6 py-4 font-semibold text-gray-700">Role</th>
+                <th class="px-6 py-4 font-semibold text-gray-700">Orders</th>
+                <th class="px-6 py-4 font-semibold text-gray-700">Total Spent</th>
+                <th class="px-6 py-4 font-semibold text-gray-700">Last Order</th>
                 <th class="px-6 py-4 font-semibold text-gray-700">Joined</th>
-                <th class="px-6 py-4 text-right font-semibold text-gray-700">Actions</th>
               </tr>
             </thead>
             <tbody class="divide-y divide-gray-100">
@@ -91,6 +102,13 @@ import type { Role, User } from '../../../shared/models/user.model';
                       {{ user.role }}
                     </span>
                   </td>
+                  <td class="px-6 py-4 text-gray-600">{{ user.orderCount }}</td>
+                  <td class="px-6 py-4 text-gray-600">
+                    {{ user.totalSpent | currency: 'VND':'symbol':'1.0-0' }}
+                  </td>
+                  <td class="px-6 py-4 text-gray-600">
+                    {{ user.lastOrderAt ? (user.lastOrderAt | date: 'mediumDate') : '—' }}
+                  </td>
                   <td class="px-6 py-4 text-gray-600">
                     @if (user.createdAt) {
                       {{ user.createdAt | date: 'mediumDate' }}
@@ -98,26 +116,36 @@ import type { Role, User } from '../../../shared/models/user.model';
                       —
                     }
                   </td>
-                  <td class="px-6 py-4 text-right">
-                    <select
-                      class="inline-block rounded-md border-0 py-1.5 pl-2 pr-8 text-sm text-gray-900 ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-inset focus:ring-indigo-600 disabled:opacity-50"
-                      [value]="user.role"
-                      (change)="onRoleChange(user, $event)"
-                      [disabled]="roleUpdatingId() === user.id"
-                      [attr.aria-label]="'Change role for ' + user.email"
-                    >
-                      <option value="USER">USER</option>
-                      <option value="ADMIN">ADMIN</option>
-                    </select>
-                  </td>
                 </tr>
               } @empty {
                 <tr>
-                  <td colspan="4" class="px-6 py-12 text-center text-gray-500">No users found.</td>
+                  <td colspan="6" class="px-6 py-12 text-center text-gray-500">No users found.</td>
                 </tr>
               }
             </tbody>
           </table>
+          @if (meta()) {
+            <div class="flex items-center justify-between border-t border-gray-100 px-6 py-4">
+              <p class="text-sm text-gray-500">{{ meta()!.total }} users total</p>
+              <div class="flex gap-2">
+                <button
+                  (click)="goToPage(currentPage() - 1)"
+                  [disabled]="currentPage() === 1"
+                  class="rounded border px-3 py-1 text-sm disabled:opacity-40"
+                >
+                  Previous
+                </button>
+                <span class="px-3 py-1 text-sm">Page {{ currentPage() }} / {{ meta()!.totalPages }}</span>
+                <button
+                  (click)="goToPage(currentPage() + 1)"
+                  [disabled]="currentPage() >= meta()!.totalPages"
+                  class="rounded border px-3 py-1 text-sm disabled:opacity-40"
+                >
+                  Next
+                </button>
+              </div>
+            </div>
+          }
         </div>
       }
     </div>
@@ -129,23 +157,29 @@ export class AdminUserListComponent implements OnInit {
 
   readonly users = signal<User[]>([]);
   readonly loading = signal(true);
-  readonly roleUpdatingId = signal<number | null>(null);
+  readonly meta = signal<{ page: number; limit: number; total: number; totalPages: number } | null>(null);
+  readonly currentPage = signal(1);
 
   searchQuery = '';
+  roleFilter: '' | Role = '';
 
   ngOnInit(): void {
     this.loadUsers();
   }
 
   search(): void {
+    this.currentPage.set(1);
     this.loadUsers();
   }
 
   loadUsers(): void {
     this.loading.set(true);
-    this.api.getUsers(1, 50, this.searchQuery || undefined).subscribe({
-      next: ({ data }) => {
+    this.api
+      .getUsers(this.currentPage(), 20, this.searchQuery || undefined, this.roleFilter || undefined)
+      .subscribe({
+      next: ({ data, meta }) => {
         this.users.set(data);
+        this.meta.set(meta);
         this.loading.set(false);
       },
       error: () => {
@@ -155,23 +189,12 @@ export class AdminUserListComponent implements OnInit {
     });
   }
 
-  onRoleChange(user: User, ev: Event): void {
-    const sel = ev.target as HTMLSelectElement;
-    const role = sel.value as Role;
-    if (role === user.role) return;
-
-    this.roleUpdatingId.set(user.id);
-    this.api.updateRole(user.id, role).subscribe({
-      next: (updated) => {
-        this.users.update((list) => list.map((u) => (u.id === updated.id ? { ...u, ...updated } : u)));
-        this.roleUpdatingId.set(null);
-        this.toast.show('Role updated', 'success');
-      },
-      error: (e: Error) => {
-        sel.value = user.role;
-        this.toast.show(e.message || 'Failed to update role', 'error');
-        this.roleUpdatingId.set(null);
-      },
-    });
+  goToPage(page: number): void {
+    const m = this.meta();
+    const totalPages = m?.totalPages ?? 1;
+    const next = Math.max(1, Math.min(totalPages, page));
+    if (next === this.currentPage()) return;
+    this.currentPage.set(next);
+    this.loadUsers();
   }
 }

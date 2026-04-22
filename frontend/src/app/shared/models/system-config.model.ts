@@ -15,6 +15,7 @@ export interface SystemConfigMeta {
   group: ConfigGroup;
   min?: number;
   max?: number;
+  unit?: 'seconds' | 'ms';
 }
 
 export const CONFIG_META_FE: SystemConfigMeta[] = [
@@ -22,8 +23,11 @@ export const CONFIG_META_FE: SystemConfigMeta[] = [
   {
     key: 'jwt_access_expires_in',
     label: 'Access Token Lifetime',
-    description: 'How long the JWT access token is valid (e.g. 14m, 1h). Shorter = more secure.',
-    type: 'duration',
+    description: 'How long the JWT access token is valid (seconds). Shorter = more secure.',
+    type: 'number',
+    min: 60,
+    max: 86_400,
+    unit: 'seconds',
     group: 'auth',
   },
   {
@@ -33,6 +37,7 @@ export const CONFIG_META_FE: SystemConfigMeta[] = [
     type: 'number',
     min: 60,
     max: 2_592_000,
+    unit: 'seconds',
     group: 'auth',
   },
   {
@@ -42,6 +47,7 @@ export const CONFIG_META_FE: SystemConfigMeta[] = [
     type: 'number',
     min: 60,
     max: 86_400,
+    unit: 'seconds',
     group: 'auth',
   },
   {
@@ -51,6 +57,7 @@ export const CONFIG_META_FE: SystemConfigMeta[] = [
     type: 'number',
     min: 300,
     max: 86_400,
+    unit: 'seconds',
     group: 'auth',
   },
 
@@ -62,6 +69,7 @@ export const CONFIG_META_FE: SystemConfigMeta[] = [
     type: 'number',
     min: 1,
     max: 3_600,
+    unit: 'seconds',
     group: 'cache',
   },
   {
@@ -71,6 +79,7 @@ export const CONFIG_META_FE: SystemConfigMeta[] = [
     type: 'number',
     min: 60,
     max: 3_600,
+    unit: 'seconds',
     group: 'cache',
   },
 

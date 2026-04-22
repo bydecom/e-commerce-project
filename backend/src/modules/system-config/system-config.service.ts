@@ -33,8 +33,8 @@ type ConfigMeta = {
 export const CONFIG_META: Record<ConfigKey, ConfigMeta> = {
   jwt_access_expires_in: {
     label: 'Access Token Lifetime',
-    description: 'How long the JWT access token stays valid (e.g. 14m, 1h, 30m).',
-    validate: (v) => (/^\d+[smh]$/.test(v.trim()) ? null : 'Must be a duration like 14m, 1h, 30m'),
+    description: 'How long the JWT access token stays valid (seconds).',
+    validate: (v) => validateIntRange(v, 60, 86_400, 'Must be at most 86400 seconds (24 hours)'),
   },
   refresh_token_ttl_seconds: {
     label: 'Refresh Token Lifetime (seconds)',
@@ -290,7 +290,7 @@ function validateIntRange(v: string, min: number, max: number, maxMsg: string): 
 
 function getEnvFallback(key: ConfigKey): string {
   const map: Record<ConfigKey, string> = {
-    jwt_access_expires_in: process.env.JWT_ACCESS_EXPIRES_IN || '14m',
+    jwt_access_expires_in: process.env.JWT_ACCESS_EXPIRES_IN || '840',
     refresh_token_ttl_seconds: process.env.REFRESH_TOKEN_TTL_SECONDS || '900',
     verify_token_ttl_seconds: process.env.VERIFY_TOKEN_TTL_SECONDS || '180',
     pending_register_ttl_seconds: process.env.PENDING_REGISTER_TTL_SECONDS || '1800',
