@@ -4,6 +4,14 @@ import * as orderService from '../order/order.service';
 
 export type ReservationItem = { productId: number; quantity: number };
 
+export type ReservationFailureReason = 'OUT_OF_STOCK' | 'TEMPORARILY_HELD';
+export type ReservationFailureItem = {
+  productId: number;
+  requestedQuantity: number;
+  availableStock: number;
+  holdTtlSeconds?: number;
+};
+
 type ReserveInput = {
   txnRef: string;
   items: ReservationItem[];
@@ -73,7 +81,9 @@ for i = 1, productCount do
   end
   local current = tonumber(redis.call('GET', counterKey) or '0')
   if current + qty > dbStock then
-    return 0
+    -- Return detail so API can show better UX:
+    -- { 0, failingIndex(1-based), currentHoldQty, dbStockSnapshot, requestedQty }
+    return { 0, i, current, dbStock, qty }
   end
 end
 
@@ -182,9 +192,47 @@ export async function reserveStockOrThrow(input: ReserveInput): Promise<void> {
   }
 
   const result = await redis.eval(RESERVE_LUA, { keys, arguments: args });
-  if (result !== 1) {
-    throw httpError(422, 'Insufficient stock');
+  if (result === 1) return;
+
+  // Node-redis may return either a number or an array for Lua multi-bulk replies.
+  const failure = Array.isArray(result) ? result : null;
+  if (!failure || failure.length < 5) {
+    throw httpError(422, 'Insufficient stock', {
+      reason: 'OUT_OF_STOCK' satisfies ReservationFailureReason,
+      items: items.map((it) => ({
+        productId: it.productId,
+        requestedQuantity: it.quantity,
+        availableStock: Math.max(0, input.stockByProductId.get(it.productId) ?? 0),
+      })) satisfies ReservationFailureItem[],
+    });
   }
+
+  const failingIndex = Math.floor(Number(failure[1]));
+  const currentHoldQty = Math.max(0, Math.floor(Number(failure[2])));
+  const dbStockSnapshot = Math.max(0, Math.floor(Number(failure[3])));
+  const requestedQty = Math.max(0, Math.floor(Number(failure[4])));
+
+  const it = items[Math.max(0, failingIndex - 1)];
+  const productId = it?.productId ?? items[0]?.productId ?? 0;
+  const availableStock = Math.max(0, dbStockSnapshot - currentHoldQty);
+
+  const reason: ReservationFailureReason =
+    availableStock <= 0 && dbStockSnapshot > 0 && currentHoldQty > 0 ? 'TEMPORARILY_HELD' : 'OUT_OF_STOCK';
+
+  const status = reason === 'TEMPORARILY_HELD' ? 409 : 422;
+  const holdTtlSeconds = Math.max(0, Math.ceil((expiresAtMs - nowMs) / 1000));
+
+  throw httpError(status, 'Insufficient stock', {
+    reason,
+    items: [
+      {
+        productId,
+        requestedQuantity: requestedQty || it?.quantity || 0,
+        availableStock,
+        ...(reason === 'TEMPORARILY_HELD' ? { holdTtlSeconds } : null),
+      },
+    ] satisfies ReservationFailureItem[],
+  });
 }
 
 export async function attachReservationOrderIdBestEffort(txnRef: string, orderId: number): Promise<void> {

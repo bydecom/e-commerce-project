@@ -1,4 +1,4 @@
-import { Component, OnDestroy, OnInit, inject, signal } from '@angular/core';
+import { Component, OnDestroy, OnInit, computed, inject, signal } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { RouterLink } from '@angular/router';
 import { Subject, Subscription, catchError, debounceTime, map, of, switchMap, tap } from 'rxjs';
@@ -6,6 +6,8 @@ import { CurrencyVndPipe } from '../../shared/pipes/currency-vnd.pipe';
 import { environment } from '../../../environments/environment';
 import type { ApiSuccess } from '../../shared/models/api-response.model';
 import { ServerCartService } from '../../core/services/server-cart.service';
+import { CheckoutBlockService, type CheckoutBlock } from '../../core/services/checkout-block.service';
+import { CheckoutModalService } from '../../core/services/checkout-modal.service';
 
 type CartLinePriced = {
   productId: number;
@@ -154,12 +156,12 @@ type CartPricingData = {
                             </button>
                           </div>
 
-                          @if (lineErrors()[line.productId]) {
+                          @if ((lineErrors()[line.productId] ?? checkoutBlockLineErrors()[line.productId]) !== undefined) {
                             <p class="flex items-center gap-1 text-xs font-medium text-amber-600">
                               <svg class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
                               </svg>
-                              {{ lineErrors()[line.productId] }}
+                              {{ lineErrors()[line.productId] ?? checkoutBlockLineErrors()[line.productId] }}
                             </p>
                           }
                         </div>
@@ -192,13 +194,23 @@ type CartPricingData = {
                   </div>
                 </dl>
 
+                @if (checkoutBlockState()) {
+                  <div class="mt-6 rounded-sm border-l-4 border-amber-500 bg-amber-50 p-4 text-sm text-amber-800">
+                    <p class="font-medium">Checkout unavailable</p>
+                    <p class="mt-1 text-amber-700">
+                      Some items are out of stock.
+                    </p>
+                  </div>
+                }
+
                 <div class="mt-8">
-                  <a
-                    routerLink="/checkout"
-                    class="block w-full rounded-sm bg-gray-900 px-4 py-3 text-center text-base font-bold text-white shadow-sm transition-colors hover:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-gray-900 focus:ring-offset-2 focus:ring-offset-gray-50 disabled:cursor-not-allowed disabled:bg-gray-300 disabled:text-gray-500"
+                  <button
+                    type="button"
+                    (click)="openCheckoutModal()"
+                    class="block w-full rounded-sm bg-gray-900 px-4 py-3 text-center text-base font-bold text-white shadow-sm transition-colors hover:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-gray-900 focus:ring-offset-2 focus:ring-offset-gray-50"
                   >
                     Proceed to checkout
-                  </a>
+                  </button>
                 </div>
 
                 <div class="mt-4 text-center">
@@ -222,6 +234,8 @@ type CartPricingData = {
 export class CartComponent implements OnInit, OnDestroy {
   private readonly http = inject(HttpClient);
   private readonly serverCart = inject(ServerCartService);
+  private readonly checkoutBlock = inject(CheckoutBlockService);
+  private readonly checkoutModal = inject(CheckoutModalService);
 
   readonly loading = signal(true);
   readonly error = signal<string | null>(null);
@@ -231,11 +245,24 @@ export class CartComponent implements OnInit, OnDestroy {
 
   readonly knownMaxStocks = signal<Record<number, number | undefined>>({});
 
+  readonly checkoutBlockLineErrors = computed<Record<number, string | undefined>>(() => {
+    const block = this.checkoutBlock.block();
+    if (!block) return {};
+    const m: Record<number, string | undefined> = {};
+    for (const it of block.items) {
+      const productId = Math.floor(Number(it.productId));
+      if (!Number.isFinite(productId) || productId < 1) continue;
+      m[productId] = 'Out of stock.';
+    }
+    return m;
+  });
+
   private readonly qtyChanges$ = new Subject<{ productId: number; name: string; quantity: number }>();
   private readonly sub = new Subscription();
 
   ngOnInit(): void {
     this.loadPricing();
+    this.applyCheckoutBlockHints();
 
     this.sub.add(
       this.serverCart.cartUpdated$.subscribe(() => {
@@ -298,6 +325,14 @@ export class CartComponent implements OnInit, OnDestroy {
         )
         .subscribe()
     );
+  }
+
+  checkoutBlockState(): CheckoutBlock | null {
+    return this.checkoutBlock.block();
+  }
+
+  openCheckoutModal(): void {
+    this.checkoutModal.openConfirm();
   }
 
   ngOnDestroy(): void {
@@ -415,5 +450,31 @@ export class CartComponent implements OnInit, OnDestroy {
     this.serverCart.refresh({ silent: true }).subscribe();
     this.loading.set(false);
     this.error.set(null);
+  }
+
+  private applyCheckoutBlockHints(): void {
+    const block = this.checkoutBlock.block();
+    if (!block) return;
+
+    const nextLineErrors: Record<number, string | undefined> = { ...this.lineErrors() };
+    const nextKnownMax: Record<number, number | undefined> = { ...this.knownMaxStocks() };
+
+    for (const it of block.items) {
+      const productId = Math.floor(Number(it.productId));
+      const availableStock = Math.max(0, Math.floor(Number(it.availableStock)));
+      if (!Number.isFinite(productId) || productId < 1) continue;
+
+      if (block.reason === 'TEMPORARILY_HELD') {
+        nextLineErrors[productId] = 'Out of stock.';
+      } else {
+        nextLineErrors[productId] = 'Out of stock.';
+      }
+
+      // Clamp quantity increase to what backend says is currently available.
+      nextKnownMax[productId] = availableStock;
+    }
+
+    this.lineErrors.set(nextLineErrors);
+    this.knownMaxStocks.set(nextKnownMax);
   }
 }

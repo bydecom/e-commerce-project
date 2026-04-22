@@ -78,10 +78,13 @@ export class LoginComponent implements OnInit {
   errorMessage = '';
   bannerSuccess = '';
   bannerError = '';
+  private returnUrl: string | null = null;
 
   ngOnInit(): void {
     const verified = this.route.snapshot.queryParamMap.get('verified');
     const reason = this.route.snapshot.queryParamMap.get('reason');
+    const returnUrl = this.route.snapshot.queryParamMap.get('returnUrl');
+    this.returnUrl = this.sanitizeReturnUrl(returnUrl);
     if (verified === '1') {
       this.bannerSuccess = 'Email verified. You can sign in now.';
     } else if (verified === '0') {
@@ -90,8 +93,12 @@ export class LoginComponent implements OnInit {
           ? 'That verification link is invalid or has expired. Register again or resend from the register page.'
           : 'Email verification did not complete. Try again or request a new link.';
     }
+    if (!this.bannerSuccess && !this.bannerError && reason === 'session_expired') {
+      this.bannerError = 'Your session has expired. Please sign in again.';
+    }
     if (verified !== null && isPlatformBrowser(this.platformId)) {
-      this.location.replaceState('/login');
+      const keepReturnUrl = this.returnUrl ? `?returnUrl=${encodeURIComponent(this.returnUrl)}` : '';
+      this.location.replaceState(`/login${keepReturnUrl}`);
     }
   }
 
@@ -113,13 +120,23 @@ export class LoginComponent implements OnInit {
     this.auth.login(email, password).subscribe({
       next: () => {
         this.loading = false;
-        this.router.navigate(['/']);
+        const target = this.returnUrl || '/';
+        void this.router.navigateByUrl(target);
       },
       error: (err: unknown) => {
         this.loading = false;
         this.errorMessage = this.extractErrorMessage(err);
       },
     });
+  }
+
+  private sanitizeReturnUrl(raw: string | null): string | null {
+    if (!raw) return null;
+    const v = raw.trim();
+    if (!v.startsWith('/')) return null;
+    if (v.startsWith('//')) return null;
+    if (v === '/login') return null;
+    return v;
   }
 
   private extractErrorMessage(err: unknown): string {

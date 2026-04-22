@@ -572,27 +572,17 @@ export async function updateProduct(
 }
 
 export async function deleteProduct(id: number) {
+  await prisma.product.delete({ where: { id } });
+
+  // Delete vector DB in Qdrant
+  aiService.deleteProductVector(id).catch((err) => console.warn('[Qdrant] Delete on product delete failed:', err));
+
+  // Best-effort cache invalidation.
   try {
-    await prisma.product.delete({ where: { id } });
-
-    // Delete vector DB in Qdrant
-    aiService.deleteProductVector(id).catch((err) => console.warn('[Qdrant] Delete on product delete failed:', err));
-
-    // Best-effort cache invalidation.
-    try {
-      await ensureRedisConnected();
-      await redisClient().del(productDetailCacheKey(id));
-    } catch {
-      // ignore
-    }
-  } catch (e) {
-    if (e instanceof Prisma.PrismaClientKnownRequestError) {
-      if (e.code === 'P2025') throw httpError(404, 'Product not found');
-      if (e.code === 'P2003' || e.code === 'P2014') {
-        throw httpError(409, 'Cannot delete product referenced by orders');
-      }
-    }
-    throw e;
+    await ensureRedisConnected();
+    await redisClient().del(productDetailCacheKey(id));
+  } catch {
+    // ignore
   }
 }
 

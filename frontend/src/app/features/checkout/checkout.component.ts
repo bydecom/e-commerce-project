@@ -2,9 +2,10 @@ import { HttpClient } from '@angular/common/http';
 import { NgClass } from '@angular/common';
 import { Component, OnInit, inject, signal } from '@angular/core';
 import { Router, RouterLink } from '@angular/router';
-import { catchError, map, of, tap } from 'rxjs';
+import { catchError, map, of, switchMap, tap } from 'rxjs';
 import { environment } from '../../../environments/environment';
 import { AuthService } from '../../core/services/auth.service';
+import { CheckoutSessionService } from '../../core/services/checkout-session.service';
 import { ServerCartService } from '../../core/services/server-cart.service';
 import { ToastService } from '../../core/services/toast.service';
 import { UserApiService } from '../../core/services/user-api.service';
@@ -243,6 +244,7 @@ export class CheckoutComponent implements OnInit {
   private readonly users = inject(UserApiService);
   private readonly toast = inject(ToastService);
   private readonly serverCart = inject(ServerCartService);
+  private readonly checkoutSession = inject(CheckoutSessionService);
 
   readonly loading = signal(true);
   readonly paying = signal(false);
@@ -252,18 +254,20 @@ export class CheckoutComponent implements OnInit {
   readonly user = signal<User | null>(null);
 
   shippingAddress = '';
-  private pendingTxnRef: string | null = null;
+  private txnRef: string | null = null;
+  private orderId: number | null = null;
 
   private cache: CacheEntry | null = null;
   private readonly CACHE_TTL_MS = 30_000;
 
   ngOnInit(): void {
-    // Restore pending txnRef across refresh (best-effort).
-    try {
-      const saved = sessionStorage.getItem('pendingCheckoutTxnRef');
-      this.pendingTxnRef = saved && saved.trim() ? saved.trim() : null;
-    } catch {
-      this.pendingTxnRef = null;
+    const s = this.checkoutSession.session();
+    this.txnRef = s?.txnRef ?? null;
+    this.orderId = this.readOrderIdBestEffort();
+    if (!this.txnRef) {
+      this.toast.show('Checkout session expired. Please try again.', 'error');
+      void this.router.navigateByUrl('/cart');
+      return;
     }
     this.load();
   }
@@ -282,28 +286,17 @@ export class CheckoutComponent implements OnInit {
 
   cancelCheckout(): void {
     if (this.paying()) return;
-    const txnRef = (() => {
-      try {
-        return sessionStorage.getItem('pendingCheckoutTxnRef') || '';
-      } catch {
-        return '';
-      }
-    })();
-    if (!txnRef) {
+    if (!this.txnRef) {
       this.router.navigateByUrl('/cart');
       return;
     }
     this.paying.set(true);
     this.http
-      .post<ApiSuccess<{ cancelled: boolean }>>(`${environment.apiUrl}/api/payments/vnpay/cancel`, { txnRef })
+      .post<ApiSuccess<{ cancelled: boolean }>>(`${environment.apiUrl}/api/payments/vnpay/cancel`, { txnRef: this.txnRef })
       .pipe(
         tap(() => {
-          try {
-            sessionStorage.removeItem('pendingCheckoutTxnRef');
-            sessionStorage.removeItem('pendingCheckoutOrderId');
-          } catch {
-            // ignore
-          }
+          this.clearOrderIdBestEffort();
+          this.checkoutSession.clear();
         }),
         tap(() => this.router.navigateByUrl('/cart')),
         catchError((e: Error) => {
@@ -337,27 +330,7 @@ export class CheckoutComponent implements OnInit {
     }
 
     this.paying.set(true);
-    const returnUrl = `${window.location.origin}/checkout/result`;
-    this.http
-      .post<ApiSuccess<{ paymentUrl: string }>>(`${environment.apiUrl}/api/payments/vnpay/pay`, {
-        txnRef: this.pendingTxnRef,
-        returnUrl,
-      })
-      .pipe(
-        map((r) => {
-          if (!r.success) throw new Error(r.message);
-          return r.data.paymentUrl;
-        }),
-        tap((paymentUrl) => {
-          window.location.href = paymentUrl;
-        }),
-        catchError((e: Error) => {
-          this.toast.show(e.message ?? 'Failed to start payment', 'error');
-          this.paying.set(false);
-          return of(null);
-        })
-      )
-      .subscribe();
+    void this.ensureOrderInitializedThenPay();
   }
 
   private load(): void {
@@ -391,41 +364,6 @@ export class CheckoutComponent implements OnInit {
       .subscribe();
   }
 
-  private initReservationBestEffort(): void {
-    if (!this.isAuthenticated()) return;
-    if (this.items().length === 0) return;
-    if (!this.hasPhone() || !this.hasAddress()) return;
-    if (this.pendingTxnRef) return;
-
-    this.http
-      .post<ApiSuccess<{ txnRef: string }>>(`${environment.apiUrl}/api/payments/vnpay/init`, {
-        shippingAddress: this.shippingAddress.trim(),
-      })
-      .pipe(
-        map((r) => {
-          if (!r.success) throw new Error(r.message);
-          return r.data.txnRef;
-        }),
-        tap((txnRef) => {
-          this.pendingTxnRef = txnRef;
-          try {
-            sessionStorage.setItem('pendingCheckoutTxnRef', txnRef);
-          } catch {
-            // ignore
-          }
-        }),
-        catchError((e: Error) => {
-          // If init fails (e.g. out of stock), do not let user stay in confirm step.
-          const msg = e.message ?? 'Checkout is not available';
-          this.toast.show(msg, 'error');
-          this.error.set(msg);
-          queueMicrotask(() => this.router.navigateByUrl('/cart'));
-          return of(null);
-        })
-      )
-      .subscribe();
-  }
-
   private loadUserBestEffort(): void {
     if (!this.isAuthenticated()) {
       this.user.set(null);
@@ -443,7 +381,6 @@ export class CheckoutComponent implements OnInit {
               '';
           }
         }),
-        tap(() => this.initReservationBestEffort()),
         catchError(() => {
           // Avoid blocking checkout UI if profile fetch fails.
           this.user.set(this.auth.currentUser());
@@ -466,5 +403,91 @@ export class CheckoutComponent implements OnInit {
     if (!data) return;
     this.items.set(data.items);
     this.total.set(data.total);
+  }
+
+  private readOrderIdBestEffort(): number | null {
+    try {
+      const raw = sessionStorage.getItem('pendingCheckoutOrderId') || '';
+      const id = Math.floor(Number(raw));
+      return Number.isFinite(id) && id > 0 ? id : null;
+    } catch {
+      return null;
+    }
+  }
+
+  private storeOrderIdBestEffort(orderId: number): void {
+    const id = Math.floor(Number(orderId));
+    if (!Number.isFinite(id) || id < 1) return;
+    this.orderId = id;
+    try {
+      sessionStorage.setItem('pendingCheckoutOrderId', String(id));
+    } catch {
+      // ignore
+    }
+  }
+
+  private clearOrderIdBestEffort(): void {
+    this.orderId = null;
+    try {
+      sessionStorage.removeItem('pendingCheckoutOrderId');
+    } catch {
+      // ignore
+    }
+  }
+
+  private ensureOrderInitializedThenPay(): Promise<void> {
+    const txnRef = this.txnRef;
+    if (!txnRef) {
+      this.toast.show('Checkout session expired. Please try again.', 'error');
+      this.paying.set(false);
+      void this.router.navigateByUrl('/cart');
+      return Promise.resolve();
+    }
+
+    const returnUrl = `${window.location.origin}/checkout/result`;
+
+    const init$ =
+      this.orderId && this.orderId > 0
+        ? of({ txnRef })
+        : this.http
+            .post<ApiSuccess<{ txnRef: string; orderId: number; ttlSeconds: number }>>(
+              `${environment.apiUrl}/api/payments/vnpay/init`,
+              { txnRef, shippingAddress: this.shippingAddress.trim() }
+            )
+            .pipe(
+              map((r) => {
+                if (!r.success) throw new Error(r.message);
+                return r.data;
+              }),
+              tap((d) => this.storeOrderIdBestEffort(d.orderId)),
+              map((d) => ({ txnRef: d.txnRef }))
+            );
+
+    return new Promise<void>((resolve) => {
+      init$
+        .pipe(
+          switchMap(({ txnRef: ref }) =>
+            this.http.post<ApiSuccess<{ paymentUrl: string }>>(`${environment.apiUrl}/api/payments/vnpay/pay`, {
+              txnRef: ref,
+              returnUrl,
+            })
+          ),
+          map((r) => {
+            if (!r.success) throw new Error(r.message);
+            return r.data.paymentUrl;
+          }),
+          tap((paymentUrl) => {
+            window.location.href = paymentUrl;
+          }),
+          catchError((e: Error) => {
+            this.toast.show(e.message ?? 'Failed to start payment', 'error');
+            this.paying.set(false);
+            void this.router.navigateByUrl('/cart');
+            resolve();
+            return of(null);
+          })
+        )
+        .subscribe(() => resolve());
+    });
   }
 }

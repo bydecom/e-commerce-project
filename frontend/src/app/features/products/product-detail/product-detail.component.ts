@@ -152,7 +152,8 @@ export class ProductDetailComponent implements OnInit, OnDestroy {
     // Server cart is now the source of truth for `/cart`.
     // If user is not logged in, redirect to login (backend requires JWT).
     if (!this.auth.isAuthenticated()) {
-      this.router.navigate(['/login']);
+      const returnUrl = this.router.url?.startsWith('/') ? this.router.url : '/';
+      void this.router.navigate(['/login'], { queryParams: { returnUrl } });
       return;
     }
 

@@ -181,12 +181,24 @@ export async function createOrder(body: {
       if (product.status !== 'AVAILABLE') {
         throw httpError(422, `Product "${product.name}" is not available for sale`);
       }
-      if (product.stock < line.quantity) {
-        throw httpError(422, `Insufficient stock for "${product.name}"`);
-      }
       const unitPrice = product.price;
       total += unitPrice * line.quantity;
       lines.push({ productId: line.productId, quantity: line.quantity, unitPrice });
+    }
+
+    // Atomic-ish stock decrement: prevents oversell under concurrent order creation.
+    // If any line cannot be decremented (stock < qty), we abort and rollback.
+    for (const l of lines) {
+      const updated = await tx.product.updateMany({
+        where: { id: l.productId, stock: { gte: l.quantity }, status: 'AVAILABLE' },
+        data: { stock: { decrement: l.quantity } },
+      });
+      if (updated.count !== 1) {
+        throw httpError(422, `Insufficient stock for product ${l.productId}`, {
+          productId: l.productId,
+          requestedQuantity: l.quantity,
+        });
+      }
     }
 
     const order = await tx.order.create({
@@ -205,13 +217,6 @@ export async function createOrder(body: {
       },
       include: orderListInclude,
     });
-
-    for (const l of lines) {
-      await tx.product.update({
-        where: { id: l.productId },
-        data: { stock: { decrement: l.quantity } },
-      });
-    }
 
     // New orders are not reviewed yet.
     return mapOrderFull(order, new Set());

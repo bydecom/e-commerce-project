@@ -19,6 +19,36 @@ import {
 import { AuthService } from '../services/auth.service';
 import { ToastService } from '../services/toast.service';
 
+// Typed error codes — kept in sync with backend src/utils/prisma-error.ts
+export type PrismaErrorCode =
+  | 'UNIQUE_CONSTRAINT_VIOLATION'
+  | 'FOREIGN_KEY_VIOLATION'
+  | 'RECORD_NOT_FOUND'
+  | 'NULL_CONSTRAINT_VIOLATION'
+  | 'PRISMA_VALIDATION_ERROR'
+  | 'INTERNAL_DB_ERROR';
+
+// Auth error codes — set explicitly in backend auth.service.ts
+export type AuthErrorCode = 'AUTH_REFRESH_INVALID_OR_EXPIRED';
+
+export type ApiErrorCode = PrismaErrorCode | AuthErrorCode;
+
+export interface ApiErrorBody {
+  success: false;
+  message: string;
+  errors: { code: ApiErrorCode } | null;
+}
+
+/** Extracts the typed error code from an HttpErrorResponse body, or null. */
+export function getApiErrorCode(err: HttpErrorResponse): ApiErrorCode | null {
+  const body = err.error as unknown;
+  if (!body || typeof body !== 'object') return null;
+  const errors = (body as { errors?: unknown }).errors;
+  if (!errors || typeof errors !== 'object') return null;
+  const code = (errors as { code?: unknown }).code;
+  return typeof code === 'string' ? (code as ApiErrorCode) : null;
+}
+
 // Module-level singletons — shared across all interceptor invocations for the lifetime of the app.
 let isRefreshing = false;
 const refreshSubject = new BehaviorSubject<string | null>(null);
@@ -31,7 +61,8 @@ function handle401WithRefresh(
   req: HttpRequest<unknown>,
   next: HttpHandlerFn,
   auth: AuthService,
-  toast: ToastService
+  toast: ToastService,
+  router: Router
 ): Observable<HttpEvent<unknown>> {
   if (isRefreshing) {
     // Another request is already refreshing — queue this one until the new token arrives.
@@ -55,7 +86,7 @@ function handle401WithRefresh(
       isRefreshing = false;
       refreshSubject.next(null);
       toast.show('Session expired. Please sign in again.', 'error');
-      auth.logout();
+      auth.logout({ returnUrl: router.url, reason: 'session_expired' });
       return throwError(() => refreshErr);
     })
   );
@@ -72,6 +103,8 @@ export const errorInterceptor: HttpInterceptorFn = (req, next) => {
       const isLogout = url.includes('/api/auth/logout');
       const isRefresh = url.includes('/api/auth/refresh');
       const isOrdersApi = url.includes('/api/orders');
+      const errorCode = getApiErrorCode(err);
+      const isRefreshInvalidOrExpired = errorCode === 'AUTH_REFRESH_INVALID_OR_EXPIRED';
 
       if (isOrdersApi && (err.status === 403 || err.status === 404)) {
         toast.show('You do not have permission to view this order or it does not exist.', 'error');
@@ -80,11 +113,17 @@ export const errorInterceptor: HttpInterceptorFn = (req, next) => {
       }
 
       if (err.status === 401 && req.headers.has('Authorization') && !isLogout && !isRefresh) {
-        return handle401WithRefresh(req, next, auth, toast);
+        return handle401WithRefresh(req, next, auth, toast, router);
       }
 
       if (err.status === 401 && (isLogout || isRefresh)) {
-        auth.logout();
+        if ((isRefreshInvalidOrExpired || isRefresh) && !isRefreshing) {
+          toast.show('Session expired. Please sign in again.', 'error');
+        }
+        auth.logout({
+          returnUrl: router.url,
+          ...(isRefreshInvalidOrExpired || isRefresh ? { reason: 'session_expired' } : null),
+        });
         return throwError(() => err);
       }
 
