@@ -131,6 +131,16 @@ export const errorInterceptor: HttpInterceptorFn = (req, next) => {
         toast.show('You do not have permission for this action.', 'error');
       } else if (err.status >= 500) {
         toast.show('Server error. Try again later.', 'error');
+        // Replace the error body so components displaying err.error.message
+        // never show raw internal details (Redis, Prisma stack traces, file paths, etc.)
+        const sanitized = new HttpErrorResponse({
+          error: { success: false, message: 'Server error. Try again later.', errors: null },
+          status: err.status,
+          statusText: err.statusText,
+          url: err.url ?? undefined,
+          headers: err.headers,
+        });
+        return throwError(() => sanitized);
       }
 
       return throwError(() => err);

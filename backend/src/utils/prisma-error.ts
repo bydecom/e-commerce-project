@@ -6,7 +6,7 @@ export type PrismaErrorCode =
   | 'RECORD_NOT_FOUND'             // P2001, P2025 — targeted record does not exist
   | 'NULL_CONSTRAINT_VIOLATION'    // P2011, P2012 — required field was null/missing
   | 'PRISMA_VALIDATION_ERROR'      // PrismaClientValidationError — malformed query
-  | 'INTERNAL_DB_ERROR';           // any other PrismaClientKnownRequestError code
+  | 'INTERNAL_DB_ERROR';           // unmapped known code, DB unreachable, engine panic, or unknown request error
 
 interface PrismaHttpError {
   status: number;
@@ -39,6 +39,15 @@ export function toPrismaHttpError(e: unknown): PrismaHttpError | null {
 
   if (e instanceof Prisma.PrismaClientValidationError) {
     return { status: 400, message: 'Invalid database query', errors: { code: 'PRISMA_VALIDATION_ERROR' } };
+  }
+
+  // DB unreachable, engine panic, or unknown request error — all are internal failures
+  if (
+    e instanceof Prisma.PrismaClientInitializationError ||
+    e instanceof Prisma.PrismaClientRustPanicError ||
+    e instanceof Prisma.PrismaClientUnknownRequestError
+  ) {
+    return { status: 500, message: 'Internal Server Error', errors: { code: 'INTERNAL_DB_ERROR' } };
   }
 
   return null;
