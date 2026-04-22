@@ -19,12 +19,10 @@ interface DemoAnalyzePayload {
   imports: [FormsModule],
   template: `
     <div class="mx-auto w-full max-w-6xl">
-      <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+      <div class="flex flex-col gap-3 border-b border-gray-200 pb-2 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <h1 class="text-2xl font-bold text-gray-900">Feedback Types</h1>
-          <p class="mt-1 text-sm text-gray-600">
-            Manage feedback categories. Inactive types are hidden from customers.
-          </p>
+
         </div>
         <button
           type="button"

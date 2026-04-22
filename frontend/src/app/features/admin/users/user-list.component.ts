@@ -14,7 +14,6 @@ import type { Role, User } from '../../../shared/models/user.model';
       <div class="flex flex-col gap-4 border-b border-gray-200 pb-5 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 class="text-2xl font-bold text-gray-900">Users</h1>
-          <p class="mt-1 text-sm text-gray-500">Manage customers and administrator accounts.</p>
         </div>
       </div>
 

@@ -60,15 +60,15 @@ const STATUS_SELECT: Record<ActionPlanStatus, string> = {
   standalone: true,
   imports: [FormsModule, PaginationComponent, SentimentBadgeComponent],
   template: `
-    <div class="mx-auto max-w-full">
-      <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+    <div class="mx-auto w-full max-w-6xl">
+      <div class="flex flex-col gap-4 border-b border-gray-200 pb-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 class="text-2xl font-bold text-gray-900">Feedbacks</h1>
         </div>
       </div>
 
       <!-- Filters -->
-      <div class="mt-6 flex flex-col gap-3 rounded-xl border border-gray-200 bg-white p-4 shadow-sm sm:flex-row sm:items-end">
+      <div class="mt-2 flex flex-col gap-3 rounded-xl border border-gray-200 bg-white p-4 shadow-sm sm:flex-row sm:items-end">
         <div class="w-full sm:flex-1">
           <label class="block text-xs font-medium text-gray-600">Search</label>
           <input
@@ -133,11 +133,11 @@ const STATUS_SELECT: Record<ActionPlanStatus, string> = {
       </div>
 
       @if (loading()) {
-        <p class="mt-8 text-gray-600">Loading...</p>
+        <p class="mt-4 text-gray-600">Loading...</p>
       } @else if (error()) {
-        <p class="mt-8 text-red-600">{{ error() }}</p>
+        <p class="mt-4 text-red-600">{{ error() }}</p>
       } @else {
-        <div class="mt-6 overflow-x-auto rounded-xl border border-gray-200 bg-white shadow-sm">
+        <div class="mt-4 overflow-x-auto rounded-xl border border-gray-200 bg-white shadow-sm">
           <table class="min-w-full divide-y divide-gray-200 text-left text-sm">
             <thead class="bg-gray-50">
               <tr>

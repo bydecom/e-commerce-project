@@ -22,7 +22,7 @@ interface CacheEntry {
   imports: [RouterLink, FormsModule, CurrencyVndPipe, ConfirmDialogComponent, PaginationComponent],
   template: `
     <div class="mx-auto w-full max-w-6xl">
-      <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+      <div class="flex flex-col gap-4 border-b border-gray-200 pb-1 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 class="text-2xl font-bold text-gray-900">Products</h1>
         </div>
@@ -35,7 +35,7 @@ interface CacheEntry {
         </a>
       </div>
 
-      <div class="mt-6 flex flex-col gap-3 rounded-xl border border-gray-200 bg-white p-4 shadow-sm sm:flex-row sm:items-end">
+      <div class="mt-4 flex flex-col gap-3 rounded-xl border border-gray-200 bg-white p-4 shadow-sm sm:flex-row sm:items-end">
         <div class="flex-1">
           <label class="block text-xs font-medium text-gray-600">Search</label>
           <input

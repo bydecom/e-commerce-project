@@ -21,11 +21,11 @@ interface CacheEntry {
   imports: [NgClass, RouterLink, FormsModule, CurrencyVndPipe, PaginationComponent],
   template: `
     <div class="mx-auto w-full max-w-6xl">
-      <div class="flex items-center justify-between">
+      <div class="flex flex-col gap-4 border-b border-gray-200 pb-1 sm:flex-row sm:items-center sm:justify-between">
         <h1 class="text-2xl font-bold text-gray-900">Orders</h1>
       </div>
 
-      <div class="mt-3 flex flex-col gap-2 rounded-lg border border-gray-200 bg-white p-3 shadow-sm sm:flex-row sm:items-end">
+      <div class="mt-2 flex flex-col gap-2 rounded-lg border border-gray-200 bg-white p-3 shadow-sm sm:flex-row sm:items-end">
         <div class="w-full sm:flex-1">
           <label class="block text-[11px] font-medium text-gray-500 uppercase tracking-wider">Search</label>
           <input

@@ -12,7 +12,6 @@ import { ToastService } from '../../../../core/services/toast.service';
       <div class="flex flex-col gap-4 border-b border-gray-200 pb-5 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 class="text-2xl font-bold text-gray-900">Categories</h1>
-          <p class="mt-1 text-sm text-gray-500">Manage product categories to organize your catalog.</p>
         </div>
         <button
           type="button"

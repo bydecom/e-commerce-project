@@ -27,12 +27,10 @@ interface SystemLog {
   imports: [FormsModule, DatePipe, DecimalPipe],
   template: `
     <div class="mx-auto max-w-6xl">
-      <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+      <div class="flex flex-col gap-4 border-b border-gray-200 pb-5 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 class="text-2xl font-bold text-gray-900">System traffic logs</h1>
-          <p class="mt-1 text-sm text-gray-600">
-            Monitor API requests to the server in near real time.
-          </p>
+
         </div>
         <div class="flex items-center gap-3">
           <button

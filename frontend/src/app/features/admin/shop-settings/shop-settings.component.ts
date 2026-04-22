@@ -24,9 +24,6 @@ function normalizeLogoUrlForSave(raw: string): string | null {
       <div class="mb-8 flex flex-col gap-4 border-b border-gray-200 pb-5 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 class="text-2xl font-bold tracking-tight text-gray-900">Store Settings</h1>
-          <p class="mt-2 text-sm text-gray-500">
-            Manage your storefront details, brand identity, and customer contact information.
-          </p>
         </div>
         @if (!loadError()) {
           <div class="flex items-center gap-3">

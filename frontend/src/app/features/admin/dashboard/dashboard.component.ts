@@ -21,10 +21,9 @@ Chart.register(...registerables);
   imports: [DatePipe, DecimalPipe, FormsModule, RouterLink],
   template: `
     <div class="mx-auto max-w-7xl space-y-8">
-      <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+      <div class="flex flex-col gap-4 border-b border-gray-200 pb-5 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 class="text-2xl font-bold text-gray-900">Dashboard</h1>
-          <p class="mt-1 text-sm text-gray-500">Real-time business insights and operational metrics.</p>
         </div>
 
         <div class="flex items-center gap-3">
