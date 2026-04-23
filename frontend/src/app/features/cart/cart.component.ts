@@ -109,7 +109,7 @@ type CartPricingData = {
                               <button
                                 type="button"
                                 (click)="adjustLineQuantity(line, -1)"
-                                [disabled]="line.quantity <= 1"
+                                [disabled]="line.quantity <= 1 || checkoutBlockLineErrors()[line.productId] !== undefined"
                                 class="flex h-full w-8 items-center justify-center text-gray-600 transition-colors hover:bg-gray-100 hover:text-gray-900 disabled:cursor-not-allowed disabled:opacity-40"
                               >
                                 <span class="sr-only">Decrease quantity</span>
@@ -122,14 +122,15 @@ type CartPricingData = {
                                 type="number"
                                 [value]="line.quantity"
                                 (change)="setLineQuantity(line, $event)"
-                                class="h-full w-12 border-x border-gray-300 bg-transparent p-0 text-center text-sm font-semibold tabular-nums text-gray-900 focus:border-indigo-500 focus:outline-none focus:ring-0 [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                                [disabled]="checkoutBlockLineErrors()[line.productId] !== undefined"
+                                class="h-full w-12 border-x border-gray-300 bg-transparent p-0 text-center text-sm font-semibold tabular-nums text-gray-900 focus:border-indigo-500 focus:outline-none focus:ring-0 disabled:opacity-40 [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
                                 min="1"
                               />
 
                               <button
                                 type="button"
                                 (click)="adjustLineQuantity(line, 1)"
-                                [disabled]="line.quantity >= (knownMaxStocks()[line.productId] ?? 9999)"
+                                [disabled]="line.quantity >= (knownMaxStocks()[line.productId] ?? 9999) || checkoutBlockLineErrors()[line.productId] !== undefined"
                                 class="flex h-full w-8 items-center justify-center text-gray-600 transition-colors hover:bg-gray-100 hover:text-gray-900 disabled:cursor-not-allowed disabled:opacity-40"
                               >
                                 <span class="sr-only">Increase quantity</span>
