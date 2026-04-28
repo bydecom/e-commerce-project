@@ -11,6 +11,20 @@ export interface OrderItemLine {
   isReviewed?: boolean;
 }
 
+export interface PaymentTransactionDetail {
+  id: number;
+  vnp_TxnRef: string;
+  vnp_TransactionNo: string | null;
+  vnp_Amount: number | null;
+  vnp_BankCode: string | null;
+  vnp_PayDate: string | null;
+  vnp_ResponseCode: string | null;
+  vnp_TransactionStatus: string | null;
+  isSuccess: boolean;
+  rawQuery: unknown;
+  createdAt: string;
+}
+
 export interface OrderDetail {
   id: number;
   userId: number;
@@ -21,5 +35,6 @@ export interface OrderDetail {
   items: OrderItemLine[];
   createdAt: string;
   updatedAt: string;
+  paymentTransactions: PaymentTransactionDetail[];
   user: { id: number; email: string; name: string | null };
 }

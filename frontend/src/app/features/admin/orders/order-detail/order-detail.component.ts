@@ -3,7 +3,8 @@ import { ActivatedRoute, RouterLink } from '@angular/router';
 import { CurrencyVndPipe } from '../../../../shared/pipes/currency-vnd.pipe';
 import { OrderApiService } from '../../../../core/services/order-api.service';
 import { ToastService } from '../../../../core/services/toast.service';
-import type { OrderDetail, OrderStatus } from '../../../../shared/models/order.model';
+import { VnpayStatusPipe } from '../../../../shared/pipes/vnpay-status.pipe';
+import type { OrderDetail, OrderStatus, PaymentTransactionDetail } from '../../../../shared/models/order.model';
 
 function nextStatuses(current: OrderStatus): OrderStatus[] {
   switch (current) {
@@ -21,7 +22,7 @@ function nextStatuses(current: OrderStatus): OrderStatus[] {
 @Component({
   selector: 'app-admin-order-detail',
   standalone: true,
-  imports: [RouterLink, CurrencyVndPipe],
+  imports: [RouterLink, CurrencyVndPipe, VnpayStatusPipe],
   template: `
     <div class="mx-auto w-full max-w-6xl">
       <a routerLink="/admin/orders" class="text-sm text-blue-600 hover:underline">← Back to orders</a>
@@ -311,6 +312,66 @@ function nextStatuses(current: OrderStatus): OrderStatus[] {
           </div>
         </div>
 
+        <div class="mt-2 overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
+          <div class="flex items-center gap-2 border-b border-gray-200 bg-gray-50/50 px-5 py-3">
+            <svg class="h-5 w-5 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M12 8c-3.314 0-6 1.567-6 3.5S8.686 15 12 15s6-1.567 6-3.5S15.314 8 12 8zm0 7v5m-4-3h8"
+              />
+            </svg>
+            <h2 class="text-base font-bold text-gray-900">Payment history</h2>
+          </div>
+
+          @if (order()!.paymentTransactions.length > 0) {
+            <div class="overflow-x-auto">
+              <table class="min-w-full divide-y divide-gray-200 text-left text-sm">
+                <thead class="bg-white">
+                  <tr>
+                    <th class="px-5 py-2.5 text-xs font-semibold uppercase tracking-wider text-gray-500">Time</th>
+                    <th class="px-5 py-2.5 text-xs font-semibold uppercase tracking-wider text-gray-500">TxnRef</th>
+                    <th class="px-5 py-2.5 text-xs font-semibold uppercase tracking-wider text-gray-500">Bank</th>
+                    <th class="px-5 py-2.5 text-right text-xs font-semibold uppercase tracking-wider text-gray-500">
+                      Amount
+                    </th>
+                    <th class="px-5 py-2.5 text-xs font-semibold uppercase tracking-wider text-gray-500">Status</th>
+                  </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-100 bg-white">
+                  @for (txn of order()!.paymentTransactions; track txn.id) {
+                    <tr class="transition-colors hover:bg-gray-50">
+                      <td class="px-5 py-3 text-gray-600">{{ formatDate(txn.createdAt) }}</td>
+                      <td class="px-5 py-3 font-mono text-xs text-gray-700">{{ txn.vnp_TxnRef }}</td>
+                      <td class="px-5 py-3">
+                        <span class="rounded-md bg-blue-50 px-2.5 py-1 text-xs font-semibold text-blue-700">
+                          {{ txn.vnp_BankCode || 'N/A' }}
+                        </span>
+                      </td>
+                      <td class="px-5 py-3 text-right font-medium text-gray-900">
+                        {{ txn.vnp_Amount | currencyVnd }}
+                      </td>
+                      <td class="px-5 py-3">
+                        <div [class]="paymentTxnStatusClass(txn)">
+                          {{ paymentTxnStatusLabel(txn) }}
+                        </div>
+                        @if (!txn.isSuccess) {
+                          <div class="mt-1 text-xs text-gray-500">
+                            {{ txn.vnp_ResponseCode | vnpayStatus }}
+                          </div>
+                        }
+                      </td>
+                    </tr>
+                  }
+                </tbody>
+              </table>
+            </div>
+          } @else {
+            <div class="px-5 py-8 text-center text-sm text-gray-500">No payment history.</div>
+          }
+        </div>
+
         <div class="mt-2 flex items-center justify-between text-xs text-gray-400">
           <p>Created: <span class="font-medium text-gray-500">{{ formatDate(order()!.createdAt) }}</span></p>
           <p>Last updated: <span class="font-medium text-gray-500">{{ formatDate(order()!.updatedAt) }}</span></p>
@@ -412,6 +473,14 @@ export class AdminOrderDetailComponent implements OnInit {
     } catch {
       return iso;
     }
+  }
+
+  paymentTxnStatusLabel(txn: PaymentTransactionDetail): string {
+    return txn.isSuccess ? 'Success' : 'Failed';
+  }
+
+  paymentTxnStatusClass(txn: PaymentTransactionDetail): string {
+    return txn.isSuccess ? 'font-semibold text-green-600' : 'font-semibold text-red-600';
   }
 
   confirmAndApplyStatus(): void {

@@ -18,6 +18,7 @@ const orderItemInclude = {
 const orderListInclude = {
   items: { include: orderItemInclude },
   user: { select: { id: true, email: true, name: true } },
+  paymentTransactions: { orderBy: { createdAt: 'desc' } },
 } as const;
 
 async function sendOrderCompletedEmail(order: {
@@ -96,6 +97,19 @@ function mapOrderFull(
     product: { id: number; name: string; imageUrl: string | null };
   }>;
   user: { id: number; email: string; name: string | null };
+  paymentTransactions: Array<{
+    id: number;
+    vnp_TxnRef: string;
+    vnp_TransactionNo: string | null;
+    vnp_Amount: number | null;
+    vnp_BankCode: string | null;
+    vnp_PayDate: string | null;
+    vnp_ResponseCode: string | null;
+    vnp_TransactionStatus: string | null;
+    isSuccess: boolean;
+    rawQuery: Prisma.JsonValue;
+    createdAt: Date;
+  }>;
 },
   reviewedProductIds: Set<number>
 ) {
@@ -110,6 +124,19 @@ function mapOrderFull(
     items: order.items.map((it) => mapItem(it, reviewedSet)),
     createdAt: order.createdAt.toISOString(),
     updatedAt: order.updatedAt.toISOString(),
+    paymentTransactions: order.paymentTransactions.map((txn) => ({
+      id: txn.id,
+      vnp_TxnRef: txn.vnp_TxnRef,
+      vnp_TransactionNo: txn.vnp_TransactionNo,
+      vnp_Amount: txn.vnp_Amount,
+      vnp_BankCode: txn.vnp_BankCode,
+      vnp_PayDate: txn.vnp_PayDate,
+      vnp_ResponseCode: txn.vnp_ResponseCode,
+      vnp_TransactionStatus: txn.vnp_TransactionStatus,
+      isSuccess: txn.isSuccess,
+      rawQuery: txn.rawQuery,
+      createdAt: txn.createdAt.toISOString(),
+    })),
     user: {
       id: order.user.id,
       email: order.user.email,
@@ -249,10 +276,7 @@ export async function listUserOrders(
       skip: offset,
       take: limit,
       orderBy: { id: 'desc' },
-      include: {
-        items: { include: orderItemInclude },
-        user: { select: { id: true, email: true, name: true } },
-      },
+      include: orderListInclude,
     }),
   ]);
 

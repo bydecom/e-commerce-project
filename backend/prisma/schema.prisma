@@ -105,7 +105,8 @@ model Order {
 
   user            User          @relation(fields: [userId], references: [id])
   items           OrderItem[]
-  feedbacks       Feedback[] 
+  feedbacks       Feedback[]
+  paymentTransactions PaymentTransaction[]
 }
 
 model OrderItem {
@@ -196,5 +197,24 @@ model SystemConfig {
   description String?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+}
+
+model PaymentTransaction {
+  id                    Int      @id @default(autoincrement())
+  orderId               Int
+  vnp_TxnRef            String   @unique
+  vnp_TransactionNo     String?
+  vnp_Amount            Float?
+  vnp_BankCode          String?
+  vnp_PayDate           String?
+  vnp_ResponseCode      String?
+  vnp_TransactionStatus String?
+  isSuccess             Boolean
+  rawQuery              Json
+  createdAt             DateTime @default(now())
+
+  order                 Order    @relation(fields: [orderId], references: [id])
+
+  @@index([vnp_TxnRef])
 }
 

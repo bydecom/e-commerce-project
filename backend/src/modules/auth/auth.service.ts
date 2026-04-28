@@ -14,7 +14,10 @@ import {
   revokeRefreshToken,
   revokeAllUserRefreshTokens,
 } from '../../utils/refresh-token';
-import { buildVerifyEmailTemplate } from '../../utils/mail-templates';
+import {
+  buildExistingAccountAlertTemplate,
+  buildVerifyEmailTemplate,
+} from '../../utils/mail-templates';
 import { StoreSettingService } from '../store-setting/store-setting.service';
 import { getConfig, getConfigInt } from '../system-config/system-config.service';
 
@@ -117,11 +120,23 @@ export async function register(input: { name: string; email: string; password: s
   if (password.length < 6) throw httpError(400, 'Password must be at least 6 characters');
 
   // If user already exists in DB, do not create a pending registration.
-  const existing = await prisma.user.findUnique({
+  const existingUser = await prisma.user.findUnique({
     where: { email },
-    select: { id: true },
+    select: { id: true, name: true },
   });
-  if (existing) {
+  if (existingUser) {
+    const setting = await StoreSettingService.getSetting();
+    const shopName = setting?.name?.trim() || 'Shop';
+
+    const { subject, html, text } = buildExistingAccountAlertTemplate({
+      name: existingUser.name,
+      shopName,
+    });
+
+    void sendMail({ to: email, subject, text, html }).catch((err) => {
+      console.error('[Mail Error] Existing account alert failed:', err);
+    });
+
     return { email, message: 'Verification email sent' };
   }
 

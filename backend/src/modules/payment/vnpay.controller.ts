@@ -1,4 +1,5 @@
 import type { NextFunction, Request, Response } from 'express';
+import { Prisma } from '@prisma/client';
 import { success } from '../../utils/response';
 import { httpError } from '../../utils/http-error';
 import * as vnpay from './vnpay.service';
@@ -14,11 +15,70 @@ import {
 } from '../inventory/stock-reservation.service';
 import { getConfigInt } from '../system-config/system-config.service';
 
+type PaymentTransactionRecord = {
+  id?: number;
+  orderId?: number;
+};
+
+type PaymentTransactionDelegate = {
+  findUnique(args: {
+    where: { vnp_TxnRef: string };
+    select?: { id?: true; orderId?: true };
+  }): Promise<PaymentTransactionRecord | null>;
+  create(args: {
+    data: {
+      orderId: number;
+      vnp_TxnRef: string;
+      vnp_TransactionNo: string | null;
+      vnp_Amount: number;
+      vnp_BankCode: string | null;
+      vnp_PayDate: string | null;
+      vnp_ResponseCode: string | null;
+      vnp_TransactionStatus: string | null;
+      isSuccess: boolean;
+      rawQuery: Record<string, string>;
+    };
+  }): Promise<unknown>;
+};
+
+function paymentTransactionClient(client: unknown): PaymentTransactionDelegate {
+  return (client as { paymentTransaction: PaymentTransactionDelegate }).paymentTransaction;
+}
+
 function getClientIp(req: Request): string {
   const xf = req.headers['x-forwarded-for'];
   if (typeof xf === 'string' && xf.trim()) return xf.split(',')[0].trim();
   if (Array.isArray(xf) && xf.length > 0) return String(xf[0]);
   return req.ip || (req.socket?.remoteAddress ?? '127.0.0.1');
+}
+
+function parseVnpAmount(rawAmount: string | undefined): number | null {
+  if (!rawAmount) return null;
+  const amount = Number(rawAmount);
+  if (!Number.isFinite(amount) || amount <= 0) return null;
+  return amount / 100;
+}
+
+async function resolveOrderIdByTxnRef(txnRef: string): Promise<number | null> {
+  const existing = await paymentTransactionClient(prisma).findUnique({
+    where: { vnp_TxnRef: txnRef },
+    select: { orderId: true },
+  });
+  if (existing?.orderId) return existing.orderId;
+
+  const completedOrderId = await vnpStore.getCompletedOrderId(txnRef);
+  if (completedOrderId) return completedOrderId;
+
+  const pending = await vnpStore.getPendingVnpayCheckout(txnRef);
+  if (pending?.orderId) return pending.orderId;
+
+  return (await getReservationPayload(txnRef))?.orderId ?? null;
+}
+
+async function getOrderSnapshotByTxnRef(txnRef: string) {
+  const orderId = await resolveOrderIdByTxnRef(txnRef);
+  if (!orderId) return null;
+  return orderService.getAdminOrder(orderId).catch(() => null);
 }
 
 export async function createPayment(req: Request, res: Response, next: NextFunction): Promise<void> {
@@ -320,66 +380,214 @@ export async function cancelPayment(req: Request, res: Response, next: NextFunct
   }
 }
 
-export async function verifyReturn(req: Request, res: Response, next: NextFunction): Promise<void> {
+export async function vnpayIpn(req: Request, res: Response): Promise<void> {
   try {
     const rawQueryString = req.originalUrl.includes('?') ? req.originalUrl.slice(req.originalUrl.indexOf('?')) : '';
     const result = vnpay.verifyVnpayReturn(req.query as Record<string, unknown>, rawQueryString);
-    if (!result.isSuccess) {
-      const failTxnRef = result.raw?.vnp_TxnRef;
-      if (failTxnRef) {
-        const pending = await vnpStore.consumePendingVnpayCheckout(failTxnRef);
-        const orderId =
-          pending?.orderId ??
-          (await getReservationPayload(failTxnRef))?.orderId ??
-          null;
-        if (orderId) {
-          await orderService.cancelOrderSystem(orderId).catch((err) => {
-            // eslint-disable-next-line no-console
-            console.error('[verifyReturn] Failed to cancel order:', err);
-          });
-        }
-        await releaseReservationBestEffort(failTxnRef, pending?.items);
-      }
-      res.json(success({ verify: result, order: null }, 'OK'));
+
+    if (!result.isValidSignature) {
+      res.status(200).json({ RspCode: '97', Message: 'Invalid signature' });
       return;
     }
 
     const txnRef = result.raw.vnp_TxnRef;
-    if (!txnRef) throw httpError(400, 'Missing vnp_TxnRef');
-
-    const completedOrderId = await vnpStore.getCompletedOrderId(txnRef);
-    if (completedOrderId) {
-      const existing = await orderService.getAdminOrder(completedOrderId).catch(() => null);
-      res.json(success({ verify: result, order: existing }, 'OK'));
+    if (!txnRef) {
+      res.status(200).json({ RspCode: '99', Message: 'Unknown error' });
       return;
     }
 
-    try {
-      const pending = await vnpStore.consumePendingVnpayCheckout(txnRef);
-      const orderId =
-        pending?.orderId ??
-        (await getReservationPayload(txnRef))?.orderId ??
-        null;
-      if (!orderId) throw httpError(409, 'No pending checkout found for this transaction');
+    const pending = await vnpStore.getPendingVnpayCheckout(txnRef);
+    const orderId = await resolveOrderIdByTxnRef(txnRef);
+    if (!orderId) {
+      res.status(200).json({ RspCode: '01', Message: 'Order not found' });
+      return;
+    }
 
-      // Payment success: keep order as PENDING (shop confirms later).
-      await prisma.order
-        .update({
-          where: { id: orderId },
+    const response = await prisma.$transaction(async (tx) => {
+      const order = await tx.order.findUnique({
+        where: { id: orderId },
+        select: {
+          id: true,
+          userId: true,
+          total: true,
+          status: true,
+          paymentStatus: true,
+        },
+      });
+      if (!order) return { code: '01', message: 'Order not found' } as const;
+
+      const vnpAmount = parseVnpAmount(result.raw.vnp_Amount);
+      if (vnpAmount == null || Math.round(order.total) !== Math.round(vnpAmount)) {
+        return { code: '04', message: 'Invalid amount' } as const;
+      }
+
+      const processed = await paymentTransactionClient(tx).findUnique({
+        where: { vnp_TxnRef: txnRef },
+        select: { id: true },
+      });
+      if (processed || order.paymentStatus !== 'PENDING') {
+        return { code: '02', message: 'Order already processed' } as const;
+      }
+
+      await paymentTransactionClient(tx).create({
+        data: {
+          orderId: order.id,
+          vnp_TxnRef: txnRef,
+          vnp_TransactionNo: result.raw.vnp_TransactionNo ?? null,
+          vnp_Amount: vnpAmount,
+          vnp_BankCode: result.raw.vnp_BankCode ?? null,
+          vnp_PayDate: result.raw.vnp_PayDate ?? null,
+          vnp_ResponseCode: result.responseCode ?? null,
+          vnp_TransactionStatus: result.transactionStatus ?? null,
+          isSuccess: result.isSuccess,
+          rawQuery: result.raw,
+        },
+      });
+
+      if (result.isSuccess) {
+        await tx.order.update({
+          where: { id: order.id },
           data: { paymentStatus: 'PAID' },
-        })
-        .catch(() => null);
-      await cartService.clearCart(pending?.userId ?? 0).catch(() => undefined);
+        });
+        return {
+          code: '00',
+          message: 'Confirm Success',
+          finalized: 'success' as const,
+          userId: order.userId,
+        };
+      }
+
+      const items = await tx.orderItem.findMany({
+        where: { orderId: order.id },
+        select: { productId: true, quantity: true },
+      });
+      for (const item of items) {
+        await tx.product.update({
+          where: { id: item.productId },
+          data: { stock: { increment: item.quantity } },
+        });
+      }
+
+      await tx.order.update({
+        where: { id: order.id },
+        data: { status: 'CANCELLED', paymentStatus: 'FAILED' },
+      });
+
+      return {
+        code: '00',
+        message: 'Confirm Success',
+        finalized: 'failed' as const,
+      };
+    });
+
+    if (response.code === '00' && response.finalized === 'success') {
+      await cartService.clearCart(response.userId).catch(() => undefined);
       await vnpStore.markCompletedOrderId(txnRef, orderId);
       await releaseReservationBestEffort(txnRef, pending?.items);
-
-      const order = await orderService.getAdminOrder(orderId).catch(() => null);
-      res.json(success({ verify: result, order }, 'OK'));
-    } catch (err) {
-      // If anything goes wrong here, at least release the hold (order cancellation handled on fail/TTL).
-      await releaseReservationBestEffort(txnRef);
-      throw err;
+    } else if (response.code === '00' && response.finalized === 'failed') {
+      await releaseReservationBestEffort(txnRef, pending?.items);
+      await vnpStore.markCompletedOrderId(txnRef, orderId).catch(() => undefined);
     }
+
+    res.status(200).json({ RspCode: response.code, Message: response.message });
+  } catch (err) {
+    if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
+      res.status(200).json({ RspCode: '02', Message: 'Order already processed' });
+      return;
+    }
+    // eslint-disable-next-line no-console
+    console.error('[VNPAY IPN Error]:', err);
+    res.status(200).json({ RspCode: '99', Message: 'Unknown error' });
+  }
+}
+
+export async function verifyReturn(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const rawQueryString = req.originalUrl.includes('?') ? req.originalUrl.slice(req.originalUrl.indexOf('?')) : '';
+    const result = vnpay.verifyVnpayReturn(req.query as Record<string, unknown>, rawQueryString);
+    const txnRef = result.raw.vnp_TxnRef;
+
+    if (txnRef && result.isSuccess) {
+      const orderId = await resolveOrderIdByTxnRef(txnRef);
+      if (orderId) {
+        const order = await prisma.order.findUnique({
+          where: { id: orderId },
+          select: { id: true, userId: true, paymentStatus: true },
+        });
+
+        if (order && order.paymentStatus === 'PENDING') {
+          const vnpAmount = parseVnpAmount(result.raw.vnp_Amount);
+          await prisma.order.update({
+            where: { id: orderId },
+            data: { paymentStatus: 'PAID' },
+          });
+
+          if (vnpAmount != null) {
+            void paymentTransactionClient(prisma)
+              .create({
+                data: {
+                  orderId,
+                  vnp_TxnRef: txnRef,
+                  vnp_TransactionNo: result.raw.vnp_TransactionNo ?? null,
+                  vnp_Amount: vnpAmount,
+                  vnp_BankCode: result.raw.vnp_BankCode ?? null,
+                  vnp_PayDate: result.raw.vnp_PayDate ?? null,
+                  vnp_ResponseCode: result.responseCode ?? null,
+                  vnp_TransactionStatus: result.transactionStatus ?? null,
+                  isSuccess: true,
+                  rawQuery: result.raw,
+                },
+              })
+              .catch(() => undefined);
+          }
+
+          await cartService.clearCart(order.userId).catch(() => undefined);
+          await vnpStore.markCompletedOrderId(txnRef, orderId);
+          await releaseReservationBestEffort(txnRef);
+        }
+      }
+    }
+
+    const order = txnRef ? await getOrderSnapshotByTxnRef(txnRef) : null;
+    res.json(success({ verify: result, order }, 'OK'));
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function devConfirmPayment(req: Request, res: Response, next: NextFunction): Promise<void> {
+  if (process.env.NODE_ENV === 'production') {
+    res.status(404).json({ success: false, message: 'Not found' });
+    return;
+  }
+
+  try {
+    const { txnRef } = req.body as { txnRef?: string };
+    if (!txnRef) throw httpError(400, 'txnRef is required');
+
+    const orderId = await resolveOrderIdByTxnRef(txnRef);
+    if (!orderId) throw httpError(404, 'Order not found for this txnRef');
+
+    const order = await prisma.order.findUnique({
+      where: { id: orderId },
+      select: { id: true, userId: true, paymentStatus: true },
+    });
+    if (!order) throw httpError(404, 'Order not found');
+
+    if (order.paymentStatus !== 'PENDING') {
+      res.json(success({ message: 'Already processed', orderId, paymentStatus: order.paymentStatus }, 'OK'));
+      return;
+    }
+
+    await prisma.order.update({
+      where: { id: orderId },
+      data: { paymentStatus: 'PAID' },
+    });
+    await cartService.clearCart(order.userId).catch(() => undefined);
+    await vnpStore.markCompletedOrderId(txnRef, orderId);
+    await releaseReservationBestEffort(txnRef);
+
+    res.json(success({ orderId, paymentStatus: 'PAID' }, 'OK'));
   } catch (err) {
     next(err);
   }

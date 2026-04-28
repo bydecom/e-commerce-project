@@ -1,14 +1,14 @@
-import { HttpClient } from '@angular/common/http';
+import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { isPlatformBrowser } from '@angular/common';
 import { Component, PLATFORM_ID, inject, signal } from '@angular/core';
 import { RouterLink } from '@angular/router';
-import { catchError, map, of, tap } from 'rxjs';
+import { catchError, map, of, switchMap, take, takeWhile, tap, timer } from 'rxjs';
 import { environment } from '../../../environments/environment';
 import type { ApiSuccess } from '../../shared/models/api-response.model';
 
 type VerifyPayload = {
   verify: { isSuccess: boolean; responseCode?: string; transactionStatus?: string };
-  order: { id: number } | null;
+  order: { id: number; paymentStatus: 'PENDING' | 'PAID' | 'FAILED'; status: string } | null;
 };
 
 @Component({
@@ -64,6 +64,37 @@ type VerifyPayload = {
               Continue Shopping
             </a>
           </div>
+        } @else if (pending()) {
+          <div class="mx-auto mb-6 flex h-20 w-20 items-center justify-center rounded-full bg-amber-100">
+            <svg
+              class="h-10 w-10 text-amber-600"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+              stroke-width="2.5"
+            >
+              <path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l2.5 2.5M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+          </div>
+          <h1 class="text-2xl font-extrabold tracking-tight text-gray-900">Đang xử lý giao dịch</h1>
+          <p class="mt-3 text-base text-gray-500">
+            {{ error() || 'Payment is being processed, please wait a moment or check again later.' }}
+          </p>
+
+          <div class="mt-8 flex flex-col gap-3">
+            <a
+              routerLink="/orders"
+              class="inline-flex w-full items-center justify-center rounded-xl bg-amber-500 px-5 py-3.5 text-sm font-bold text-white shadow-sm transition hover:bg-amber-600 focus:ring-2 focus:ring-amber-400 focus:ring-offset-2"
+            >
+              Check my orders
+            </a>
+            <a
+              routerLink="/products"
+              class="inline-flex w-full items-center justify-center rounded-xl bg-white px-5 py-3.5 text-sm font-bold text-gray-700 ring-1 ring-inset ring-gray-200 transition hover:bg-gray-50"
+            >
+              Continue shopping
+            </a>
+          </div>
         } @else {
           <div class="mx-auto mb-6 flex h-20 w-20 items-center justify-center rounded-full bg-rose-100">
             <svg
@@ -104,11 +135,14 @@ type VerifyPayload = {
 export class CheckoutResultComponent {
   private readonly http = inject(HttpClient);
   private readonly platformId = inject(PLATFORM_ID);
+  private readonly pollIntervalMs = 2000;
+  private readonly maxPollAttempts = 5;
 
   readonly loading = signal(true);
   readonly success = signal(false);
   readonly orderId = signal<number | null>(null);
   readonly error = signal<string | null>(null);
+  readonly pending = signal(false);
 
   constructor() {
     if (!isPlatformBrowser(this.platformId)) {
@@ -124,23 +158,64 @@ export class CheckoutResultComponent {
     }
 
     const qs = window.location.search || '';
-    this.http
-      .get<ApiSuccess<VerifyPayload>>(`${environment.apiUrl}/api/payments/vnpay/verify${qs}`)
+    timer(0, this.pollIntervalMs)
       .pipe(
-        map((r) => {
-          if (!r.success) throw new Error(r.message);
-          return r.data;
-        }),
-        tap((data) => {
-          this.success.set(Boolean(data.verify?.isSuccess));
+        take(this.maxPollAttempts),
+        switchMap((attempt) =>
+          this.http.get<ApiSuccess<VerifyPayload>>(`${environment.apiUrl}/api/payments/vnpay/verify${qs}`).pipe(
+            map((r) => {
+              if (!r.success) throw new Error(r.message);
+              return { attempt, data: r.data };
+            })
+          )
+        ),
+        map(({ attempt, data }) => {
           this.orderId.set(data.order?.id ?? null);
+
+          const paymentStatus = data.order?.paymentStatus;
+          if (paymentStatus === 'PAID') {
+            return { done: true, success: true, pending: false, error: null };
+          }
+          if (paymentStatus === 'FAILED' || data.order?.status === 'CANCELLED' || data.verify?.isSuccess === false) {
+            return {
+              done: true,
+              success: false,
+              pending: false,
+              error: 'Payment failed or cancelled.',
+            };
+          }
+          if (attempt >= this.maxPollAttempts - 1) {
+            return {
+              done: true,
+              success: false,
+              pending: true,
+              error: 'Giao dịch đang được xử lý, vui lòng chờ trong giây lát hoặc kiểm tra lại sau.',
+            };
+          }
+
+          return { done: false, success: false, pending: false, error: null };
         }),
-        catchError((e: Error) => {
-          this.error.set(e.message ?? 'Failed to verify payment');
+        takeWhile((result) => !result.done, true),
+        catchError((e: Error & { status?: number }) => {
+          const status = e instanceof HttpErrorResponse ? e.status : e.status;
+          if (status === 0) {
+            this.error.set('Can not connect to server. Please check your connection and try again.');
+            this.pending.set(true);
+          } else {
+            this.error.set(e.message ?? 'Failed to verify payment');
+            this.pending.set(false);
+          }
           this.success.set(false);
+          this.loading.set(false);
           return of(null);
         }),
-        tap(() => this.loading.set(false))
+        tap((result) => {
+          if (!result || !result.done) return;
+          this.success.set(Boolean(result.success));
+          this.pending.set(Boolean(result.pending));
+          this.error.set(result.error ?? null);
+          this.loading.set(false);
+        })
       )
       .subscribe();
   }

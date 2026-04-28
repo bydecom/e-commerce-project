@@ -67,12 +67,20 @@ app.use(
 
 const globalLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 150,
+  max: process.env.NODE_ENV === 'production' ? 150 : 10_000,
   standardHeaders: true,
   legacyHeaders: false,
+  skip: (req) => {
+    if (process.env.NODE_ENV !== 'production') {
+      return true;
+    }
+
+    const ip = req.ip || req.socket.remoteAddress || '';
+    return ip === '::1' || ip === '127.0.0.1' || ip === '::ffff:127.0.0.1';
+  },
   message: {
     success: false,
-    message: 'Hệ thống đang xử lý quá nhiều yêu cầu từ IP này. Vui lòng quay lại sau 15 phút.',
+    message: 'System is busy. Please try again later.',
   },
 });
 app.use('/api', globalLimiter);

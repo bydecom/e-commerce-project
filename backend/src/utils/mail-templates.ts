@@ -61,3 +61,29 @@ export function buildVerifyEmailTemplate(input: VerifyEmailInput): {
   return { subject, html, text };
 }
 
+export function buildExistingAccountAlertTemplate(params: {
+  name: string | null;
+  shopName: string;
+}): { subject: string; text: string; html: string } {
+  const customerName = params.name?.trim() || 'bạn';
+  const safeShopName = params.shopName?.trim() || 'Shop';
+
+  const subject = `[${safeShopName}] Alert: Your email has been used to register an account`;
+
+  const text = `Hello ${customerName}, someone just tried to register a new account at ${safeShopName} using this email. Since you already have an account, this request has been rejected to protect your information.`;
+
+  const html = `
+    <div style="font-family: sans-serif; color: #333;">
+      <h2>Account Registration Alert</h2>
+      <p>Hello <b>${customerName}</b>,</p>
+      <p>We have received a request to register a new account at <b>${safeShopName}</b> using this email address.</p>
+      <p>Since your email already exists in our system, this new registration request has been <b>rejected</b> to protect your information.</p>
+      <p>If this was you, please return to the login page. If it wasn’t you, rest assured that your account is still secure.</p>
+      <hr />
+      <p>Best regards,<br/>The ${safeShopName} Team</p>
+    </div>
+  `;
+
+  return { subject, text, html };
+}
+
