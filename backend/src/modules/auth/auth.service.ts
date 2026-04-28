@@ -121,7 +121,9 @@ export async function register(input: { name: string; email: string; password: s
     where: { email },
     select: { id: true },
   });
-  if (existing) throw httpError(409, 'Email already exists');
+  if (existing) {
+    return { email, message: 'Verification email sent' };
+  }
 
   await ensureRedisConnected();
   const redis = redisClient();

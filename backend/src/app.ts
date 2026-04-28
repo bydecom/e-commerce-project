@@ -53,8 +53,14 @@ app.use(
         cb(null, true);
         return;
       }
-      const devLocal = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/;
-      cb(null, devLocal.test(origin));
+      if (process.env.NODE_ENV !== 'production') {
+        const devLocal = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/;
+        if (devLocal.test(origin)) {
+          cb(null, true);
+          return;
+        }
+      }
+      cb(new Error('CORS not allowed'));
     },
   })
 );
