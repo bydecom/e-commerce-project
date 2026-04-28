@@ -7,7 +7,6 @@ import { environment } from '../../../environments/environment';
 import type { User } from '../../shared/models/user.model';
 import type { ApiSuccess } from '../../shared/models/api-response.model';
 
-const TOKEN_KEY = 'access_token';
 const USER_KEY = 'current_user';
 
 /** Matches `POST /api/auth/register` response `data` after email verification flow. */
@@ -22,17 +21,17 @@ export class AuthService {
   private readonly http = inject(HttpClient);
   private readonly router = inject(Router);
 
-  private readonly userSignal = signal<User | null>(this.readStoredSession());
+  // Access token lives only in memory — never written to localStorage or any
+  // DOM-accessible storage, so XSS cannot read it.
+  private accessToken: string | null = null;
+  private readonly userSignal = signal<User | null>(this.readStoredUser());
 
   readonly currentUser = this.userSignal.asReadonly();
   readonly isAuthenticated = computed(() => this.userSignal() !== null);
   readonly isAdmin = computed(() => this.userSignal()?.role === 'ADMIN');
 
   getToken(): string | null {
-    if (!isPlatformBrowser(this.platformId)) {
-      return null;
-    }
-    return localStorage.getItem(TOKEN_KEY);
+    return this.accessToken;
   }
 
   register(name: string, email: string, password: string): Observable<RegisterInitResult> {
@@ -97,9 +96,7 @@ export class AuthService {
           if (!res.success || !res.data?.token) {
             throw new Error('Refresh failed');
           }
-          if (isPlatformBrowser(this.platformId)) {
-            localStorage.setItem(TOKEN_KEY, res.data.token);
-          }
+          this.accessToken = res.data.token;
           return res.data.token;
         })
       );
@@ -111,37 +108,41 @@ export class AuthService {
 
   /** Update snapshot user after profile update. */
   updateCurrentUser(next: User): void {
-    if (!isPlatformBrowser(this.platformId)) {
-      this.userSignal.set(next);
-      return;
+    if (isPlatformBrowser(this.platformId)) {
+      localStorage.setItem(USER_KEY, JSON.stringify(next));
     }
-    const token = localStorage.getItem(TOKEN_KEY);
-    if (!token) {
-      this.userSignal.set(next);
-      return;
-    }
-    localStorage.setItem(USER_KEY, JSON.stringify(next));
     this.userSignal.set(next);
   }
 
   /**
-   * Calls `POST /api/auth/logout` to blacklist the JWT server-side, then clears client session.
-   * If there is no token (or outside browser), only clears local state.
+   * Full logout: if an access token is in memory, calls `POST /api/auth/logout` to
+   * blacklist the JWT and clear the refresh cookie. If the token was lost (page reload
+   * before re-authentication), calls `POST /api/auth/signout` instead, which revokes
+   * only the refresh cookie without requiring a JWT.
    */
   logout(opts?: { returnUrl?: string; reason?: string }): void {
     if (!isPlatformBrowser(this.platformId)) {
       this.userSignal.set(null);
       return;
     }
-    const token = localStorage.getItem(TOKEN_KEY);
-    if (!token) {
-      this.clearClientSession({ returnUrl: opts?.returnUrl, reason: opts?.reason });
-      return;
+    if (this.accessToken) {
+      this.http
+        .post<ApiSuccess<null>>(`${environment.apiUrl}/api/auth/logout`, {}, { withCredentials: true })
+        .subscribe({
+          next: () => this.clearClientSession(opts),
+          error: () => this.clearClientSession(opts),
+        });
+    } else if (this.userSignal()) {
+      // Token not in memory (page was refreshed) but session cookie may still be alive.
+      this.http
+        .post<ApiSuccess<null>>(`${environment.apiUrl}/api/auth/signout`, {}, { withCredentials: true })
+        .subscribe({
+          next: () => this.clearClientSession(opts),
+          error: () => this.clearClientSession(opts),
+        });
+    } else {
+      this.clearClientSession(opts);
     }
-    this.http.post<ApiSuccess<null>>(`${environment.apiUrl}/api/auth/logout`, {}, { withCredentials: true }).subscribe({
-      next: () => this.clearClientSession({ returnUrl: opts?.returnUrl, reason: opts?.reason }),
-      error: () => this.clearClientSession({ returnUrl: opts?.returnUrl, reason: opts?.reason }),
-    });
   }
 
   changePassword(currentPassword: string, newPassword: string): Observable<void> {
@@ -161,8 +162,8 @@ export class AuthService {
   }
 
   private clearClientSession(opts?: { returnUrl?: string; reason?: string }): void {
+    this.accessToken = null;
     if (isPlatformBrowser(this.platformId)) {
-      localStorage.removeItem(TOKEN_KEY);
       localStorage.removeItem(USER_KEY);
     }
     this.userSignal.set(null);
@@ -187,24 +188,15 @@ export class AuthService {
   }
 
   private persistSession(token: string, user: User): void {
-    if (!isPlatformBrowser(this.platformId)) {
-      return;
+    this.accessToken = token;
+    if (isPlatformBrowser(this.platformId)) {
+      localStorage.setItem(USER_KEY, JSON.stringify(user));
     }
-    localStorage.setItem(TOKEN_KEY, token);
-    localStorage.setItem(USER_KEY, JSON.stringify(user));
     this.userSignal.set(user);
   }
 
-  /**
-   * Restores session only when both token and user snapshot exist (avoids stale user after token removal).
-   */
-  private readStoredSession(): User | null {
+  private readStoredUser(): User | null {
     if (!isPlatformBrowser(this.platformId)) {
-      return null;
-    }
-    const token = localStorage.getItem(TOKEN_KEY);
-    if (!token) {
-      localStorage.removeItem(USER_KEY);
       return null;
     }
     const raw = localStorage.getItem(USER_KEY);
