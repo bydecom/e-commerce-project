@@ -3,6 +3,9 @@ import express from 'express';
 import type { Request, Response } from 'express';
 import cors from 'cors';
 import cookieParser from 'cookie-parser';
+import helmet from 'helmet';
+import rateLimit from 'express-rate-limit';
+import hpp from 'hpp';
 import { prisma } from './db';
 
 import { authRouter } from './modules/auth/auth.route';
@@ -35,6 +38,8 @@ if (String(process.env.TRUST_PROXY ?? '').toLowerCase() === 'true') {
   app.set('trust proxy', 1);
 }
 
+app.use(helmet());
+
 /** Allow localhost and 127.0.0.1 (any port) during local development to avoid CORS mismatches. */
 app.use(
   cors({
@@ -53,7 +58,22 @@ app.use(
     },
   })
 );
+
+const globalLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 150,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: {
+    success: false,
+    message: 'Hệ thống đang xử lý quá nhiều yêu cầu từ IP này. Vui lòng quay lại sau 15 phút.',
+  },
+});
+app.use('/api', globalLimiter);
+
 app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+app.use(hpp());
 app.use(cookieParser());
 app.use(dbLoggerMiddleware);
 

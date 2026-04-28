@@ -12,6 +12,7 @@ import {
   storeRefreshToken,
   rotateRefreshToken,
   revokeRefreshToken,
+  revokeAllUserRefreshTokens,
 } from '../../utils/refresh-token';
 import { buildVerifyEmailTemplate } from '../../utils/mail-templates';
 import { StoreSettingService } from '../store-setting/store-setting.service';
@@ -386,4 +387,6 @@ export async function changePassword(input: {
     where: { id: userId },
     data: { password: passwordHash },
   });
+
+  await revokeAllUserRefreshTokens(userId);
 }

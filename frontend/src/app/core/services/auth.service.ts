@@ -2,7 +2,7 @@ import { Injectable, PLATFORM_ID, computed, inject, signal } from '@angular/core
 import { isPlatformBrowser } from '@angular/common';
 import { Router } from '@angular/router';
 import { HttpClient } from '@angular/common/http';
-import { Observable, map } from 'rxjs';
+import { BehaviorSubject, Observable, map } from 'rxjs';
 import { environment } from '../../../environments/environment';
 import type { User } from '../../shared/models/user.model';
 import type { ApiSuccess } from '../../shared/models/api-response.model';
@@ -26,12 +26,40 @@ export class AuthService {
   private accessToken: string | null = null;
   private readonly userSignal = signal<User | null>(this.readStoredUser());
 
+  // Interceptor refresh state must NOT be module-global in SSR.
+  private isRefreshing = false;
+  private refreshTokenSubject = new BehaviorSubject<string | null>(null);
+
   readonly currentUser = this.userSignal.asReadonly();
   readonly isAuthenticated = computed(() => this.userSignal() !== null);
   readonly isAdmin = computed(() => this.userSignal()?.role === 'ADMIN');
 
   getToken(): string | null {
     return this.accessToken;
+  }
+
+  get isRefreshingToken(): boolean {
+    return this.isRefreshing;
+  }
+
+  setRefreshingState(state: boolean): void {
+    this.isRefreshing = state;
+  }
+
+  get refreshToken$(): Observable<string | null> {
+    return this.refreshTokenSubject.asObservable();
+  }
+
+  broadcastNewToken(token: string | null): void {
+    this.refreshTokenSubject.next(token);
+  }
+
+  clearLocalSessionQuietly(): void {
+    this.accessToken = null;
+    if (isPlatformBrowser(this.platformId)) {
+      localStorage.removeItem(USER_KEY);
+    }
+    this.userSignal.set(null);
   }
 
   register(name: string, email: string, password: string): Observable<RegisterInitResult> {

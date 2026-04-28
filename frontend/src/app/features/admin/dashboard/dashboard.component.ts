@@ -995,6 +995,12 @@ export class AdminDashboardComponent implements OnInit, OnDestroy {
           y: {
             border: { display: false, dash: [4, 4] },
             grid: { color: grid },
+            title: {
+              display: true,
+              text: 'VND',
+              color: tick,
+              font: { size: 11 },
+            },
             ticks: {
               color: tick,
               font: { size: 10 },
