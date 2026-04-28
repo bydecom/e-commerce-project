@@ -11,4 +11,5 @@ authRouter.post('/resend-verification', authController.resendVerification);
 authRouter.post('/refresh', authController.refresh);
 authRouter.get('/me', authMiddleware, authController.me);
 authRouter.post('/logout', authMiddleware, authController.logout);
+authRouter.post('/signout', authController.signout);
 authRouter.post('/change-password', authMiddleware, authController.changePassword);

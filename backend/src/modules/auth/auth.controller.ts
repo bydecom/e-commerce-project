@@ -2,6 +2,7 @@ import type { NextFunction, Request, Response } from 'express';
 import { success } from '../../utils/response';
 import { httpError } from '../../utils/http-error';
 import * as authService from './auth.service';
+import { revokeRefreshToken } from '../../utils/refresh-token';
 import { getConfigInt } from '../system-config/system-config.service';
 
 async function refreshTtlMs(): Promise<number> {
@@ -149,6 +150,23 @@ export async function refresh(req: Request, res: Response, next: NextFunction): 
     res.json(success({ token: data.token }));
   } catch (err) {
     clearRefreshCookie(res);
+    next(err);
+  }
+}
+
+/** Revokes the refresh cookie without requiring an access token. Used when the
+ *  in-memory access token was lost (e.g. page reload) but the session cookie remains. */
+export async function signout(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const rawRefreshToken = typeof req.cookies?.refresh_token === 'string'
+      ? req.cookies.refresh_token
+      : undefined;
+    if (rawRefreshToken) {
+      await revokeRefreshToken(rawRefreshToken);
+    }
+    clearRefreshCookie(res);
+    res.json(success(null, 'Signed out'));
+  } catch (err) {
     next(err);
   }
 }
