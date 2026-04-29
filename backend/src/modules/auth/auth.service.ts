@@ -9,9 +9,11 @@ import { sendMail } from '../../utils/mail';
 import { blacklistJwt } from '../../utils/jwt-blacklist';
 import {
   generateRefreshToken,
+  generateTokenFamily,
   storeRefreshToken,
   rotateRefreshToken,
   revokeRefreshToken,
+  revokeTokenFamily,
   revokeAllUserRefreshTokens,
 } from '../../utils/refresh-token';
 import {
@@ -210,7 +212,7 @@ export async function login(input: { email: string; password: string; oldRefresh
   }
 
   const refreshToken = generateRefreshToken();
-  await storeRefreshToken(refreshToken, { userId: user.id, role: user.role });
+  await storeRefreshToken(refreshToken, { userId: user.id, role: user.role, familyId: generateTokenFamily() });
 
   return {
     token,
@@ -228,7 +230,13 @@ export async function refreshAccessToken(rawRefreshToken: string): Promise<{
   }
 
   const result = await rotateRefreshToken(rawRefreshToken);
-  if (!result) {
+
+  if (result.status === 'reuse_detected') {
+    await revokeTokenFamily(result.familyId, result.userId);
+    throw httpError(401, 'Refresh token invalid or expired', { code: 'AUTH_REFRESH_REUSE_DETECTED' });
+  }
+
+  if (result.status === 'not_found') {
     throw httpError(401, 'Refresh token invalid or expired', { code: 'AUTH_REFRESH_INVALID_OR_EXPIRED' });
   }
 
