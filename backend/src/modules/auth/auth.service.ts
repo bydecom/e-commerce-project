@@ -151,6 +151,10 @@ export async function register(input: { name: string; email: string; password: s
       console.error('[Mail Error] Existing account alert failed:', err);
     });
 
+    // Timing guard: match the cost of the new-user path (bcrypt hash) so
+    // response time doesn't reveal whether the email is already registered.
+    await bcrypt.hash(password, 10);
+
     return { email, message: 'Verification email sent' };
   }
 
