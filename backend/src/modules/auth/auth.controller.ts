@@ -171,6 +171,33 @@ export async function signout(req: Request, res: Response, next: NextFunction): 
   }
 }
 
+export async function requestOtp(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const b = req.body as Record<string, unknown>;
+    const email = typeof b.email === 'string' ? b.email : '';
+    await authService.requestOtp({ email });
+    res.json(success(null, 'Verification code sent'));
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function verifyOtp(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const b = req.body as Record<string, unknown>;
+    const email = typeof b.email === 'string' ? b.email : '';
+    const otp = typeof b.otp === 'string' ? b.otp : '';
+    const oldRefreshToken = typeof req.cookies?.refresh_token === 'string'
+      ? req.cookies.refresh_token
+      : undefined;
+    const data = await authService.verifyOtpAndLogin({ email, otp, oldRefreshToken });
+    await setRefreshCookie(res, data.refreshToken);
+    res.json(success({ token: data.token, user: data.user }));
+  } catch (err) {
+    next(err);
+  }
+}
+
 export async function changePassword(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
     const auth = req.auth;

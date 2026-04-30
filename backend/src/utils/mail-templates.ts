@@ -61,6 +61,62 @@ export function buildVerifyEmailTemplate(input: VerifyEmailInput): {
   return { subject, html, text };
 }
 
+export function buildOtpLoginTemplate(params: {
+  name: string | null;
+  otp: string;
+  expiresInMinutes: number;
+  shopName: string;
+}): { subject: string; html: string; text: string } {
+  const safeName = params.name?.trim() || 'there';
+  const safeShop = params.shopName.trim() || 'Shop';
+  const subject = `Your login verification code - ${safeShop}`;
+
+  const html = `
+    <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 600px; margin: 0 auto; background-color: #ffffff; border: 1px solid #e5e7eb; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);">
+      <div style="background-color: #111827; padding: 32px 24px; text-align: center;">
+        <h1 style="margin: 0; color: #ffffff; font-size: 24px; font-weight: 800; letter-spacing: -0.025em;">
+          ${safeShop} — Login Verification
+        </h1>
+      </div>
+
+      <div style="padding: 32px 24px; color: #374151; font-size: 16px; line-height: 1.6;">
+        <p style="margin: 0 0 16px;">Hi <strong>${safeName}</strong>,</p>
+        <p style="margin: 0 0 24px;">We detected multiple failed login attempts on your account. Use the code below to verify your identity and continue.</p>
+
+        <div style="text-align: center; margin: 32px 0;">
+          <div style="display: inline-block; background-color: #f3f4f6; border: 2px dashed #d1d5db; border-radius: 12px; padding: 20px 40px;">
+            <span style="font-size: 36px; font-weight: 800; letter-spacing: 0.15em; color: #111827;">${params.otp}</span>
+          </div>
+        </div>
+
+        <p style="margin: 0 0 12px; font-size: 14px; color: #6b7280; text-align: center;">
+          This code expires in <strong>${params.expiresInMinutes} minutes</strong> and can only be used once.
+        </p>
+
+        <hr style="border: 0; border-top: 1px solid #e5e7eb; margin: 32px 0;" />
+
+        <p style="margin: 0; font-size: 14px; color: #9ca3af;">
+          If you did not attempt to log in, someone may be trying to access your account. You can safely ignore this email — your account remains secure.
+        </p>
+      </div>
+
+      <div style="background-color: #f9fafb; padding: 24px; text-align: center; border-top: 1px solid #e5e7eb;">
+        <p style="margin: 0; font-size: 13px; color: #6b7280;">
+          &copy; ${new Date().getFullYear()} ${safeShop}. All rights reserved.
+        </p>
+      </div>
+    </div>
+  `;
+
+  const text =
+    `Hi ${safeName},\n\n` +
+    `Your login verification code is: ${params.otp}\n\n` +
+    `It expires in ${params.expiresInMinutes} minutes and can only be used once.\n\n` +
+    `If you did not attempt to log in, you can safely ignore this email.`;
+
+  return { subject, html, text };
+}
+
 export function buildExistingAccountAlertTemplate(params: {
   name: string | null;
   shopName: string;

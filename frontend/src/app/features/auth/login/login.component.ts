@@ -125,6 +125,15 @@ export class LoginComponent implements OnInit {
       },
       error: (err: unknown) => {
         this.loading = false;
+        if (this.isOtpRequired(err)) {
+          void this.router.navigate(['/verify-otp'], {
+            queryParams: {
+              email,
+              ...(this.returnUrl ? { returnUrl: this.returnUrl } : {}),
+            },
+          });
+          return;
+        }
         this.errorMessage = this.extractErrorMessage(err);
       },
     });
@@ -137,6 +146,14 @@ export class LoginComponent implements OnInit {
     if (v.startsWith('//')) return null;
     if (v === '/login') return null;
     return v;
+  }
+
+  private isOtpRequired(err: unknown): boolean {
+    if (err instanceof HttpErrorResponse) {
+      const errors = (err.error as { errors?: { code?: string } | null } | null)?.errors;
+      return errors?.code === 'AUTH_OTP_REQUIRED';
+    }
+    return false;
   }
 
   private extractErrorMessage(err: unknown): string {
