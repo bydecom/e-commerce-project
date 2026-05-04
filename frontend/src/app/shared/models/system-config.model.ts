@@ -63,7 +63,7 @@ export const CONFIG_META_FE: SystemConfigMeta[] = [
   {
     key: 'idle_timeout_seconds',
     label: 'Idle Logout Timeout',
-    description: 'Bao lâu không thao tác thì tự đăng xuất (giây).',
+    description: 'How long to logout automatically due to inactivity (seconds).',
     type: 'number',
     min: 60,
     max: 86_400,
