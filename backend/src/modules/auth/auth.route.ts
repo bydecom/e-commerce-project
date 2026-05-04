@@ -7,10 +7,19 @@ export const authRouter = Router();
 
 const authStrictLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 5,
+  max: 10,
   message: {
     success: false,
     message: 'You have tried too many times. Please try again in 15 minutes to protect your account.',
+  },
+});
+
+const authOtpLimiter = rateLimit({
+  windowMs: 10 * 60 * 1000,
+  max: 5,
+  message: {
+    success: false,
+    message: 'Too many OTP requests. Please try again later.',
   },
 });
 
@@ -32,3 +41,5 @@ authRouter.get('/me', authMiddleware, authController.me);
 authRouter.post('/logout', authMiddleware, authController.logout);
 authRouter.post('/signout', authController.signout);
 authRouter.post('/change-password', authMiddleware, authController.changePassword);
+authRouter.post('/otp/request', authOtpLimiter, authController.requestOtp);
+authRouter.post('/otp/verify', authOtpLimiter, authController.verifyOtp);

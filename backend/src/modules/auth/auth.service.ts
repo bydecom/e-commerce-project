@@ -9,15 +9,29 @@ import { sendMail } from '../../utils/mail';
 import { blacklistJwt } from '../../utils/jwt-blacklist';
 import {
   generateRefreshToken,
+  generateTokenFamily,
   storeRefreshToken,
   rotateRefreshToken,
   revokeRefreshToken,
+  revokeTokenFamily,
   revokeAllUserRefreshTokens,
 } from '../../utils/refresh-token';
 import {
   buildExistingAccountAlertTemplate,
+  buildOtpLoginTemplate,
   buildVerifyEmailTemplate,
 } from '../../utils/mail-templates';
+import {
+  isOtpGateActive,
+  incrementLoginAttempts,
+  resetLoginAttempts,
+  generateOtp,
+  storeOtp,
+  setOtpResendCooldown,
+  getOtpResendCooldownTtl,
+  checkAndConsumeOtp,
+  clearOtpKeys,
+} from '../../utils/login-attempts';
 import { StoreSettingService } from '../store-setting/store-setting.service';
 import { getConfig, getConfigInt } from '../system-config/system-config.service';
 
@@ -137,6 +151,10 @@ export async function register(input: { name: string; email: string; password: s
       console.error('[Mail Error] Existing account alert failed:', err);
     });
 
+    // Timing guard: match the cost of the new-user path (bcrypt hash) so
+    // response time doesn't reveal whether the email is already registered.
+    await bcrypt.hash(password, 10);
+
     return { email, message: 'Verification email sent' };
   }
 
@@ -172,22 +190,18 @@ export async function register(input: { name: string; email: string; password: s
   return { email, message: 'Verification email sent' };
 }
 
-export async function login(input: { email: string; password: string; oldRefreshToken?: string }) {
-  const email = normalizeEmail(input.email);
-  const password = input.password;
+// Lazy dummy hash — used so bcrypt.compare always runs even when email doesn't exist,
+// preventing timing-based email enumeration.
+let _dummyHash: string | null = null;
+async function dummyHash(): Promise<string> {
+  if (!_dummyHash) _dummyHash = await bcrypt.hash('__timing_guard__', 10);
+  return _dummyHash;
+}
 
-  if (!email) throw httpError(400, 'email is required');
-  if (!password) throw httpError(400, 'password is required');
-
-  const user = await prisma.user.findUnique({
-    where: { email },
-    select: { id: true, name: true, email: true, role: true, password: true },
-  });
-  if (!user) throw httpError(401, 'Email or Password wrong');
-
-  const ok = await bcrypt.compare(password, user.password);
-  if (!ok) throw httpError(401, 'Email or Password wrong');
-
+async function issueTokens(
+  user: { id: number; name: string | null; email: string; role: 'USER' | 'ADMIN' },
+  oldRefreshToken?: string,
+): Promise<{ token: string; refreshToken: string; user: ReturnType<typeof mapUser> }> {
   const secret = process.env.JWT_SECRET;
   if (!secret) throw httpError(500, 'JWT secret is not configured');
 
@@ -197,26 +211,114 @@ export async function login(input: { email: string; password: string; oldRefresh
   const token = jwt.sign(
     { userId: user.id, role: user.role },
     secret,
-    {
-      algorithm: 'HS256',
-      expiresIn,
-      subject: String(user.id),
-      jwtid: jti,
-    }
+    { algorithm: 'HS256', expiresIn, subject: String(user.id), jwtid: jti },
   );
 
-  if (input.oldRefreshToken) {
-    await revokeRefreshToken(input.oldRefreshToken);
+  if (oldRefreshToken) {
+    await revokeRefreshToken(oldRefreshToken);
   }
 
   const refreshToken = generateRefreshToken();
-  await storeRefreshToken(refreshToken, { userId: user.id, role: user.role });
+  await storeRefreshToken(refreshToken, { userId: user.id, role: user.role, familyId: generateTokenFamily() });
 
-  return {
-    token,
-    refreshToken,
-    user: mapUser({ id: user.id, name: user.name, email: user.email, role: user.role }),
-  };
+  return { token, refreshToken, user: mapUser(user) };
+}
+
+export async function login(input: { email: string; password: string; oldRefreshToken?: string }) {
+  const email = normalizeEmail(input.email);
+  const password = input.password;
+
+  if (!email) throw httpError(400, 'email is required');
+  if (!password) throw httpError(400, 'password is required');
+
+  if (await isOtpGateActive(email)) {
+    throw httpError(403, 'Too many failed attempts. Please verify your identity to continue.', {
+      code: 'AUTH_OTP_REQUIRED',
+    });
+  }
+
+  const user = await prisma.user.findUnique({
+    where: { email },
+    select: { id: true, name: true, email: true, role: true, password: true },
+  });
+
+  // Always run bcrypt regardless of whether email exists — prevents timing-based enumeration
+  const hashToCheck = user ? user.password : await dummyHash();
+  const ok = await bcrypt.compare(password, hashToCheck);
+
+  if (!user || !ok) {
+    const newCount = await incrementLoginAttempts(email);
+    if (newCount >= 4) {
+      throw httpError(403, 'Too many failed attempts. Please verify your identity to continue.', {
+        code: 'AUTH_OTP_REQUIRED',
+      });
+    }
+    throw httpError(401, 'Invalid email or password');
+  }
+
+  await resetLoginAttempts(email);
+  return issueTokens({ id: user.id, name: user.name, email: user.email, role: user.role }, input.oldRefreshToken);
+}
+
+export async function requestOtp(input: { email: string }): Promise<void> {
+  const email = normalizeEmail(input.email);
+  if (!email) throw httpError(400, 'email is required');
+
+  const cooldownTtl = await getOtpResendCooldownTtl(email);
+  if (cooldownTtl > 0) {
+    throw httpError(429, `Please wait ${cooldownTtl} seconds before requesting another code`);
+  }
+
+  const user = await prisma.user.findUnique({
+    where: { email },
+    select: { id: true, name: true },
+  });
+
+  const otp = generateOtp();
+
+  if (user) {
+    await storeOtp(email, otp);
+
+    const setting = await StoreSettingService.getSetting();
+    const shopName = setting?.name?.trim() || 'Shop';
+    const expiresInMinutes = Math.max(1, Math.round(parseInt(process.env.OTP_TTL_SECONDS ?? '300', 10) / 60));
+    const { subject, html, text } = buildOtpLoginTemplate({ name: user.name, otp, expiresInMinutes, shopName });
+
+    await sendMail({ to: email, subject, html, text });
+  } else {
+    // Simulate email send time so response timing doesn't reveal whether email exists
+    await new Promise<void>((resolve) => setTimeout(resolve, 800));
+    await setOtpResendCooldown(email);
+  }
+}
+
+export async function verifyOtpAndLogin(input: {
+  email: string;
+  otp: string;
+  oldRefreshToken?: string;
+}) {
+  const email = normalizeEmail(input.email);
+  const otp = (input.otp || '').trim();
+
+  if (!email) throw httpError(400, 'email is required');
+  if (!otp) throw httpError(400, 'otp is required');
+
+  const user = await prisma.user.findUnique({
+    where: { email },
+    select: { id: true, name: true, email: true, role: true },
+  });
+
+  const valid = await checkAndConsumeOtp(email, otp);
+
+  if (!user || !valid) {
+    if (!user) await new Promise<void>((resolve) => setTimeout(resolve, 200));
+    throw httpError(401, 'Invalid or expired verification code');
+  }
+
+  await resetLoginAttempts(email);
+  await clearOtpKeys(email);
+
+  return issueTokens(user, input.oldRefreshToken);
 }
 
 export async function refreshAccessToken(rawRefreshToken: string): Promise<{
@@ -228,7 +330,13 @@ export async function refreshAccessToken(rawRefreshToken: string): Promise<{
   }
 
   const result = await rotateRefreshToken(rawRefreshToken);
-  if (!result) {
+
+  if (result.status === 'reuse_detected') {
+    await revokeTokenFamily(result.familyId, result.userId);
+    throw httpError(401, 'Refresh token invalid or expired', { code: 'AUTH_REFRESH_REUSE_DETECTED' });
+  }
+
+  if (result.status === 'not_found') {
     throw httpError(401, 'Refresh token invalid or expired', { code: 'AUTH_REFRESH_INVALID_OR_EXPIRED' });
   }
 

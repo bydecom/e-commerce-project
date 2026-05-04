@@ -173,6 +173,28 @@ export class AuthService {
     }
   }
 
+  requestOtp(email: string): Observable<void> {
+    return this.http
+      .post<ApiSuccess<null>>(`${environment.apiUrl}/api/auth/otp/request`, { email })
+      .pipe(map((res) => { if (!res.success) throw new Error('Request failed'); }));
+  }
+
+  verifyOtpAndLogin(email: string, otp: string): Observable<{ user: User; token: string }> {
+    return this.http
+      .post<ApiSuccess<{ user: User; token: string }>>(
+        `${environment.apiUrl}/api/auth/otp/verify`,
+        { email, otp },
+        { withCredentials: true }
+      )
+      .pipe(
+        map((res) => {
+          if (!res.success || !res.data) throw new Error('Verification failed');
+          this.persistSession(res.data.token, res.data.user);
+          return res.data;
+        })
+      );
+  }
+
   changePassword(currentPassword: string, newPassword: string): Observable<void> {
     return this.http
       .post<ApiSuccess<null>>(`${environment.apiUrl}/api/auth/change-password`, {

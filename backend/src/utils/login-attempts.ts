@@ -1,0 +1,85 @@
+import { createHash, randomInt } from 'crypto';
+import { ensureRedisConnected, redisClient } from '../config/redis';
+
+function envInt(name: string, fallback: number): number {
+  const v = parseInt(process.env[name] ?? '', 10);
+  return Number.isFinite(v) && v > 0 ? v : fallback;
+}
+
+function getAttemptLimit(): number { return envInt('LOGIN_ATTEMPT_LIMIT', 4); }
+function getAttemptTtl(): number   { return envInt('LOGIN_ATTEMPT_TTL_SECONDS', 86400); }
+function getOtpTtl(): number       { return envInt('OTP_TTL_SECONDS', 300); }
+function getOtpCooldown(): number  { return envInt('OTP_RESEND_COOLDOWN_SECONDS', 60); }
+
+function keyAttempts(email: string): string    { return `login_attempts:${email}`; }
+function keyOtp(email: string): string         { return `otp:${email}`; }
+function keyOtpCooldown(email: string): string { return `otp_resend_cooldown:${email}`; }
+
+function hashOtp(otp: string): string {
+  return createHash('sha256').update(otp).digest('hex');
+}
+
+export async function getLoginAttempts(email: string): Promise<number> {
+  await ensureRedisConnected();
+  const val = await redisClient().get(keyAttempts(email));
+  return val ? parseInt(val, 10) : 0;
+}
+
+export async function incrementLoginAttempts(email: string): Promise<number> {
+  await ensureRedisConnected();
+  const redis = redisClient();
+  const key = keyAttempts(email);
+  const count = await redis.incr(key);
+  // Set TTL only on first increment — fixes the 24-hour window from first failure
+  if (count === 1) {
+    await redis.expire(key, getAttemptTtl());
+  }
+  return count;
+}
+
+export async function resetLoginAttempts(email: string): Promise<void> {
+  await ensureRedisConnected();
+  await redisClient().del(keyAttempts(email));
+}
+
+export async function isOtpGateActive(email: string): Promise<boolean> {
+  const count = await getLoginAttempts(email);
+  return count >= getAttemptLimit();
+}
+
+export function generateOtp(): string {
+  return String(randomInt(100000, 1000000));
+}
+
+export async function storeOtp(email: string, otp: string): Promise<void> {
+  await ensureRedisConnected();
+  const redis = redisClient();
+  await redis.set(keyOtp(email), hashOtp(otp), { EX: getOtpTtl() });
+  await redis.set(keyOtpCooldown(email), '1', { EX: getOtpCooldown() });
+}
+
+export async function setOtpResendCooldown(email: string): Promise<void> {
+  await ensureRedisConnected();
+  await redisClient().set(keyOtpCooldown(email), '1', { EX: getOtpCooldown() });
+}
+
+export async function getOtpResendCooldownTtl(email: string): Promise<number> {
+  await ensureRedisConnected();
+  const ttl = await redisClient().ttl(keyOtpCooldown(email));
+  return ttl > 0 ? ttl : 0;
+}
+
+export async function checkAndConsumeOtp(email: string, otp: string): Promise<boolean> {
+  await ensureRedisConnected();
+  const redis = redisClient();
+  const stored = await redis.get(keyOtp(email));
+  if (!stored) return false;
+  if (stored !== hashOtp(otp)) return false;
+  await redis.del(keyOtp(email));
+  return true;
+}
+
+export async function clearOtpKeys(email: string): Promise<void> {
+  await ensureRedisConnected();
+  await redisClient().del([keyOtp(email), keyOtpCooldown(email)]);
+}
