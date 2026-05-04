@@ -543,6 +543,7 @@ async function main() {
     { key: 'refresh_token_ttl_seconds',       value: '900',   description: 'Refresh token lifetime in seconds' },
     { key: 'verify_token_ttl_seconds',        value: '180',   description: 'Email verification link lifetime in seconds' },
     { key: 'pending_register_ttl_seconds',    value: '1800',  description: 'Pending registration cleanup TTL in seconds' },
+    { key: 'idle_timeout_seconds',            value: '900',   description: 'Auto logout after user inactivity (seconds, 60–86400)' },
     { key: 'product_cache_ttl_seconds',       value: '5',     description: 'Product detail Redis cache TTL in seconds (max 3600)' },
     { key: 'checkout_reservation_ttl_seconds',value: '900',   description: 'Stock reservation hold time at checkout in seconds (60–3600)' },
     { key: 'use_gemini',                      value: 'false', description: 'Use Gemini AI instead of local LLM (true/false)' },

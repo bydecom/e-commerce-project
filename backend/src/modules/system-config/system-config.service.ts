@@ -12,7 +12,8 @@ export type ConfigKey =
   | 'use_gemini'
   | 'gemini_api_key'
   | 'vnp_hash_secret'
-  | 'vnp_return_url';
+  | 'vnp_return_url'
+  | 'idle_timeout_seconds';
 
 export type SystemConfigRecord = {
   key: ConfigKey;
@@ -88,6 +89,11 @@ export const CONFIG_META: Record<ConfigKey, ConfigMeta> = {
         return 'Must be a valid URL (e.g. https://yourshop.com)';
       }
     },
+  },
+  idle_timeout_seconds: {
+    label: 'AFK Logout Timeout (seconds)',
+    description: 'How long a signed-in user may stay idle before automatic logout.',
+    validate: (v) => validateIntRange(v, 60, 86_400, 'Must be at most 24 hours (86400 seconds)'),
   },
 };
 
@@ -300,6 +306,7 @@ function getEnvFallback(key: ConfigKey): string {
     gemini_api_key: process.env.GEMINI_API_KEY || '',
     vnp_hash_secret: process.env.VNP_HASH_SECRET || '',
     vnp_return_url: process.env.VNP_RETURN_URL || 'http://localhost:4200',
+    idle_timeout_seconds: process.env.IDLE_TIMEOUT_SECONDS || '900',
   };
   return map[key];
 }

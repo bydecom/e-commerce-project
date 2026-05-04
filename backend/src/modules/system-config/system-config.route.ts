@@ -5,7 +5,9 @@ import * as ctrl from './system-config.controller';
 
 export const systemConfigRouter = Router();
 
-// All endpoints require ADMIN role
+systemConfigRouter.get('/public', ctrl.getPublic);
+
+// All endpoints below require ADMIN role
 systemConfigRouter.use(authMiddleware, requireRole(['ADMIN']));
 
 systemConfigRouter.get('/', ctrl.getAll);

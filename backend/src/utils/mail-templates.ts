@@ -65,7 +65,7 @@ export function buildExistingAccountAlertTemplate(params: {
   name: string | null;
   shopName: string;
 }): { subject: string; text: string; html: string } {
-  const customerName = params.name?.trim() || 'bạn';
+  const customerName = params.name?.trim() || 'my friend';
   const safeShopName = params.shopName?.trim() || 'Shop';
 
   const subject = `[${safeShopName}] Alert: Your email has been used to register an account`;

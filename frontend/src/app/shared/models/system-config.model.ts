@@ -60,6 +60,16 @@ export const CONFIG_META_FE: SystemConfigMeta[] = [
     unit: 'seconds',
     group: 'auth',
   },
+  {
+    key: 'idle_timeout_seconds',
+    label: 'Idle Logout Timeout',
+    description: 'Bao lâu không thao tác thì tự đăng xuất (giây).',
+    type: 'number',
+    min: 60,
+    max: 86_400,
+    unit: 'seconds',
+    group: 'auth',
+  },
 
   // Cache
   {

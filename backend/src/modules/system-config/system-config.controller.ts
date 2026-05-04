@@ -3,6 +3,15 @@ import { httpError } from '../../utils/http-error';
 import { success } from '../../utils/response';
 import * as systemConfigService from './system-config.service';
 
+export async function getPublic(_req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const idle_timeout_seconds = await systemConfigService.getConfigInt('idle_timeout_seconds', 900);
+    res.json(success({ idle_timeout_seconds }, 'OK'));
+  } catch (err) {
+    next(err);
+  }
+}
+
 export async function getAll(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
     const configs = await systemConfigService.getAllConfigs();
