@@ -1,4 +1,5 @@
 import { Component, inject, signal } from '@angular/core';
+import { HttpErrorResponse } from '@angular/common/http';
 import {
   FormBuilder,
   ReactiveFormsModule,
@@ -6,9 +7,8 @@ import {
   type AbstractControl,
   type ValidationErrors,
 } from '@angular/forms';
-import { Router, RouterLink } from '@angular/router';
+import { RouterLink } from '@angular/router';
 import { AuthService } from '../../core/services/auth.service';
-import { ToastService } from '../../core/services/toast.service';
 
 @Component({
   selector: 'app-change-password',
@@ -44,6 +44,18 @@ import { ToastService } from '../../core/services/toast.service';
           </button>
         </div>
       </div>
+
+      @if (errorMessage()) {
+        <div class="mb-6 rounded border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
+          {{ errorMessage() }}
+        </div>
+      }
+
+      @if (successMessage()) {
+        <div class="mb-6 rounded border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-800">
+          {{ successMessage() }}
+        </div>
+      }
 
       <form [formGroup]="form" (ngSubmit)="submit()" class="space-y-6">
         <div class="rounded-lg border border-gray-200 bg-white shadow-sm">
@@ -105,10 +117,10 @@ import { ToastService } from '../../core/services/toast.service';
 export class ChangePasswordComponent {
   private readonly fb = inject(FormBuilder);
   private readonly auth = inject(AuthService);
-  private readonly toast = inject(ToastService);
-  private readonly router = inject(Router);
 
   readonly saving = signal(false);
+  readonly errorMessage = signal('');
+  readonly successMessage = signal('');
 
   readonly form = this.fb.nonNullable.group(
     {
@@ -126,18 +138,25 @@ export class ChangePasswordComponent {
     }
     if (this.saving()) return;
 
+    this.errorMessage.set('');
+    this.successMessage.set('');
     this.saving.set(true);
     const v = this.form.getRawValue();
     this.auth.changePassword(v.currentPassword, v.newPassword).subscribe({
       next: () => {
         this.saving.set(false);
         this.form.reset();
-        this.toast.show('Password updated successfully.', 'success');
-        void this.router.navigate(['/profile']);
+        this.successMessage.set('Password updated successfully. Redirecting...');
+        setTimeout(() => this.auth.logout(), 1500);
       },
-      error: (e: Error) => {
+      error: (e: unknown) => {
         this.saving.set(false);
-        this.toast.show(e.message || 'Could not change password', 'error');
+        if (e instanceof HttpErrorResponse) {
+          const msg = (e.error as { message?: string } | null)?.message;
+          this.errorMessage.set(msg || 'Could not change password');
+        } else {
+          this.errorMessage.set('Could not change password');
+        }
       },
     });
   }

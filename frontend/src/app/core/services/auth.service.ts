@@ -207,6 +207,40 @@ export class AuthService {
       );
   }
 
+  requestForgotPassword(email: string): Observable<void> {
+    return this.http
+      .post<ApiSuccess<null>>(`${environment.apiUrl}/api/auth/forgot-password/request`, { email })
+      .pipe(map((res) => {
+        if (!res.success) throw new Error('Request failed');
+      }));
+  }
+
+  verifyForgotPasswordOtp(email: string, otp: string): Observable<string> {
+    return this.http
+      .post<ApiSuccess<{ resetToken: string }>>(
+        `${environment.apiUrl}/api/auth/forgot-password/verify`,
+        { email, otp }
+      )
+      .pipe(
+        map((res) => {
+          if (!res.success || !res.data?.resetToken) throw new Error('Verification failed');
+          return res.data.resetToken;
+        })
+      );
+  }
+
+  resetPassword(email: string, resetToken: string, newPassword: string): Observable<void> {
+    return this.http
+      .post<ApiSuccess<null>>(`${environment.apiUrl}/api/auth/forgot-password/reset`, {
+        email,
+        resetToken,
+        newPassword,
+      })
+      .pipe(map((res) => {
+        if (!res.success) throw new Error('Reset failed');
+      }));
+  }
+
   private clearClientSession(opts?: { returnUrl?: string; reason?: string }): void {
     this.accessToken = null;
     if (isPlatformBrowser(this.platformId)) {

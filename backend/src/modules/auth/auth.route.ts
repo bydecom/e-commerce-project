@@ -33,6 +33,9 @@ const authRefreshLimiter = rateLimit({
 });
 
 authRouter.post('/register', authController.register);
+authRouter.post('/forgot-password/request', authOtpLimiter, authController.forgotPasswordRequest);
+authRouter.post('/forgot-password/verify', authStrictLimiter, authController.forgotPasswordVerify);
+authRouter.post('/forgot-password/reset', authStrictLimiter, authController.forgotPasswordReset);
 authRouter.post('/login', authStrictLimiter, authController.login);
 authRouter.get('/verify-email', authController.verifyEmail);
 authRouter.post('/resend-verification', authStrictLimiter, authController.resendVerification);
@@ -40,6 +43,6 @@ authRouter.post('/refresh', authRefreshLimiter, authController.refresh);
 authRouter.get('/me', authMiddleware, authController.me);
 authRouter.post('/logout', authMiddleware, authController.logout);
 authRouter.post('/signout', authController.signout);
-authRouter.post('/change-password', authMiddleware, authController.changePassword);
+authRouter.post('/change-password', authStrictLimiter, authMiddleware, authController.changePassword);
 authRouter.post('/otp/request', authOtpLimiter, authController.requestOtp);
 authRouter.post('/otp/verify', authOtpLimiter, authController.verifyOtp);

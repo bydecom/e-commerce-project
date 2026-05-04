@@ -170,3 +170,55 @@ export function buildExistingAccountAlertTemplate(params: {
   return { subject, text, html };
 }
 
+export function buildPasswordChangedAlertTemplate(params: {
+  name: string | null;
+  shopName: string;
+}): { subject: string; text: string; html: string } {
+  const safeName = params.name?.trim() || 'there';
+  const safeShop = params.shopName.trim() || 'Shop';
+
+  const subject = `Security alert: your password was changed - ${safeShop}`;
+
+  const text =
+    `Hi ${safeName},\n\n` +
+    `The password for your ${safeShop} account was successfully changed.\n\n` +
+    `If you did this, you can safely ignore this email.\n` +
+    `If you did NOT do this, please use Forgot Password immediately to secure your account.\n\n` +
+    `The ${safeShop} Team`;
+
+  const html = `
+    <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 600px; margin: 0 auto; background-color: #ffffff; border: 1px solid #e5e7eb; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05);">
+      <div style="background-color: #111827; padding: 32px 24px; text-align: center;">
+        <h1 style="margin: 0; color: #ffffff; font-size: 24px; font-weight: 800; letter-spacing: -0.025em;">
+          ${safeShop} — Password Changed
+        </h1>
+      </div>
+
+      <div style="padding: 32px 24px; color: #374151; font-size: 16px; line-height: 1.6;">
+        <p style="margin: 0 0 16px;">Hi <strong>${safeName}</strong>,</p>
+        <p style="margin: 0 0 24px;">The password for your <strong>${safeShop}</strong> account was successfully changed.</p>
+
+        <div style="background-color: #fffbeb; border: 1px solid #fcd34d; border-radius: 8px; padding: 16px 20px; margin: 0 0 24px;">
+          <p style="margin: 0; font-size: 14px; color: #92400e;">
+            <strong>Didn't change your password?</strong><br/>
+            Use the Forgot Password feature immediately or contact support to secure your account.
+          </p>
+        </div>
+
+        <hr style="border: 0; border-top: 1px solid #e5e7eb; margin: 32px 0;" />
+        <p style="margin: 0; font-size: 14px; color: #9ca3af;">
+          If you made this change yourself, no action is needed.
+        </p>
+      </div>
+
+      <div style="background-color: #f9fafb; padding: 24px; text-align: center; border-top: 1px solid #e5e7eb;">
+        <p style="margin: 0; font-size: 13px; color: #6b7280;">
+          &copy; ${new Date().getFullYear()} ${safeShop}. All rights reserved.
+        </p>
+      </div>
+    </div>
+  `;
+
+  return { subject, text, html };
+}
+

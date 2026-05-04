@@ -83,3 +83,88 @@ export async function clearOtpKeys(email: string): Promise<void> {
   await ensureRedisConnected();
   await redisClient().del([keyOtp(email), keyOtpCooldown(email)]);
 }
+
+/** OTP value TTL in seconds (`OTP_TTL_SECONDS`), for email copy / forgot flow. */
+export function getOtpTtlSeconds(): number {
+  return getOtpTtl();
+}
+
+// ─── Forgot password OTP / reset token ───────────────────────────────────────
+
+function keyForgotOtp(email: string): string {
+  return `forgot_otp:${email}`;
+}
+function keyResetToken(email: string): string {
+  return `reset_token:${email}`;
+}
+function keyForgotCooldown(email: string): string {
+  return `forgot_otp_cooldown:${email}`;
+}
+
+/** Cooldown for unknown-email path (must match keys read by `getForgotCooldownTtl`). */
+export async function setForgotResendCooldown(email: string): Promise<void> {
+  await ensureRedisConnected();
+  await redisClient().set(keyForgotCooldown(email), '1', { EX: getOtpCooldown() });
+}
+
+export async function storeForgotOtp(email: string, otp: string): Promise<void> {
+  await ensureRedisConnected();
+  const redis = redisClient();
+  await redis.set(keyForgotOtp(email), hashOtp(otp), { EX: getOtpTtl() });
+  await redis.set(keyForgotCooldown(email), '1', { EX: getOtpCooldown() });
+}
+
+export async function getForgotCooldownTtl(email: string): Promise<number> {
+  await ensureRedisConnected();
+  const ttl = await redisClient().ttl(keyForgotCooldown(email));
+  return ttl > 0 ? ttl : 0;
+}
+
+export async function checkAndConsumeForgotOtp(email: string, otp: string): Promise<boolean> {
+  await ensureRedisConnected();
+  const redis = redisClient();
+  const stored = await redis.get(keyForgotOtp(email));
+  if (!stored || stored !== hashOtp(otp)) return false;
+  await redis.del(keyForgotOtp(email));
+  return true;
+}
+
+export async function storeResetToken(email: string, token: string): Promise<void> {
+  await ensureRedisConnected();
+  await redisClient().set(keyResetToken(email), token, { EX: 900 });
+}
+
+export async function checkAndConsumeResetToken(email: string, token: string): Promise<boolean> {
+  await ensureRedisConnected();
+  const redis = redisClient();
+  const stored = await redis.get(keyResetToken(email));
+  if (!stored || stored !== token) return false;
+  await redis.del(keyResetToken(email));
+  return true;
+}
+
+// ─── Change password attempts (per userId) ───────────────────────────────────
+
+function keyChangePasswordAttempts(userId: number): string {
+  return `change_password_attempts:${userId}`;
+}
+
+export async function isChangePasswordLocked(userId: number): Promise<boolean> {
+  await ensureRedisConnected();
+  const count = await redisClient().get(keyChangePasswordAttempts(userId));
+  return count ? parseInt(count, 10) >= 5 : false;
+}
+
+export async function incrementChangePasswordAttempts(userId: number): Promise<number> {
+  await ensureRedisConnected();
+  const redis = redisClient();
+  const key = keyChangePasswordAttempts(userId);
+  const count = await redis.incr(key);
+  if (count === 1) await redis.expire(key, 900);
+  return count;
+}
+
+export async function resetChangePasswordAttempts(userId: number): Promise<void> {
+  await ensureRedisConnected();
+  await redisClient().del(keyChangePasswordAttempts(userId));
+}

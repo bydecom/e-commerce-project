@@ -4,13 +4,19 @@ import { catchError, switchMap, throwError } from 'rxjs';
 import { AuthService } from '../services/auth.service';
 import { environment } from '../../../environments/environment';
 
-/** 401 on these auth endpoints must not trigger refresh (loop or wrong UX). */
+/**
+ * 401 on these URLs means wrong credentials / business auth failure, not expired access token.
+ * Do not run refresh+retry (would loop on change-password, OTP verify, forgot flow, etc.).
+ */
 function shouldSkipTokenRefresh(url: string): boolean {
   return (
     url.includes('/api/auth/login') ||
     url.includes('/api/auth/refresh') ||
     url.includes('/api/auth/logout') ||
-    url.includes('/api/auth/signout')
+    url.includes('/api/auth/signout') ||
+    url.includes('/api/auth/change-password') ||
+    url.includes('/api/auth/otp/verify') ||
+    url.includes('/api/auth/forgot-password/')
   );
 }
 

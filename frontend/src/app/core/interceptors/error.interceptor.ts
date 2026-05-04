@@ -27,6 +27,11 @@ export const errorInterceptor: HttpInterceptorFn = (req, next) => {
         } else {
           toast.show('You do not have permission for this action.', 'error');
         }
+      } else if (err.status === 429) {
+        const msg =
+          (err.error as { message?: string } | null)?.message ??
+          'Too many requests. Please try again later.';
+        toast.show(msg, 'error');
       } else if (err.status >= 500) {
         toast.show('Server error. Try again later.', 'error');
         const sanitized = new HttpErrorResponse({

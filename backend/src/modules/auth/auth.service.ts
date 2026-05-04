@@ -19,6 +19,7 @@ import {
 import {
   buildExistingAccountAlertTemplate,
   buildOtpLoginTemplate,
+  buildPasswordChangedAlertTemplate,
   buildVerifyEmailTemplate,
 } from '../../utils/mail-templates';
 import {
@@ -31,6 +32,16 @@ import {
   getOtpResendCooldownTtl,
   checkAndConsumeOtp,
   clearOtpKeys,
+  storeForgotOtp,
+  getForgotCooldownTtl,
+  checkAndConsumeForgotOtp,
+  storeResetToken,
+  checkAndConsumeResetToken,
+  getOtpTtlSeconds,
+  setForgotResendCooldown,
+  isChangePasswordLocked,
+  incrementChangePasswordAttempts,
+  resetChangePasswordAttempts,
 } from '../../utils/login-attempts';
 import { StoreSettingService } from '../store-setting/store-setting.service';
 import { getConfig, getConfigInt } from '../system-config/system-config.service';
@@ -498,14 +509,23 @@ export async function changePassword(input: {
   if (newPassword.length < 6) throw httpError(400, 'Password must be at least 6 characters');
   if (newPassword === currentPassword) throw httpError(400, 'New password must be different');
 
+  if (await isChangePasswordLocked(userId)) {
+    throw httpError(429, 'Too many failed attempts. Please try again in 15 minutes.');
+  }
+
   const user = await prisma.user.findUnique({
     where: { id: userId },
-    select: { id: true, password: true },
+    select: { id: true, name: true, email: true, password: true },
   });
   if (!user) throw httpError(404, 'User not found');
 
   const ok = await bcrypt.compare(currentPassword, user.password);
-  if (!ok) throw httpError(401, 'Invalid current password');
+  if (!ok) {
+    await incrementChangePasswordAttempts(userId);
+    throw httpError(401, 'Invalid current password');
+  }
+
+  await resetChangePasswordAttempts(userId);
 
   const passwordHash = await bcrypt.hash(newPassword, 10);
   await prisma.user.update({
@@ -514,4 +534,100 @@ export async function changePassword(input: {
   });
 
   await revokeAllUserRefreshTokens(userId);
+
+  void StoreSettingService.getSetting()
+    .then((setting) => {
+      const shopName = setting?.name?.trim() || 'Shop';
+      const { subject, html, text } = buildPasswordChangedAlertTemplate({ name: user.name, shopName });
+      void sendMail({ to: user.email, subject, html, text }).catch((err) => {
+        console.error('[Mail Error] Password change alert failed:', err);
+      });
+    })
+    .catch(() => {});
+}
+
+export async function requestForgotPasswordOtp(input: { email: string }): Promise<void> {
+  const email = normalizeEmail(input.email);
+  if (!email) throw httpError(400, 'Email is required');
+  if (!isValidEmail(email)) throw httpError(400, 'Invalid email');
+
+  const cooldown = await getForgotCooldownTtl(email);
+  if (cooldown > 0) {
+    throw httpError(429, `Please wait ${cooldown} seconds before requesting another code`);
+  }
+
+  const user = await prisma.user.findUnique({
+    where: { email },
+    select: { id: true, name: true },
+  });
+
+  if (!user) {
+    await new Promise<void>((r) => setTimeout(r, 800));
+    await setForgotResendCooldown(email);
+    return;
+  }
+
+  const otp = generateOtp();
+  await storeForgotOtp(email, otp);
+
+  const setting = await StoreSettingService.getSetting();
+  const shopName = setting?.name?.trim() || 'Shop';
+  const expiresInMinutes = Math.max(1, Math.round(getOtpTtlSeconds() / 60));
+
+  const { subject, html, text } = buildOtpLoginTemplate({
+    name: user.name,
+    otp,
+    expiresInMinutes,
+    shopName,
+  });
+
+  await sendMail({ to: email, subject, html, text });
+}
+
+export async function verifyForgotPasswordOtp(input: {
+  email: string;
+  otp: string;
+}): Promise<{ resetToken: string }> {
+  const email = normalizeEmail(input.email);
+  const otp = (input.otp || '').trim();
+
+  if (!email) throw httpError(400, 'Email is required');
+  if (!otp) throw httpError(400, 'OTP is required');
+
+  const valid = await checkAndConsumeForgotOtp(email, otp);
+  if (!valid) {
+    await new Promise<void>((r) => setTimeout(r, 200));
+    throw httpError(401, 'Invalid or expired verification code');
+  }
+
+  const resetToken = randomUUID();
+  await storeResetToken(email, resetToken);
+  return { resetToken };
+}
+
+export async function resetPassword(input: {
+  email: string;
+  resetToken: string;
+  newPassword: string;
+}): Promise<void> {
+  const email = normalizeEmail(input.email);
+  const resetToken = (input.resetToken || '').trim();
+  const newPassword = input.newPassword ?? '';
+
+  if (!email || !resetToken || !newPassword) throw httpError(400, 'Missing required fields');
+  if (!isValidEmail(email)) throw httpError(400, 'Invalid email');
+  if (newPassword.length < 6) throw httpError(400, 'Password must be at least 6 characters');
+
+  const valid = await checkAndConsumeResetToken(email, resetToken);
+  if (!valid) throw httpError(403, 'Invalid or expired reset session');
+
+  const user = await prisma.user.findUnique({ where: { email } });
+  if (!user) throw httpError(404, 'User not found');
+
+  const passwordHash = await bcrypt.hash(newPassword, 10);
+  await prisma.user.update({ where: { email }, data: { password: passwordHash } });
+
+  await revokeAllUserRefreshTokens(user.id);
+  await resetLoginAttempts(email);
+  await clearOtpKeys(email);
 }

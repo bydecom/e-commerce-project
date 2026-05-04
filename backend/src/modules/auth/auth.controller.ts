@@ -216,3 +216,39 @@ export async function changePassword(req: Request, res: Response, next: NextFunc
     next(err);
   }
 }
+
+export async function forgotPasswordRequest(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const b = req.body as Record<string, unknown>;
+    const email = typeof b.email === 'string' ? b.email : '';
+    await authService.requestForgotPasswordOtp({ email });
+    res.json(success(null, 'If your email is registered, a code has been sent'));
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function forgotPasswordVerify(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const b = req.body as Record<string, unknown>;
+    const email = typeof b.email === 'string' ? b.email : '';
+    const otp = typeof b.otp === 'string' ? b.otp : '';
+    const data = await authService.verifyForgotPasswordOtp({ email, otp });
+    res.json(success(data, 'Verified'));
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function forgotPasswordReset(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const b = req.body as Record<string, unknown>;
+    const email = typeof b.email === 'string' ? b.email : '';
+    const resetToken = typeof b.resetToken === 'string' ? b.resetToken : '';
+    const newPassword = typeof b.newPassword === 'string' ? b.newPassword : '';
+    await authService.resetPassword({ email, resetToken, newPassword });
+    res.json(success(null, 'Password has been reset successfully'));
+  } catch (err) {
+    next(err);
+  }
+}
