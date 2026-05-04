@@ -11,7 +11,7 @@ export function buildVerifyEmailTemplate(input: VerifyEmailInput): {
   text: string;
 } {
   const safeName = input.name?.trim() || 'there';
-  const safeShop = input.shopName.trim() || 'Shop';
+  const safeShop = input.shopName?.trim() || 'Shop';
   const subject = `Verify your email - ${safeShop}`;
 
   const html = `
@@ -121,8 +121,8 @@ export function buildExistingAccountAlertTemplate(params: {
   name: string | null;
   shopName: string;
 }): { subject: string; text: string; html: string } {
-  const safeName = params.name?.trim() || ‘there’;
-  const safeShop = params.shopName?.trim() || ‘Shop’;
+  const safeName = params.name?.trim() || 'there';
+  const safeShop = params.shopName?.trim() || 'Shop';
 
   const subject = `Security alert: registration attempt detected - ${safeShop}`;
 
@@ -134,7 +134,7 @@ export function buildExistingAccountAlertTemplate(params: {
     `The ${safeShop} Team`;
 
   const html = `
-    <div style="font-family: -apple-system, BlinkMacSystemFont, ‘Segoe UI’, Roboto, Helvetica, Arial, sans-serif; max-width: 600px; margin: 0 auto; background-color: #ffffff; border: 1px solid #e5e7eb; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);">
+    <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 600px; margin: 0 auto; background-color: #ffffff; border: 1px solid #e5e7eb; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);">
       <div style="background-color: #111827; padding: 32px 24px; text-align: center;">
         <h1 style="margin: 0; color: #ffffff; font-size: 24px; font-weight: 800; letter-spacing: -0.025em;">
           ${safeShop} — Security Alert
