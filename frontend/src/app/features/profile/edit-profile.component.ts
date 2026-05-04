@@ -1,6 +1,6 @@
 import { Component, OnInit, inject, signal, DestroyRef } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
-import { HttpClient } from '@angular/common/http';
+import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { AbstractControl, FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
 import { forkJoin } from 'rxjs';
@@ -66,6 +66,12 @@ interface LocationItem {
           <div class="h-8 w-8 animate-spin rounded-full border-4 border-gray-200 border-t-gray-900" aria-hidden="true"></div>
         </div>
       } @else {
+        @if (saveError()) {
+          <div class="mb-6 rounded border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
+            {{ saveError() }}
+          </div>
+        }
+
         <form [formGroup]="form" (ngSubmit)="save()" class="space-y-6">
 
           <!-- Basic Info -->
@@ -218,6 +224,7 @@ export class EditProfileComponent implements OnInit {
   readonly loading   = signal(true);
   readonly saving    = signal(false);
   readonly loadError = signal<string | null>(null);
+  readonly saveError = signal('');
   readonly me        = signal<User | null>(null);
 
   readonly provinces = signal<LocationItem[]>([]);
@@ -279,6 +286,7 @@ export class EditProfileComponent implements OnInit {
 
   resetForm(): void {
     if (this.loading() || this.saving()) return;
+    this.saveError.set('');
     this.wards.set([]);
     this.form.controls.wardId.disable({ emitEvent: false });
     this.form.reset({}, { emitEvent: false });
@@ -369,6 +377,7 @@ export class EditProfileComponent implements OnInit {
       this.form.markAllAsTouched();
       return;
     }
+    this.saveError.set('');
     this.saving.set(true);
     const v = this.form.getRawValue();
 
@@ -390,9 +399,14 @@ export class EditProfileComponent implements OnInit {
           this.toast.show('Profile updated successfully.', 'success');
           void this.router.navigate(['/profile']);
         },
-        error: (e: Error) => {
+        error: (e: unknown) => {
           this.saving.set(false);
-          this.toast.show(e.message || 'Could not update profile', 'error');
+          if (e instanceof HttpErrorResponse) {
+            const msg = (e.error as { message?: string } | null)?.message;
+            this.saveError.set(msg || 'Could not update profile');
+          } else {
+            this.saveError.set('Could not update profile');
+          }
         },
       });
   }

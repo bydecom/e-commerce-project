@@ -4,6 +4,18 @@ import { Router } from '@angular/router';
 import { catchError, throwError } from 'rxjs';
 import { ToastService } from '../services/toast.service';
 
+/** 429 được component form auth xử lý inline — tránh toast chồng */
+function shouldSkip429GlobalToast(url: string): boolean {
+  return (
+    url.includes('/api/auth/login') ||
+    url.includes('/api/auth/register') ||
+    url.includes('/api/auth/resend-verification') ||
+    url.includes('/api/auth/change-password') ||
+    url.includes('/api/auth/forgot-password/') ||
+    url.includes('/api/auth/otp/')
+  );
+}
+
 export const errorInterceptor: HttpInterceptorFn = (req, next) => {
   const toast = inject(ToastService);
   const router = inject(Router);
@@ -28,10 +40,12 @@ export const errorInterceptor: HttpInterceptorFn = (req, next) => {
           toast.show('You do not have permission for this action.', 'error');
         }
       } else if (err.status === 429) {
-        const msg =
-          (err.error as { message?: string } | null)?.message ??
-          'Too many requests. Please try again later.';
-        toast.show(msg, 'error');
+        if (!shouldSkip429GlobalToast(url)) {
+          const msg =
+            (err.error as { message?: string } | null)?.message ??
+            'Too many requests. Please try again later.';
+          toast.show(msg, 'error');
+        }
       } else if (err.status >= 500) {
         toast.show('Server error. Try again later.', 'error');
         const sanitized = new HttpErrorResponse({

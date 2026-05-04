@@ -1,20 +1,19 @@
-import { isPlatformBrowser } from '@angular/common';
 import {
   Component,
   OnInit,
   OnDestroy,
-  PLATFORM_ID,
   inject,
   signal,
   computed,
 } from '@angular/core';
-import { HttpClient } from '@angular/common/http';
+import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { EMPTY, Subscription } from 'rxjs';
 import { switchMap } from 'rxjs/operators';
 import { FormsModule } from '@angular/forms';
 import { AuthService } from '../../../core/services/auth.service';
 import { ServerCartService } from '../../../core/services/server-cart.service';
+import { ToastService } from '../../../core/services/toast.service';
 import { ProductApiService, type ProductFeedbackDto } from '../../../core/services/product-api.service';
 import { CurrencyVndPipe } from '../../../shared/pipes/currency-vnd.pipe';
 import type { Product } from '../../../shared/models/product.model';
@@ -35,12 +34,11 @@ export class ProductDetailComponent implements OnInit, OnDestroy {
   private readonly auth = inject(AuthService);
   private readonly serverCart = inject(ServerCartService);
   private readonly router = inject(Router);
-  private readonly platformId = inject(PLATFORM_ID);
+  private readonly toast = inject(ToastService);
 
   readonly loading = signal(true);
   readonly error = signal<string | null>(null);
   readonly product = signal<Product | null>(null);
-  readonly cartHint = signal(false);
   readonly cartError = signal<string | null>(null);
   readonly addingToCart = signal(false);
 
@@ -62,7 +60,6 @@ export class ProductDetailComponent implements OnInit, OnDestroy {
 
   private sub!: Subscription;
   private feedbackSub: Subscription | null = null;
-  private hintTimer: ReturnType<typeof setTimeout> | null = null;
 
   readonly feedbackLoading = signal(false);
   readonly feedbackError = signal<string | null>(null);
@@ -131,7 +128,6 @@ export class ProductDetailComponent implements OnInit, OnDestroy {
   ngOnDestroy(): void {
     if (this.sub) this.sub.unsubscribe();
     if (this.feedbackSub) this.feedbackSub.unsubscribe();
-    if (this.hintTimer) clearTimeout(this.hintTimer);
   }
 
   increaseQty(): void {
@@ -169,25 +165,18 @@ export class ProductDetailComponent implements OnInit, OnDestroy {
       .subscribe({
         next: () => {
           this.serverCart.refresh().subscribe();
-          this.cartHint.set(true);
           this.addingToCart.set(false);
-          if (this.hintTimer) clearTimeout(this.hintTimer);
-          if (isPlatformBrowser(this.platformId)) {
-            this.hintTimer = setTimeout(() => {
-              this.cartHint.set(false);
-              this.hintTimer = null;
-            }, 3000);
+          this.toast.show('Added to cart!', 'success');
+        },
+        error: (e: unknown) => {
+          this.addingToCart.set(false);
+          if (e instanceof HttpErrorResponse) {
+            const msg = (e.error as { message?: string } | null)?.message;
+            this.cartError.set(msg ?? 'Failed to add to cart');
+          } else {
+            this.cartError.set(e instanceof Error ? e.message : 'Failed to add to cart');
           }
         },
-        error: (e: Error) => {
-          this.cartError.set(e.message ?? 'Failed to add to cart');
-          this.addingToCart.set(false);
-        },
       });
-  }
-
-  goToCart(): void {
-    this.cartHint.set(false);
-    void this.router.navigate(['/cart']);
   }
 }

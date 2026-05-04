@@ -1,5 +1,5 @@
 import { DatePipe } from '@angular/common';
-import { HttpClient } from '@angular/common/http';
+import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { Component, DestroyRef, OnInit, inject, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { AbstractControl, FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
@@ -189,6 +189,11 @@ interface LocationItem {
 
               <form [formGroup]="form" (ngSubmit)="saveProfile()">
                 <div class="px-6 py-6 sm:p-8">
+                  @if (profileSaveError()) {
+                    <div class="mb-4 rounded border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
+                      {{ profileSaveError() }}
+                    </div>
+                  }
                   <div class="grid grid-cols-1 gap-8 md:grid-cols-2 md:gap-12">
                     <div class="space-y-5">
                       <h4 class="border-b border-gray-100 pb-2 font-bold text-gray-900">Basic Information</h4>
@@ -330,6 +335,7 @@ export class ProfileComponent implements OnInit {
 
   readonly isEditModalOpen = signal(false);
   readonly savingProfile = signal(false);
+  readonly profileSaveError = signal('');
   readonly provinces = signal<LocationItem[]>([]);
   readonly wards = signal<LocationItem[]>([]);
 
@@ -432,6 +438,7 @@ export class ProfileComponent implements OnInit {
     const currentUser = this.me();
     if (!currentUser) return;
 
+    this.profileSaveError.set('');
     this.isEditModalOpen.set(true);
     this.form.reset({}, { emitEvent: false });
     this.wards.set([]);
@@ -488,6 +495,7 @@ export class ProfileComponent implements OnInit {
 
   closeEditModal(): void {
     if (this.savingProfile()) return;
+    this.profileSaveError.set('');
     this.isEditModalOpen.set(false);
   }
 
@@ -497,6 +505,7 @@ export class ProfileComponent implements OnInit {
       return;
     }
 
+    this.profileSaveError.set('');
     this.savingProfile.set(true);
     const v = this.form.getRawValue();
 
@@ -519,9 +528,14 @@ export class ProfileComponent implements OnInit {
           this.toast.show('Profile updated successfully.', 'success');
           this.closeEditModal();
         },
-        error: (e: Error) => {
+        error: (e: unknown) => {
           this.savingProfile.set(false);
-          this.toast.show(e.message || 'Could not update profile', 'error');
+          if (e instanceof HttpErrorResponse) {
+            const msg = (e.error as { message?: string } | null)?.message;
+            this.profileSaveError.set(msg || 'Could not update profile');
+          } else {
+            this.profileSaveError.set('Could not update profile');
+          }
         },
       });
   }

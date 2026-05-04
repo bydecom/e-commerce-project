@@ -194,29 +194,8 @@
                 </div>
               }
 
-              @if (cartHint()) {
-                <div
-                  class="mt-4 flex items-center gap-2 rounded-xl bg-green-50 px-4 py-3 text-green-800 border border-green-200 animate-in fade-in slide-in-from-top-2 duration-300"
-                >
-                  <svg class="h-5 w-5 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7" />
-                  </svg>
-                  <p class="text-sm font-medium">
-                    Added <span class="font-bold">{{ quantity() }}</span> items to your cart!
-                  </p>
-                  <button
-                    type="button"
-                    (click)="goToCart()"
-                    class="ml-auto text-sm font-bold text-green-700 hover:underline"
-                  >
-                    View Cart &rarr;
-                  </button>
-                </div>
-              }
               @if (cartError()) {
-                <div class="mt-4 rounded-xl bg-red-50 px-4 py-3 text-sm font-medium text-red-800 border border-red-200">
-                  {{ cartError() }}
-                </div>
+                <p class="mt-2 text-sm text-red-600">{{ cartError() }}</p>
               }
 
               <div class="mt-10 grid grid-cols-2 gap-4 border-t border-gray-200 pt-8 sm:grid-cols-2">

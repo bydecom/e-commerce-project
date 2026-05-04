@@ -12,7 +12,7 @@ interface ActiveToast extends ToastMessage {
   standalone: true,
   imports: [CommonModule],
   template: `
-    <div class="fixed bottom-4 right-4 z-50 flex flex-col gap-2">
+    <div class="fixed top-4 right-4 z-50 flex flex-col gap-2">
       @for (toast of toasts(); track toast.id) {
         <div
           class="flex items-center gap-3 rounded-lg px-4 py-3 text-sm font-medium shadow-lg transition-all"
@@ -38,7 +38,7 @@ export class ToastComponent implements OnInit, OnDestroy {
     this.sub = this.toastService.messages$.subscribe((msg) => {
       const id = ++this.counter;
       this.toasts.update((list) => [...list, { ...msg, id }]);
-      setTimeout(() => this.dismiss(id), 4000);
+      setTimeout(() => this.dismiss(id), 3000);
     });
   }
 
