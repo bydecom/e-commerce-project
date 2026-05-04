@@ -11,11 +11,26 @@ interface ActiveToast extends ToastMessage {
   selector: 'app-toast',
   standalone: true,
   imports: [CommonModule],
+  styles: `
+    @keyframes toast-enter {
+      from {
+        opacity: 0;
+        transform: translateX(0.375rem);
+      }
+      to {
+        opacity: 1;
+        transform: translateX(0);
+      }
+    }
+    .toast-item-enter {
+      animation: toast-enter 250ms ease-out;
+    }
+  `,
   template: `
-    <div class="fixed top-4 right-4 z-50 flex flex-col gap-2">
+    <div class="fixed top-2 right-4 z-[9999] flex flex-col gap-2">
       @for (toast of toasts(); track toast.id) {
         <div
-          class="flex items-center gap-3 rounded-lg px-4 py-3 text-sm font-medium shadow-lg transition-all"
+          class="toast-item-enter flex items-center gap-3 rounded-lg px-4 py-3 text-sm font-medium shadow-lg transition-all"
           [class]="variantClass(toast.variant)"
         >
           <span>{{ toast.text }}</span>
