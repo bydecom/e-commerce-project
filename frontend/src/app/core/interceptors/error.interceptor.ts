@@ -20,7 +20,13 @@ export const errorInterceptor: HttpInterceptorFn = (req, next) => {
       }
 
       if (err.status === 403) {
-        toast.show('You do not have permission for this action.', 'error');
+        const body = err.error as { errors?: { code?: string } } | null;
+        const otpRequired = body?.errors?.code === 'AUTH_OTP_REQUIRED';
+        if (otpRequired && url.includes('/api/auth/login')) {
+          // Login chuyển sang /verify-otp; không hiện toast "no permission" gây hiểu nhầm.
+        } else {
+          toast.show('You do not have permission for this action.', 'error');
+        }
       } else if (err.status >= 500) {
         toast.show('Server error. Try again later.', 'error');
         const sanitized = new HttpErrorResponse({

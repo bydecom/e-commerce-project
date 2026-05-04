@@ -1,8 +1,18 @@
 import { HttpErrorResponse, HttpInterceptorFn } from '@angular/common/http';
 import { inject } from '@angular/core';
-import { catchError, filter, switchMap, take, throwError } from 'rxjs';
+import { catchError, switchMap, throwError } from 'rxjs';
 import { AuthService } from '../services/auth.service';
 import { environment } from '../../../environments/environment';
+
+/** 401 on these auth endpoints must not trigger refresh (loop or wrong UX). */
+function shouldSkipTokenRefresh(url: string): boolean {
+  return (
+    url.includes('/api/auth/login') ||
+    url.includes('/api/auth/refresh') ||
+    url.includes('/api/auth/logout') ||
+    url.includes('/api/auth/signout')
+  );
+}
 
 export const authInterceptor: HttpInterceptorFn = (req, next) => {
   const auth = inject(AuthService);
@@ -23,50 +33,24 @@ export const authInterceptor: HttpInterceptorFn = (req, next) => {
 
   return next(authReq).pipe(
     catchError((error: HttpErrorResponse) => {
-      if (
-        error.status === 401 &&
-        !req.url.includes('/api/auth/login') &&
-        !req.url.includes('/api/auth/refresh')
-      ) {
-        if (!auth.isRefreshingToken) {
-          auth.setRefreshingState(true);
-          auth.broadcastNewToken(null);
-
-          return auth.refreshAccessToken().pipe(
-            switchMap((newToken) => {
-              auth.setRefreshingState(false);
-              auth.broadcastNewToken(newToken);
-
-              return next(
-                req.clone({
-                  withCredentials: true,
-                  setHeaders: { Authorization: `Bearer ${newToken}` },
-                })
-              );
-            }),
-            catchError((refreshErr) => {
-              auth.setRefreshingState(false);
-              auth.logout({ reason: 'session_expired' });
-              return throwError(() => refreshErr);
-            })
-          );
-        }
-
-        return auth.refreshToken$.pipe(
-          filter((t): t is string => t !== null),
-          take(1),
-          switchMap((newToken) =>
-            next(
-              req.clone({
-                withCredentials: true,
-                setHeaders: { Authorization: `Bearer ${newToken}` },
-              })
-            )
-          )
-        );
+      if (error.status !== 401 || shouldSkipTokenRefresh(req.url)) {
+        return throwError(() => error);
       }
 
-      return throwError(() => error);
+      return auth.refreshAccessTokenSingleFlight().pipe(
+        switchMap((newToken) =>
+          next(
+            req.clone({
+              withCredentials: true,
+              setHeaders: { Authorization: `Bearer ${newToken}` },
+            })
+          )
+        ),
+        catchError((refreshErr) => {
+          auth.logout({ reason: 'session_expired' });
+          return throwError(() => refreshErr);
+        })
+      );
     })
   );
 };

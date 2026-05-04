@@ -2,7 +2,7 @@ import { Injectable, PLATFORM_ID, computed, inject, signal } from '@angular/core
 import { isPlatformBrowser } from '@angular/common';
 import { Router } from '@angular/router';
 import { HttpClient } from '@angular/common/http';
-import { BehaviorSubject, Observable, map } from 'rxjs';
+import { Observable, finalize, map, share } from 'rxjs';
 import { environment } from '../../../environments/environment';
 import type { User } from '../../shared/models/user.model';
 import type { ApiSuccess } from '../../shared/models/api-response.model';
@@ -26,9 +26,8 @@ export class AuthService {
   private accessToken: string | null = null;
   private readonly userSignal = signal<User | null>(this.readStoredUser());
 
-  // Interceptor refresh state must NOT be module-global in SSR.
-  private isRefreshing = false;
-  private refreshTokenSubject = new BehaviorSubject<string | null>(null);
+  /** One in-flight refresh for parallel 401s (interceptor + APP_INITIALIZER). */
+  private refreshInFlight$: Observable<string> | null = null;
 
   readonly currentUser = this.userSignal.asReadonly();
   readonly isAuthenticated = computed(() => this.userSignal() !== null);
@@ -36,22 +35,6 @@ export class AuthService {
 
   getToken(): string | null {
     return this.accessToken;
-  }
-
-  get isRefreshingToken(): boolean {
-    return this.isRefreshing;
-  }
-
-  setRefreshingState(state: boolean): void {
-    this.isRefreshing = state;
-  }
-
-  get refreshToken$(): Observable<string | null> {
-    return this.refreshTokenSubject.asObservable();
-  }
-
-  broadcastNewToken(token: string | null): void {
-    this.refreshTokenSubject.next(token);
   }
 
   clearLocalSessionQuietly(): void {
@@ -128,6 +111,19 @@ export class AuthService {
           return res.data.token;
         })
       );
+  }
+
+  /** Shared refresh so concurrent 401s do not stack HTTP refresh calls or hang waiters. */
+  refreshAccessTokenSingleFlight(): Observable<string> {
+    if (!this.refreshInFlight$) {
+      this.refreshInFlight$ = this.refreshAccessToken().pipe(
+        finalize(() => {
+          this.refreshInFlight$ = null;
+        }),
+        share()
+      );
+    }
+    return this.refreshInFlight$;
   }
 
   loginStub(user: User, token: string): void {

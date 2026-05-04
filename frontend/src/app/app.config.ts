@@ -18,7 +18,7 @@ export function initializeApp(authService: AuthService) {
     // Only attempt refresh if we have a stored user (previously logged in).
     if (authService.currentUser()) {
       return firstValueFrom(
-        authService.refreshAccessToken().pipe(
+        authService.refreshAccessTokenSingleFlight().pipe(
           catchError(() => {
             authService.clearLocalSessionQuietly();
             return of(null);

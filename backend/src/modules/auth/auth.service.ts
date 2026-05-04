@@ -123,6 +123,14 @@ async function issueVerificationEmail(email: string, token: string, name: string
   });
 }
 
+// Lazy dummy hash — used so bcrypt.compare always runs even when email doesn't exist,
+// preventing timing-based email enumeration. Used by `login`.
+let _dummyHash: string | null = null;
+async function dummyHash(): Promise<string> {
+  if (!_dummyHash) _dummyHash = await bcrypt.hash('__timing_guard__', 10);
+  return _dummyHash;
+}
+
 export async function register(input: { name: string; email: string; password: string }) {
   const email = normalizeEmail(input.email);
   const password = input.password;
@@ -188,14 +196,6 @@ export async function register(input: { name: string; email: string; password: s
   await issueVerificationEmail(email, token, name);
 
   return { email, message: 'Verification email sent' };
-}
-
-// Lazy dummy hash — used so bcrypt.compare always runs even when email doesn't exist,
-// preventing timing-based email enumeration.
-let _dummyHash: string | null = null;
-async function dummyHash(): Promise<string> {
-  if (!_dummyHash) _dummyHash = await bcrypt.hash('__timing_guard__', 10);
-  return _dummyHash;
 }
 
 async function issueTokens(
