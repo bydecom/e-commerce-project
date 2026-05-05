@@ -112,9 +112,6 @@ export async function upsertItemWithStock(input: {
 
   if (!Number.isFinite(userId) || userId <= 0) throw httpError(400, 'Invalid user');
   if (!Number.isFinite(productId) || productId <= 0) throw httpError(400, 'Invalid productId');
-  if (!Number.isFinite(quantity) || quantity < 0) throw httpError(400, 'quantity must be a non-negative integer');
-  if (!name) throw httpError(400, 'name is required');
-  if (input.mode !== 'inc' && input.mode !== 'set') throw httpError(400, 'Invalid mode');
 
   await ensureRedisConnected();
   const redis = redisClient();

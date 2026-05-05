@@ -450,9 +450,6 @@ export async function createProduct(body: {
   if (!cat) throw httpError(400, 'Invalid categoryId');
 
   const name = body.name?.trim();
-  if (!name) throw httpError(400, 'name is required');
-  if (body.price < 0 || Number.isNaN(body.price)) throw httpError(400, 'Invalid price');
-  if (body.stock < 0 || Number.isNaN(body.stock)) throw httpError(400, 'Invalid stock');
 
   const p = await prisma.product.create({
     data: {
@@ -504,15 +501,8 @@ export async function updateProduct(
     const cat = await prisma.category.findUnique({ where: { id: body.categoryId } });
     if (!cat) throw httpError(400, 'Invalid categoryId');
   }
-  if (body.price !== undefined && (body.price < 0 || Number.isNaN(body.price))) {
-    throw httpError(400, 'Invalid price');
-  }
-  if (body.stock !== undefined && (body.stock < 0 || Number.isNaN(body.stock))) {
-    throw httpError(400, 'Invalid stock');
-  }
 
   const name = body.name !== undefined ? body.name.trim() : existing.name;
-  if (!name) throw httpError(400, 'name cannot be empty');
 
   const p = await prisma.product.update({
     where: { id },

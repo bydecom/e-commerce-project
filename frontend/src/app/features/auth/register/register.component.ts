@@ -99,6 +99,9 @@ import { strongPasswordValidator, matchPasswordsValidator } from '../../../share
               @if (form.controls.password.errors?.['noUppercase']) {
                 <p class="mt-1 text-xs text-red-600">Password must contain at least 1 uppercase letter.</p>
               }
+              @if (form.controls.password.errors?.['noLowercase']) {
+                <p class="mt-1 text-xs text-red-600">Password must contain at least 1 lowercase letter.</p>
+              }
               @if (form.controls.password.errors?.['noNumber']) {
                 <p class="mt-1 text-xs text-red-600">Password must contain at least 1 number.</p>
               }
@@ -143,7 +146,7 @@ export class RegisterComponent {
     {
       name: ['', [Validators.required, Validators.maxLength(100)]],
       email: ['', [Validators.required, Validators.email]],
-      password: ['', [Validators.required, strongPasswordValidator]],
+      password: ['', [Validators.required, Validators.minLength(8), strongPasswordValidator]],
       confirmPassword: ['', [Validators.required]],
     },
     { validators: [matchPasswordsValidator('password', 'confirmPassword')] }

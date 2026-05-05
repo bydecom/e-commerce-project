@@ -147,11 +147,6 @@ export async function register(input: { name: string; email: string; password: s
   const password = input.password;
   const name = input.name?.trim() ? input.name.trim() : null;
 
-  if (!email) throw httpError(400, 'email is required');
-  if (!isValidEmail(email)) throw httpError(400, 'Invalid email');
-  if (!password) throw httpError(400, 'password is required');
-  if (password.length < 6) throw httpError(400, 'Password must be at least 6 characters');
-
   // If user already exists in DB, do not create a pending registration.
   const existingUser = await prisma.user.findUnique({
     where: { email },
@@ -238,9 +233,6 @@ async function issueTokens(
 export async function login(input: { email: string; password: string; oldRefreshToken?: string }) {
   const email = normalizeEmail(input.email);
   const password = input.password;
-
-  if (!email) throw httpError(400, 'email is required');
-  if (!password) throw httpError(400, 'password is required');
 
   if (await isOtpGateActive(email)) {
     throw httpError(403, 'Too many failed attempts. Please verify your identity to continue.', {
@@ -504,11 +496,6 @@ export async function changePassword(input: {
   const currentPassword = input.currentPassword ?? '';
   const newPassword = input.newPassword ?? '';
 
-  if (!currentPassword) throw httpError(400, 'currentPassword is required');
-  if (!newPassword) throw httpError(400, 'newPassword is required');
-  if (newPassword.length < 6) throw httpError(400, 'Password must be at least 6 characters');
-  if (newPassword === currentPassword) throw httpError(400, 'New password must be different');
-
   if (await isChangePasswordLocked(userId)) {
     throw httpError(429, 'Too many failed attempts. Please try again in 15 minutes.');
   }
@@ -613,10 +600,6 @@ export async function resetPassword(input: {
   const email = normalizeEmail(input.email);
   const resetToken = (input.resetToken || '').trim();
   const newPassword = input.newPassword ?? '';
-
-  if (!email || !resetToken || !newPassword) throw httpError(400, 'Missing required fields');
-  if (!isValidEmail(email)) throw httpError(400, 'Invalid email');
-  if (newPassword.length < 6) throw httpError(400, 'Password must be at least 6 characters');
 
   const valid = await checkAndConsumeResetToken(email, resetToken);
   if (!valid) throw httpError(403, 'Invalid or expired reset session');

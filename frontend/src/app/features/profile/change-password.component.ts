@@ -90,6 +90,9 @@ import { strongPasswordValidator, matchPasswordsValidator } from '../../shared/v
                   @if (form.controls.newPassword.errors?.['noUppercase']) {
                     <p class="mt-1 text-xs text-red-600">Password must contain at least 1 uppercase letter.</p>
                   }
+                  @if (form.controls.newPassword.errors?.['noLowercase']) {
+                    <p class="mt-1 text-xs text-red-600">Password must contain at least 1 lowercase letter.</p>
+                  }
                   @if (form.controls.newPassword.errors?.['noNumber']) {
                     <p class="mt-1 text-xs text-red-600">Password must contain at least 1 number.</p>
                   }
@@ -129,7 +132,7 @@ export class ChangePasswordComponent {
   readonly form = this.fb.nonNullable.group(
     {
       currentPassword: ['', [Validators.required]],
-      newPassword: ['', [Validators.required, strongPasswordValidator]],
+      newPassword: ['', [Validators.required, Validators.minLength(8), strongPasswordValidator]],
       confirmPassword: ['', [Validators.required]],
     },
     { validators: [matchPasswordsValidator('newPassword', 'confirmPassword')] }

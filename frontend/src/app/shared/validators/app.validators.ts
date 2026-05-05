@@ -6,6 +6,7 @@ export function strongPasswordValidator(control: AbstractControl): ValidationErr
   const errors: ValidationErrors = {};
   if (v.length < 8) errors['minlength'] = { requiredLength: 8, actualLength: v.length };
   if (!/[A-Z]/.test(v)) errors['noUppercase'] = true;
+  if (!/[a-z]/.test(v)) errors['noLowercase'] = true;
   if (!/[0-9]/.test(v)) errors['noNumber'] = true;
   return Object.keys(errors).length ? errors : null;
 }

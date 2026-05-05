@@ -1,6 +1,11 @@
 import type { NextFunction, Request, Response } from 'express';
 import { success } from '../../utils/response';
 import * as categoryService from './category.service';
+import type { createCategorySchema, updateCategorySchema } from './category.schema';
+import type { z } from 'zod';
+
+type CreateBody = z.infer<typeof createCategorySchema>;
+type UpdateBody = z.infer<typeof updateCategorySchema>;
 
 export async function listCategories(_req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
@@ -13,8 +18,7 @@ export async function listCategories(_req: Request, res: Response, next: NextFun
 
 export async function createCategory(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
-    const b = req.body as Record<string, unknown>;
-    const name = typeof b.name === 'string' ? b.name : '';
+    const { name } = req.body as CreateBody;
     const data = await categoryService.createCategory(name);
     res.status(201).json(success(data, 'Created'));
   } catch (err) {
@@ -23,9 +27,7 @@ export async function createCategory(req: Request, res: Response, next: NextFunc
 }
 
 function parseIdParam(req: Request): number {
-  const raw = req.params['id'];
-  const s = Array.isArray(raw) ? raw[0] : raw;
-  return parseInt(String(s), 10);
+  return parseInt(String(req.params['id']), 10);
 }
 
 export async function updateCategory(req: Request, res: Response, next: NextFunction): Promise<void> {
@@ -35,9 +37,8 @@ export async function updateCategory(req: Request, res: Response, next: NextFunc
       res.status(400).json({ success: false, message: 'Invalid id', errors: null });
       return;
     }
-    const b = req.body as Record<string, unknown>;
-    const name = typeof b.name === 'string' ? b.name : '';
-    const data = await categoryService.updateCategory(id, name);
+    const { name } = req.body as UpdateBody;
+    const data = await categoryService.updateCategory(id, name!);
     res.json(success(data));
   } catch (err) {
     next(err);

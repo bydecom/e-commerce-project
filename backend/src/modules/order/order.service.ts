@@ -170,11 +170,8 @@ function mergeItems(
 ): Array<{ productId: number; quantity: number }> {
   const map = new Map<number, number>();
   for (const it of items) {
-    const productId =
-      typeof it.productId === 'number' ? it.productId : parseInt(String(it.productId), 10);
-    if (Number.isNaN(productId) || productId < 1) throw httpError(400, 'Invalid productId');
-    const q = Math.floor(Number(it.quantity));
-    if (!Number.isFinite(q) || q < 1) throw httpError(400, 'Invalid quantity');
+    const productId = it.productId;
+    const q = it.quantity;
     map.set(productId, (map.get(productId) ?? 0) + q);
   }
   return [...map.entries()].map(([productId, quantity]) => ({ productId, quantity }));
@@ -186,12 +183,7 @@ export async function createOrder(body: {
   shippingAddress: string;
 }) {
   const userId = Math.floor(Number(body.userId));
-  if (!Number.isFinite(userId) || userId < 1) throw httpError(400, 'userId is required');
-  const shippingAddress = typeof body.shippingAddress === 'string' ? body.shippingAddress.trim() : '';
-  if (!shippingAddress) throw httpError(400, 'shippingAddress is required');
-  if (!Array.isArray(body.items) || body.items.length === 0) {
-    throw httpError(400, 'items must be a non-empty array');
-  }
+  const shippingAddress = body.shippingAddress;
 
   const merged = mergeItems(body.items);
 

@@ -133,6 +133,9 @@ type Step = 'email' | 'otp' | 'reset';
               @if (resetForm.controls.newPassword.errors?.['noUppercase']) {
                 <p class="mt-1 text-xs text-red-600">Password must contain at least 1 uppercase letter.</p>
               }
+              @if (resetForm.controls.newPassword.errors?.['noLowercase']) {
+                <p class="mt-1 text-xs text-red-600">Password must contain at least 1 lowercase letter.</p>
+              }
               @if (resetForm.controls.newPassword.errors?.['noNumber']) {
                 <p class="mt-1 text-xs text-red-600">Password must contain at least 1 number.</p>
               }
@@ -191,7 +194,7 @@ export class ForgotPasswordComponent implements OnDestroy {
 
   resetForm = this.fb.nonNullable.group(
     {
-      newPassword: ['', [Validators.required, strongPasswordValidator]],
+      newPassword: ['', [Validators.required, Validators.minLength(8), strongPasswordValidator]],
       confirmPassword: ['', [Validators.required]],
     },
     { validators: [matchPasswordsValidator('newPassword', 'confirmPassword')] }

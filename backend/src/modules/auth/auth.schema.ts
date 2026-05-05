@@ -9,25 +9,25 @@ const passwordRule = z
 
 export const registerSchema = z.object({
   name:     z.string().max(100).optional(),
-  email:    z.string().email('Invalid email format'),
+  email:    z.string().trim().toLowerCase().email('Invalid email format'),
   password: passwordRule,
 });
 
 export const loginSchema = z.object({
-  email:    z.string().email('Invalid email format'),
+  email:    z.string().trim().toLowerCase().email('Invalid email format'),
   password: z.string().min(1, 'Password is required'),
 });
 
 export const resendVerificationSchema = z.object({
-  email: z.string().email('Invalid email format'),
+  email: z.string().trim().toLowerCase().email('Invalid email format'),
 });
 
 export const requestOtpSchema = z.object({
-  email: z.string().email('Invalid email format'),
+  email: z.string().trim().toLowerCase().email('Invalid email format'),
 });
 
 export const verifyOtpSchema = z.object({
-  email: z.string().email('Invalid email format'),
+  email: z.string().trim().toLowerCase().email('Invalid email format'),
   otp:   z.string().length(6, 'OTP must be exactly 6 digits'),
 });
 
@@ -40,16 +40,16 @@ export const changePasswordSchema = z.object({
 });
 
 export const forgotPasswordRequestSchema = z.object({
-  email: z.string().email('Invalid email format'),
+  email: z.string().trim().toLowerCase().email('Invalid email format'),
 });
 
 export const forgotPasswordVerifySchema = z.object({
-  email: z.string().email('Invalid email format'),
+  email: z.string().trim().toLowerCase().email('Invalid email format'),
   otp:   z.string().length(6, 'OTP must be exactly 6 digits'),
 });
 
 export const forgotPasswordResetSchema = z.object({
-  email:       z.string().email('Invalid email format'),
+  email:       z.string().trim().toLowerCase().email('Invalid email format'),
   resetToken:  z.string().min(1, 'Reset token is required'),
   newPassword: passwordRule,
 });
