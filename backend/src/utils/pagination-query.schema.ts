@@ -1,25 +1,27 @@
 import { z } from 'zod';
 
-function trimToString(v: unknown): string | undefined {
-  if (v === undefined || v === null) return undefined;
-  if (Array.isArray(v)) return trimToString(v[0]);
-  const s = String(v).trim();
-  return s === '' ? undefined : s;
-}
-
-const intString = (label: string) =>
+// Helper: Xử lý chuỗi từ Query -> Ép sang Number -> Check Min/Max -> Trả về lại String
+const paginationField = (min: number, max?: number) =>
   z
-    .string()
-    .regex(/^\d+$/, `${label} must be an integer`)
-    .transform((s) => parseInt(s, 10));
+    .preprocess(
+      (val) => {
+        // 1. Trích xuất và dọn dẹp query param
+        if (typeof val === 'string') {
+          const trimmed = val.trim();
+          // Nếu chuỗi rỗng thì coi như undefined để rơi vào .optional()
+          return trimmed === '' ? undefined : Number(trimmed);
+        }
+        return val;
+      },
+      // 2. Validate lúc nó đang là Number, sau đó transform lại thành String
+      max !== undefined
+        ? z.number().int().min(min).max(max).transform(String)
+        : z.number().int().min(min).transform(String)
+    )
+    .optional();
 
-export const paginationQuerySchema = z
-  .object({
-    page: z.preprocess((v) => trimToString(v), intString('page').min(1)).optional(),
-    limit: z.preprocess((v) => trimToString(v), intString('limit').min(1).max(100)).optional(),
-  })
-  .transform((q) => ({
-    ...(q.page !== undefined ? { page: String(q.page) } : {}),
-    ...(q.limit !== undefined ? { limit: String(q.limit) } : {}),
-  }));
+export const paginationQuerySchema = z.object({
+  page: paginationField(1),
+  limit: paginationField(1, 100),
+});
 
