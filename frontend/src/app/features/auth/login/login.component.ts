@@ -2,13 +2,13 @@ import { isPlatformBrowser, Location } from '@angular/common';
 import { HttpErrorResponse } from '@angular/common/http';
 import { Component, inject, OnInit, PLATFORM_ID } from '@angular/core';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
-import { FormsModule } from '@angular/forms';
+import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { AuthService } from '../../../core/services/auth.service';
 
 @Component({
   selector: 'app-login',
   standalone: true,
-  imports: [RouterLink, FormsModule],
+  imports: [RouterLink, ReactiveFormsModule],
   template: `
     <div class="mx-auto max-w-md px-4 py-12">
       <h1 class="text-2xl font-bold text-gray-900">Login</h1>
@@ -23,31 +23,38 @@ import { AuthService } from '../../../core/services/auth.service';
           {{ bannerError }}
         </div>
       }
-      <form class="mt-6 space-y-4" (ngSubmit)="submit()">
-        @if (errorMessage) {
+      <form class="mt-6 space-y-4" [formGroup]="form" (ngSubmit)="submit()">
+        @if (serverError) {
           <div class="rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
-            {{ errorMessage }}
+            {{ serverError }}
           </div>
         }
         <div>
           <label class="block text-sm font-medium text-gray-700">Email</label>
           <input
             type="email"
-            [(ngModel)]="email"
-            name="email"
+            formControlName="email"
             autocomplete="email"
             class="mt-1 w-full rounded border border-gray-300 px-3 py-2"
           />
+          @if (form.controls.email.touched && form.controls.email.errors?.['required']) {
+            <p class="mt-1 text-xs text-red-600">Email is required.</p>
+          }
+          @if (form.controls.email.touched && form.controls.email.errors?.['email']) {
+            <p class="mt-1 text-xs text-red-600">Enter a valid email address.</p>
+          }
         </div>
         <div>
           <label class="block text-sm font-medium text-gray-700">Password</label>
           <input
             type="password"
-            [(ngModel)]="password"
-            name="password"
+            formControlName="password"
             autocomplete="current-password"
             class="mt-1 w-full rounded border border-gray-300 px-3 py-2"
           />
+          @if (form.controls.password.touched && form.controls.password.errors?.['required']) {
+            <p class="mt-1 text-xs text-red-600">Password is required.</p>
+          }
         </div>
         <button
           type="submit"
@@ -73,12 +80,15 @@ export class LoginComponent implements OnInit {
   private readonly route = inject(ActivatedRoute);
   private readonly location = inject(Location);
   private readonly platformId = inject(PLATFORM_ID);
+  private readonly fb = inject(FormBuilder);
 
-  email = '';
-  password = '';
+  readonly form = this.fb.nonNullable.group({
+    email: ['', [Validators.required, Validators.email]],
+    password: ['', [Validators.required]],
+  });
 
   loading = false;
-  errorMessage = '';
+  serverError = '';
   bannerSuccess = '';
   bannerError = '';
   private returnUrl: string | null = null;
@@ -106,40 +116,33 @@ export class LoginComponent implements OnInit {
   }
 
   submit(): void {
-    this.errorMessage = '';
-    const email = this.email.trim();
-    const password = this.password;
+    this.form.markAllAsTouched();
+    if (this.form.invalid) return;
 
-    if (!email) {
-      this.errorMessage = 'Email is required';
-      return;
-    }
-    if (!password) {
-      this.errorMessage = 'Password is required';
-      return;
-    }
+    this.serverError = '';
+    const { email, password } = this.form.getRawValue();
 
     this.loading = true;
-    this.auth.login(email, password).subscribe({
+    this.auth.login(email.trim(), password).subscribe({
       next: () => {
         this.loading = false;
-        this.password = '';
+        this.form.controls.password.reset();
         const target = this.returnUrl || '/';
         void this.router.navigateByUrl(target);
       },
       error: (err: unknown) => {
         this.loading = false;
-        this.password = '';
+        this.form.controls.password.reset();
         if (this.isOtpRequired(err)) {
           void this.router.navigate(['/verify-otp'], {
             queryParams: {
-              email,
+              email: email.trim(),
               ...(this.returnUrl ? { returnUrl: this.returnUrl } : {}),
             },
           });
           return;
         }
-        this.errorMessage = this.extractErrorMessage(err);
+        this.serverError = this.extractErrorMessage(err);
       },
     });
   }
