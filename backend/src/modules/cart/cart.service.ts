@@ -49,8 +49,8 @@ function safeParseStored(raw: string): StoredCartItem | null {
 }
 
 /**
- * Giỏ đổi → hủy các đơn chưa thanh toán (tránh VNPay / checkout treo lệch với Redis cart).
- * Chỉ đơn status PENDING **và** paymentStatus PENDING — không đụng đơn đã PAID dù shop chưa CONFIRMED.
+ * When cart changes, cancel pending unpaid orders (avoid VNPay / checkout hang with Redis cart).
+ * Only PENDING orders **and** PENDING payment — don't touch PAID orders even if shop is not CONFIRMED.
  */
 async function invalidatePendingUnpaidOrdersForUser(userId: number): Promise<void> {
   try {

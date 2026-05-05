@@ -36,7 +36,7 @@
 //   await prisma.category.deleteMany();
 //   await prisma.storeSetting.deleteMany();
 //   await prisma.user.deleteMany();
-//   // Lưu ý: Không deleteMany bảng SystemConfig để tránh làm mất config admin đã chỉnh
+//   // Note: Do not deleteMany SystemConfig table to avoid losing admin-configured configs
 //   console.log('🧹 Cleared existing records.');
 
 //   // ── 2. SYSTEM CONFIG (skip duplicates) ─────────────────────────────────────
@@ -949,7 +949,6 @@ async function main() {
   console.log(`   ⭐ Reviews     : ${totalFeedbacks} feedbacks`);
   console.log(`   🛠️  Plans       : ${totalActionPlans} action plans`);
 
-  // Uncomment khi đã có Qdrant running:
   console.log('\n🤖 Syncing vectors to Qdrant...');
   await syncPostgresToQdrant();
 }

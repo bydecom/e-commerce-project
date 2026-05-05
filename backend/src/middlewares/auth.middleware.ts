@@ -42,8 +42,8 @@ export async function authMiddleware(req: Request, res: Response, next: NextFunc
 }
 
 /**
- * Gắn `req.auth` khi có Bearer JWT hợp lệ và không blacklist; nếu không có token / token lỗi / hết hạn thì bỏ qua (không 401).
- * Dùng cho endpoint vừa cho khách vừa cần nhận user khi đã đăng nhập (vd. POST /api/ai/chat).
+ * Attach `req.auth` when valid Bearer JWT is present and not blacklisted; if no token / token error / expired, skip (no 401).
+ * Used for endpoints that need both guest and logged-in user (e.g. POST /api/ai/chat).
  */
 export async function optionalAuthMiddleware(
   req: Request,
