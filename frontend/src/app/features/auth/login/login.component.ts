@@ -123,11 +123,13 @@ export class LoginComponent implements OnInit {
     this.auth.login(email, password).subscribe({
       next: () => {
         this.loading = false;
+        this.password = '';
         const target = this.returnUrl || '/';
         void this.router.navigateByUrl(target);
       },
       error: (err: unknown) => {
         this.loading = false;
+        this.password = '';
         if (this.isOtpRequired(err)) {
           void this.router.navigate(['/verify-otp'], {
             queryParams: {

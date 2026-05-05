@@ -151,6 +151,11 @@ export class ChangePasswordComponent {
       },
       error: (e: unknown) => {
         this.saving.set(false);
+        this.form.reset({
+          currentPassword: '',
+          newPassword: '',
+          confirmPassword: '',
+        });
         if (e instanceof HttpErrorResponse) {
           const msg = (e.error as { message?: string } | null)?.message;
           this.errorMessage.set(msg || 'Could not change password');

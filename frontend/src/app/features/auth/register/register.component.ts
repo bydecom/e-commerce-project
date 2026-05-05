@@ -149,6 +149,8 @@ export class RegisterComponent {
     this.auth.register(this.name, this.email, this.password).subscribe({
       next: (data) => {
         this.loading = false;
+        this.password = '';
+        this.confirmPassword = '';
         this.pendingEmail = data.email;
         this.verificationInfo = data.message;
         this.verificationSent = true;
@@ -157,6 +159,8 @@ export class RegisterComponent {
       },
       error: (err: unknown) => {
         this.loading = false;
+        this.password = '';
+        this.confirmPassword = '';
         this.errorMessage = this.extractErrorMessage(err);
       },
     });

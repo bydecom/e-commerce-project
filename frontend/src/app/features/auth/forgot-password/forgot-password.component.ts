@@ -289,10 +289,18 @@ export class ForgotPasswordComponent implements OnDestroy {
     this.auth.resetPassword(email, this.resetToken, newPassword).subscribe({
       next: () => {
         this.loading.set(false);
+        this.resetToken = '';
+        this.resetForm.reset({
+          newPassword: '',
+          confirmPassword: '',
+        });
         this.successMessage.set('Password successfully reset! Redirecting to login...');
         setTimeout(() => void this.router.navigate(['/login']), 2000);
       },
-      error: (err) => this.handleError(err),
+      error: (err) => {
+        this.resetForm.patchValue({ newPassword: '', confirmPassword: '' });
+        this.handleError(err);
+      },
     });
   }
 
