@@ -125,6 +125,7 @@ type CartPricingData = {
                                 [disabled]="checkoutBlockLineErrors()[line.productId] !== undefined"
                                 class="h-full w-12 border-x border-gray-300 bg-transparent p-0 text-center text-sm font-semibold tabular-nums text-gray-900 focus:border-indigo-500 focus:outline-none focus:ring-0 disabled:opacity-40 [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
                                 min="1"
+                                max="99"
                               />
 
                               <button

@@ -1,11 +1,30 @@
 import { Component, OnInit, inject, signal } from '@angular/core';
-import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
+import { AbstractControl, FormBuilder, ReactiveFormsModule, ValidationErrors, Validators } from '@angular/forms';
 import { StoreSettingService } from '../../../core/services/store-setting.service';
 import { ToastService } from '../../../core/services/toast.service';
 
 function stripUrlSchemeForForm(url: string | null | undefined): string {
   if (!url) return '';
   return url.trim().replace(/^https:\/\//i, '').replace(/^http:\/\//i, '');
+}
+
+function optionalEmailValidator(control: AbstractControl): ValidationErrors | null {
+  const v = String(control.value ?? '').trim();
+  if (!v) return null;
+  return Validators.email(control);
+}
+
+function optionalLogoUrlValidator(control: AbstractControl): ValidationErrors | null {
+  const raw = String(control.value ?? '').trim();
+  if (!raw) return null;
+  const normalized = /^https?:\/\//i.test(raw) ? raw : `https://${raw}`;
+  try {
+    const u = new URL(normalized);
+    if (u.protocol !== 'http:' && u.protocol !== 'https:') return { url: true };
+    return null;
+  } catch {
+    return { url: true };
+  }
 }
 
 function normalizeLogoUrlForSave(raw: string): string | null {
@@ -197,8 +216,8 @@ export class AdminShopSettingsComponent implements OnInit {
   readonly form = this.fb.nonNullable.group({
     name: ['', Validators.required],
     description: [''],
-    logoUrl: [''],
-    email: [''],
+    logoUrl: ['', [optionalLogoUrlValidator]],
+    email: ['', [optionalEmailValidator]],
     phone: [''],
     address: [''],
   });

@@ -166,6 +166,7 @@ import { OrderStatusBadgeComponent } from '../../../shared/components/order-stat
                           <textarea
                             [value]="getComment(o.id, it.productId)"
                             (input)="setComment(o.id, it.productId, $event)"
+                            maxlength="8000"
                             placeholder="Share your thoughts about this product..."
                             class="w-full rounded-lg border-gray-200 bg-gray-50 p-3 text-xs focus:border-indigo-500 focus:ring-indigo-500"
                           ></textarea>

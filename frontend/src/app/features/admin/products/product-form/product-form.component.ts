@@ -1,13 +1,25 @@
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { Component, OnInit, inject, signal } from '@angular/core';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
-import { FormBuilder, FormsModule, ReactiveFormsModule, Validators } from '@angular/forms';
+import { AbstractControl, FormBuilder, FormsModule, ReactiveFormsModule, ValidationErrors, Validators } from '@angular/forms';
 import { catchError, map, throwError } from 'rxjs';
 import { environment } from '../../../../../environments/environment';
 import { ProductApiService } from '../../../../core/services/product-api.service';
 import { ToastService } from '../../../../core/services/toast.service';
 import type { ApiSuccess } from '../../../../shared/models/api-response.model';
 import type { ProductStatus } from '../../../../shared/models/product.model';
+
+function optionalHttpUrlValidator(control: AbstractControl): ValidationErrors | null {
+  const raw = String(control.value ?? '').trim();
+  if (!raw) return null;
+  try {
+    const u = new URL(raw);
+    if (u.protocol !== 'http:' && u.protocol !== 'https:') return { url: true };
+    return null;
+  } catch {
+    return { url: true };
+  }
+}
 
 @Component({
   selector: 'app-admin-product-form',
@@ -294,12 +306,12 @@ export class AdminProductFormComponent implements OnInit {
   stockFocused = false;
 
   readonly form = this.fb.nonNullable.group({
-    name: ['', [Validators.required]],
-    description: [''],
+    name: ['', [Validators.required, Validators.maxLength(300)]],
+    description: ['', [Validators.maxLength(8000)]],
     price: [0, [Validators.required, Validators.min(0)]],
     // Stock: don't throw error when negative, will clamp to 0 automatically.
-    stock: [0, [Validators.required]],
-    imageUrl: [''],
+    stock: [0, [Validators.required, Validators.min(0)]],
+    imageUrl: ['', [optionalHttpUrlValidator]],
     categoryId: this.fb.control<number | null>(null, [Validators.required]),
     status: this.fb.nonNullable.control<ProductStatus>('DRAFT', [Validators.required]),
   });
