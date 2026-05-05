@@ -20,12 +20,24 @@ export const updateMeSchema = z.object({
   if (!anyDelivery) return;
 
   if (!hasProvince) {
-    ctx.addIssue({ code: 'custom', message: 'Province is required', path: ['provinceId'] });
+    ctx.addIssue({
+      code: 'custom' as const,
+      message: 'Province is required',
+      path: ['provinceId'],
+    });
   }
   if (!hasWard) {
-    ctx.addIssue({ code: 'custom', message: 'Ward is required', path: ['wardId'] });
+    ctx.addIssue({
+      code: 'custom' as const,
+      message: 'Ward is required',
+      path: ['wardId'],
+    });
   }
   if (!hasStreet) {
-    ctx.addIssue({ code: 'custom', message: 'Street address is required', path: ['streetAddress'] });
+    ctx.addIssue({
+      code: 'custom' as const,
+      message: 'Street address is required',
+      path: ['streetAddress'],
+    });
   }
 });
