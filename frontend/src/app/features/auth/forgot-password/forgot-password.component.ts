@@ -1,15 +1,9 @@
 import { Component, inject, signal, OnDestroy } from '@angular/core';
-import {
-  FormBuilder,
-  ReactiveFormsModule,
-  Validators,
-  AbstractControl,
-  ValidationErrors,
-  FormGroup,
-} from '@angular/forms';
+import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
 import { HttpErrorResponse } from '@angular/common/http';
 import { AuthService } from '../../../core/services/auth.service';
+import { strongPasswordValidator, matchPasswordsValidator } from '../../../shared/validators/app.validators';
 
 type Step = 'email' | 'otp' | 'reset';
 
@@ -119,7 +113,7 @@ type Step = 'email' | 'otp' | 'reset';
 
       @if (step() === 'reset') {
         <p class="mt-2 text-sm text-gray-600">
-          Your new password must be at least 6 characters (same as registration).
+          Your new password must be at least 8 characters, including 1 uppercase letter and 1 number.
         </p>
         <form [formGroup]="resetForm" (ngSubmit)="submitReset()" class="mt-6 space-y-4">
           <div>
@@ -129,8 +123,19 @@ type Step = 'email' | 'otp' | 'reset';
               formControlName="newPassword"
               class="mt-1 w-full rounded border border-gray-300 px-3 py-2 focus:border-indigo-500 focus:ring-indigo-500"
             />
-            @if (resetForm.controls.newPassword.touched && resetForm.controls.newPassword.errors?.['minlength']) {
-              <p class="mt-1 text-xs text-red-600">Password must be at least 6 characters.</p>
+            @if (resetForm.controls.newPassword.touched) {
+              @if (resetForm.controls.newPassword.errors?.['required']) {
+                <p class="mt-1 text-xs text-red-600">Password is required.</p>
+              }
+              @if (resetForm.controls.newPassword.errors?.['minlength']) {
+                <p class="mt-1 text-xs text-red-600">Password must be at least 8 characters.</p>
+              }
+              @if (resetForm.controls.newPassword.errors?.['noUppercase']) {
+                <p class="mt-1 text-xs text-red-600">Password must contain at least 1 uppercase letter.</p>
+              }
+              @if (resetForm.controls.newPassword.errors?.['noNumber']) {
+                <p class="mt-1 text-xs text-red-600">Password must contain at least 1 number.</p>
+              }
             }
           </div>
           <div>
@@ -140,7 +145,7 @@ type Step = 'email' | 'otp' | 'reset';
               formControlName="confirmPassword"
               class="mt-1 w-full rounded border border-gray-300 px-3 py-2 focus:border-indigo-500 focus:ring-indigo-500"
             />
-            @if (resetForm.touched && resetForm.errors?.['passwordMismatch']) {
+            @if (resetForm.controls.confirmPassword.touched && resetForm.errors?.['passwordMismatch']) {
               <p class="mt-1 text-xs text-red-600">Passwords do not match.</p>
             }
           </div>
@@ -186,10 +191,10 @@ export class ForgotPasswordComponent implements OnDestroy {
 
   resetForm = this.fb.nonNullable.group(
     {
-      newPassword: ['', [Validators.required, Validators.minLength(6)]],
+      newPassword: ['', [Validators.required, strongPasswordValidator]],
       confirmPassword: ['', [Validators.required]],
     },
-    { validators: [this.passwordsMatchValidator] }
+    { validators: [matchPasswordsValidator('newPassword', 'confirmPassword')] }
   );
 
   ngOnDestroy(): void {
@@ -302,14 +307,6 @@ export class ForgotPasswordComponent implements OnDestroy {
         this.handleError(err);
       },
     });
-  }
-
-  private passwordsMatchValidator(control: AbstractControl): ValidationErrors | null {
-    const g = control as FormGroup;
-    const newPassword = g.get('newPassword')?.value ?? '';
-    const confirmPassword = g.get('confirmPassword')?.value ?? '';
-    if (!newPassword || !confirmPassword) return null;
-    return newPassword === confirmPassword ? null : { passwordMismatch: true };
   }
 
   private clearMessages(): void {

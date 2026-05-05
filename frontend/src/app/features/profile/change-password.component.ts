@@ -1,14 +1,9 @@
 import { Component, inject, signal } from '@angular/core';
 import { HttpErrorResponse } from '@angular/common/http';
-import {
-  FormBuilder,
-  ReactiveFormsModule,
-  Validators,
-  type AbstractControl,
-  type ValidationErrors,
-} from '@angular/forms';
+import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import { AuthService } from '../../core/services/auth.service';
+import { strongPasswordValidator, matchPasswordsValidator } from '../../shared/validators/app.validators';
 
 @Component({
   selector: 'app-change-password',
@@ -83,12 +78,21 @@ import { AuthService } from '../../core/services/auth.service';
                   type="password"
                   formControlName="newPassword"
                   class="mt-1 block w-full rounded-sm border-0 px-3 py-2 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-gray-900 sm:text-sm"
-                  placeholder="At least 6 characters"
+                  placeholder="At least 8 characters"
                 />
-                @if (form.controls.newPassword.touched && form.controls.newPassword.errors?.['required']) {
-                  <p class="mt-1 text-xs text-red-600">New password is required.</p>
-                } @else if (form.controls.newPassword.touched && form.controls.newPassword.errors?.['minlength']) {
-                  <p class="mt-1 text-xs text-red-600">Password must be at least 6 characters.</p>
+                @if (form.controls.newPassword.touched) {
+                  @if (form.controls.newPassword.errors?.['required']) {
+                    <p class="mt-1 text-xs text-red-600">New password is required.</p>
+                  }
+                  @if (form.controls.newPassword.errors?.['minlength']) {
+                    <p class="mt-1 text-xs text-red-600">Password must be at least 8 characters.</p>
+                  }
+                  @if (form.controls.newPassword.errors?.['noUppercase']) {
+                    <p class="mt-1 text-xs text-red-600">Password must contain at least 1 uppercase letter.</p>
+                  }
+                  @if (form.controls.newPassword.errors?.['noNumber']) {
+                    <p class="mt-1 text-xs text-red-600">Password must contain at least 1 number.</p>
+                  }
                 }
               </div>
 
@@ -125,10 +129,10 @@ export class ChangePasswordComponent {
   readonly form = this.fb.nonNullable.group(
     {
       currentPassword: ['', [Validators.required]],
-      newPassword: ['', [Validators.required, Validators.minLength(6)]],
+      newPassword: ['', [Validators.required, strongPasswordValidator]],
       confirmPassword: ['', [Validators.required]],
     },
-    { validators: [passwordsMatchValidator] }
+    { validators: [matchPasswordsValidator('newPassword', 'confirmPassword')] }
   );
 
   submit(): void {
@@ -167,11 +171,4 @@ export class ChangePasswordComponent {
   }
 }
 
-function passwordsMatchValidator(control: AbstractControl): ValidationErrors | null {
-  const group = control as { value?: { newPassword?: string; confirmPassword?: string } };
-  const newPassword = group.value?.newPassword ?? '';
-  const confirmPassword = group.value?.confirmPassword ?? '';
-  if (!newPassword || !confirmPassword) return null;
-  return newPassword === confirmPassword ? null : { passwordMismatch: true };
-}
 
