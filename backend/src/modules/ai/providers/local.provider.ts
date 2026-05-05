@@ -16,7 +16,7 @@ export class LocalAIProvider implements IAIProvider {
   async generateJson<T>(input: GenerateJsonInput): Promise<T> {
     let systemPrompt = input.system;
 
-    // Nếu có truyền responseSchema, tự động tiêm lệnh ép Local LLM trả về JSON
+    // If responseSchema is passed, automatically inject command to force Local LLM to return JSON
     if (input.responseSchema) {
       systemPrompt +=
         '\n\nCRITICAL INSTRUCTION: You MUST return EXACTLY ONE valid JSON object. Do not include any markdown formatting (like ```json). Do not add any conversational text before or after the JSON.';
@@ -31,7 +31,7 @@ export class LocalAIProvider implements IAIProvider {
       max_tokens: input.maxTokens ?? 1000,
     };
 
-    // Kích hoạt JSON mode trên LM Studio (nếu model có hỗ trợ)
+    // Activate JSON mode on LM Studio (if model supports)
     if (input.responseSchema) {
       bodyPayload.response_format = { type: 'json_object' };
     }

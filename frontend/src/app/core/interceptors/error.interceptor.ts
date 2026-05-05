@@ -35,7 +35,7 @@ export const errorInterceptor: HttpInterceptorFn = (req, next) => {
         const body = err.error as { errors?: { code?: string } } | null;
         const otpRequired = body?.errors?.code === 'AUTH_OTP_REQUIRED';
         if (otpRequired && url.includes('/api/auth/login')) {
-          // Login chuyển sang /verify-otp; không hiện toast "no permission" gây hiểu nhầm.
+          // Login changed to /verify-otp; don't show "no permission" toast to avoid confusion.
         } else {
           toast.show('You do not have permission for this action.', 'error');
         }

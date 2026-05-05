@@ -132,7 +132,7 @@ export async function getConfig(key: ConfigKey): Promise<string> {
     const row = await prisma.systemConfig.findUnique({ where: { key } });
     value = row?.value ?? getEnvFallback(key);
 
-    // Cache chỉ lưu ciphertext / raw value, tuyệt đối không lưu plaintext đã giải mã
+    // Cache only ciphertext / raw value, never plaintext decrypted
     cacheSet(key, value);
   }
 
@@ -172,7 +172,7 @@ export async function updateConfig(keyRaw: string, valueRaw: string): Promise<Sy
   const meta = CONFIG_META[key];
   let value = valueRaw.trim();
 
-  // Nếu là secret và FE gửi lại mask => không đổi
+  // If secret and FE sends back mask => don't change
   if (SENSITIVE_KEYS.includes(key) && value === MASKED_SECRET) {
     const existingRow = await prisma.systemConfig.findUnique({ where: { key } });
     return {
@@ -219,7 +219,7 @@ export async function bulkUpdateConfigs(
     }
     const meta = CONFIG_META[key as ConfigKey];
 
-    // Bỏ qua validate nếu value là MASKED_SECRET (người dùng không đổi secret)
+    // Skip validate if value is MASKED_SECRET (user didn't change secret)
     if (SENSITIVE_KEYS.includes(key as ConfigKey) && value === MASKED_SECRET) {
       continue;
     }
@@ -238,7 +238,7 @@ export async function bulkUpdateConfigs(
     const meta = CONFIG_META[key];
     let valueToSave = valueRaw.trim();
 
-    // FE gửi lại mask => giữ nguyên (không ghi DB)
+    // FE sends back mask => keep as is (don't write to DB)
     if (SENSITIVE_KEYS.includes(key) && valueToSave === MASKED_SECRET) {
       const existingRow = await prisma.systemConfig.findUnique({ where: { key } });
       out.push({
