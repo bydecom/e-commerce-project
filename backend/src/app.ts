@@ -19,6 +19,7 @@ import { dashboardRouter } from './modules/dashboard/dashboard.route';
 import { aiRouter } from './modules/ai/ai.route';
 import { storeSettingRoute } from './modules/store-setting/store-setting.route';
 import { systemConfigRouter } from './modules/system-config/system-config.route';
+import { uploadRouter } from './modules/upload/upload.route';
 
 import { errorMiddleware } from './middlewares/error.middleware';
 import { dbLoggerMiddleware } from './middlewares/logger.middleware';
@@ -136,5 +137,6 @@ app.use('/api/system-logs', systemLogRouter);
 app.use('/api/cart', cartRouter);
 app.use('/api/payments', paymentRouter);
 app.use('/api/locations', locationRouter);
+app.use('/api/upload', uploadRouter);
 
 app.use(errorMiddleware);

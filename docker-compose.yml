@@ -89,9 +89,39 @@ services:
       - qdrant_data:/qdrant/storage
     restart: unless-stopped
 
+  minio:
+    image: quay.io/minio/minio
+    container_name: ecommerce_minio
+    environment:
+      MINIO_ROOT_USER: admin
+      MINIO_ROOT_PASSWORD: password123
+      MINIO_API_CORS_ALLOW_ORIGIN: "*"
+    command: server /data --console-address ":9003" --address ":9002"
+    ports:
+      - "9002:9002"
+      - "9003:9003"
+    volumes:
+      - minio_data:/data
+    restart: unless-stopped
+
+  minio-create-bucket:
+    image: quay.io/minio/mc
+    container_name: ecommerce_minio_mc
+    depends_on:
+      - minio
+    entrypoint: >
+      /bin/sh -c "
+      sleep 5;
+      /usr/bin/mc config host add myminio http://minio:9002 admin password123;
+      /usr/bin/mc mb myminio/ecommerce-products || true;
+      /usr/bin/mc anonymous set download myminio/ecommerce-products;
+      exit 0;
+      "
+
 volumes:
   postgres_data:
   redis_data:
   portainer_data:
   rabbitmq_data:
   qdrant_data:
+  minio_data:

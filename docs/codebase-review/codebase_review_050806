@@ -1,0 +1,136 @@
+# Codebase Review — MinIO & HTTPS Changes
+
+> Review date: 2026-05-08
+
+## Tổng quan
+
+Bạn đã thêm MinIO (S3-compatible object storage) và cấu hình HTTPS vào codebase. Dưới đây là đánh giá chi tiết.
+
+---
+
+## ✅ Những thứ đã làm tốt
+
+### 1. Storage Architecture (MinIO / S3)
+- **Presigned URL pattern** — chuẩn best practice: backend chỉ tạo URL, frontend upload trực tiếp → giảm tải backend.
+- **S3-compatible abstraction** — dùng `@aws-sdk/client-s3` thay vì MinIO SDK riêng → chuyển sang AWS S3 chỉ cần bỏ `AWS_ENDPOINT`.
+- [storage.ts](file:///d:/Workspace/Project/e-commerce-project/backend/src/config/storage.ts) — `forcePathStyle` auto-detect dựa trên `AWS_ENDPOINT` rất clean.
+- [upload.controller.ts](file:///d:/Workspace/Project/e-commerce-project/backend/src/modules/upload/upload.controller.ts) — validation mimeType whitelist (chỉ cho phép image types).
+- [upload.route.ts](file:///d:/Workspace/Project/e-commerce-project/backend/src/modules/upload/upload.route.ts) — đúng cách: admin-only (`authMiddleware` + `requireRole(['ADMIN'])`).
+- [Frontend UploadService](file:///d:/Workspace/Project/e-commerce-project/frontend/src/app/core/services/upload.service.ts) — RxJS pipe chain sạch sẽ, đúng pattern.
+
+### 2. Docker Compose
+- MinIO service + sidecar `minio-create-bucket` tự tạo bucket + set public download → zero manual setup.
+- Custom ports (9002/9003) tránh conflict với Portainer (9000).
+- Volume `minio_data` đảm bảo data persistent.
+
+### 3. HTTPS Configuration
+- [index.ts](file:///d:/Workspace/Project/e-commerce-project/backend/index.ts) — logic HTTP/HTTPS rõ ràng, hỗ trợ redirect server.
+- `TRUST_PROXY` support trong [app.ts](file:///d:/Workspace/Project/e-commerce-project/backend/src/app.ts#L38-L40) — cần thiết cho production (ALB/CloudFront).
+- Cookie `secure` flag xử lý đúng trong [auth.controller.ts](file:///d:/Workspace/Project/e-commerce-project/backend/src/modules/auth/auth.controller.ts#L13-L16).
+
+### 4. CORS
+- Dev-friendly CORS cho localhost/127.0.0.1 mọi port, nhưng production chỉ cho phép `CLIENT_URL` → đúng cách.
+
+---
+
+## ⚠️ Những điểm cần chú ý / cải thiện
+
+### 1. `.env.example` có HTTPS duplicate
+```diff
+ # File: backend/.env.example
+ 
+ # Dòng 14-18 đã set HTTPS_ENABLED=false, HTTPS_PORT=3443, etc.
+ # Dòng 46-52 lại set HTTPS_ENABLED=true, HTTPS_PORT=3443 → GHI ĐÈ LÊN
+
+-# HTTPS configuration
+-HTTPS_ENABLED=true
+-HTTPS_PORT=3443
+-HTTPS_REDIRECT=true
+-
+-TLS_KEY_PATH="path/to/your/localhost-key.pem"
+-TLS_CERT_PATH="path/to/your/localhost.pem"
+```
+
+> [!WARNING]
+> File `.env.example` có **2 block HTTPS** xung đột. Block cuối (dòng 46-52) ghi đè block đầu. Nên **xóa block duplicate** và giữ 1 block duy nhất với `HTTPS_ENABLED=false` (default cho dev).
+
+### 2. Thiếu `AWS_*` vars trong `.env.example`
+
+Các env vars cho MinIO/S3 chưa có trong `.env.example`:
+```env
+# Object Storage (MinIO for dev, S3 for production)
+AWS_ENDPOINT=http://localhost:9002
+AWS_ACCESS_KEY_ID=admin
+AWS_SECRET_ACCESS_KEY=password123
+AWS_BUCKET_NAME=ecommerce-products
+AWS_REGION=us-east-1
+```
+
+### 3. Thiếu `RABBITMQ_URL` trong `.env.example`
+
+RabbitMQ đã có service trong Docker nhưng chưa có trong `.env.example`:
+```env
+RABBITMQ_URL=amqp://admin:secret123@localhost:5672
+```
+
+### 4. Frontend `environment.prod.ts` — `storageUrl` trống
+
+```typescript
+// frontend/src/environments/environment.prod.ts
+storageUrl: '',  // ← cần điền URL production (S3 bucket hoặc CloudFront)
+```
+
+### 5. Upload service — file size limit chưa có
+
+[upload.controller.ts](file:///d:/Workspace/Project/e-commerce-project/backend/src/modules/upload/upload.controller.ts) chỉ validate mime type, nhưng chưa giới hạn kích thước file. Nên thêm `maxFileSize` param hoặc set presigned URL condition:
+
+```typescript
+const command = new PutObjectCommand({
+  Bucket: BUCKET_NAME,
+  Key: key,
+  ContentType: mimetype,
+  ContentLength: maxSize,  // Optional: enforce max size
+});
+```
+
+### 6. Upload presigned URL — extension validation
+
+[upload.controller.ts](file:///d:/Workspace/Project/e-commerce-project/backend/src/modules/upload/upload.controller.ts#L7) nhận `ext` từ query string mà không validate. Nên thêm allowlist:
+
+```typescript
+const allowedExts = ['jpg', 'jpeg', 'png', 'webp', 'gif'];
+if (!allowedExts.includes(ext.toLowerCase())) {
+  throw httpError(400, 'Unsupported file extension');
+}
+```
+
+### 7. Docker port mismatch cần chú ý
+
+Docker compose map **non-standard ports**:
+- PostgreSQL: `5433:5432` (host:container)
+- Redis: `6380:6379`
+
+`.env.example` dùng `localhost:5432` (dòng 1) — cần sửa thành `localhost:5433` cho đúng.
+
+---
+
+## 📋 Tóm tắt
+
+| Hạng mục | Trạng thái |
+|----------|------------|
+| MinIO integration | ✅ Tốt, chuẩn S3-compatible |
+| Presigned URL flow | ✅ Clean, đúng pattern |
+| Docker MinIO setup | ✅ Auto bucket + public policy |
+| HTTPS support | ✅ Flexible (direct TLS hoặc proxy) |
+| TRUST_PROXY | ✅ Sẵn sàng cho reverse proxy |
+| Cookie secure flag | ✅ Đúng logic |
+| `.env.example` completeness | ⚠️ Thiếu AWS_, RABBITMQ_URL; có HTTPS duplicate |
+| File size validation | ⚠️ Chưa có |
+| Extension validation | ⚠️ Chưa strict |
+| Prod environment config | ⚠️ `storageUrl` trống |
+
+---
+
+## Kết luận
+
+Kiến trúc MinIO/S3 và HTTPS đã implement **rất tốt** — đúng pattern, dễ chuyển sang production AWS. Chỉ cần fix vài điểm nhỏ ở `.env.example` (duplicate, thiếu vars) và thêm validation cho upload.

@@ -1,0 +1,13 @@
+{
+  "/minio": {
+    "target": "http://127.0.0.1:9002",
+    "secure": false,
+    "changeOrigin": true,
+    "pathRewrite": {
+      "^/minio": ""
+    },
+    "headers": {
+      "host": "127.0.0.1:9002"
+    }
+  }
+}

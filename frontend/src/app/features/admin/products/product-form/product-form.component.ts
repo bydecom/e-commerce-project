@@ -6,9 +6,9 @@ import { catchError, map, throwError } from 'rxjs';
 import { environment } from '../../../../../environments/environment';
 import { ProductApiService } from '../../../../core/services/product-api.service';
 import { ToastService } from '../../../../core/services/toast.service';
+import { UploadService } from '../../../../core/services/upload.service';
 import type { ApiSuccess } from '../../../../shared/models/api-response.model';
 import type { ProductStatus } from '../../../../shared/models/product.model';
-
 function optionalHttpUrlValidator(control: AbstractControl): ValidationErrors | null {
   const raw = String(control.value ?? '').trim();
   if (!raw) return null;
@@ -186,7 +186,13 @@ function optionalHttpUrlValidator(control: AbstractControl): ValidationErrors | 
                       class="block w-full rounded-md border-0 px-3 py-1.5 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm sm:leading-6"
                       placeholder="https://example.com/image.png"
                     />
-                    <p class="mt-2 text-xs text-gray-500">Provide a direct link to the product image.</p>
+                    <div class="mt-2 flex items-center gap-2">
+                      <span class="text-xs text-gray-500">Or upload file:</span>
+                      <input type="file" accept="image/*" (change)="onFileSelected($event)" class="text-xs" [disabled]="uploading()" />
+                      @if (uploading()) {
+                         <span class="text-xs text-indigo-600">Uploading...</span>
+                      }
+                    </div>
                   </div>
                 </div>
               </div>
@@ -288,14 +294,16 @@ export class AdminProductFormComponent implements OnInit {
   private readonly http = inject(HttpClient);
   private readonly toast = inject(ToastService);
   private readonly fb = inject(FormBuilder);
+  private readonly upload = inject(UploadService);
 
   private readonly aiUrl = `${environment.apiUrl}/api/ai/enhance-product-description`;
 
   readonly isNew = signal(true);
-  readonly loading = signal(false); 
+  readonly loading = signal(false);
   readonly loadError = signal<string | null>(null);
   readonly saving = signal(false);
   readonly enhancingDescription = signal(false);
+  readonly uploading = signal(false);
   readonly categories = signal<{ id: number; name: string }[]>([]);
 
   private productId: number | null = null;
@@ -445,6 +453,24 @@ export class AdminProductFormComponent implements OnInit {
     this.stockFocused = false;
     const safe = Math.max(0, Math.floor(Number(this.form.controls.stock.value) || 0));
     this.form.controls.stock.setValue(safe, { emitEvent: false });
+  }
+
+  onFileSelected(event: Event): void {
+    const file = (event.target as HTMLInputElement).files?.[0];
+    if (!file) return;
+
+    this.uploading.set(true);
+    this.upload.uploadImage(file).subscribe({
+      next: (publicUrl) => {
+        this.form.patchValue({ imageUrl: publicUrl });
+        this.uploading.set(false);
+        this.toast.show('Image uploaded successfully', 'success');
+      },
+      error: (e: Error) => {
+        this.toast.show(e.message || 'Upload failed', 'error');
+        this.uploading.set(false);
+      }
+    });
   }
 
   enhanceDescription(): void {
