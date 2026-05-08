@@ -1,6 +1,6 @@
 ---
 name: grill-with-docs
-description: Grilling session that challenges your plan against the existing domain model, sharpens terminology, and updates documentation (CONTEXT.md, ADRs) inline as decisions crystallise. Use when user wants to stress-test a plan against their project's language and documented decisions.
+description: Grilling session that challenges your plan against this e-commerce project's domain model (CONTEXT.md), sharpens terminology (Order, Product, Feedback, etc.), and updates documentation (CONTEXT.md, ADRs) inline as decisions crystallise. Use when user wants to stress-test a plan against the project's language and documented decisions.
 ---
 
 <what-to-do>
@@ -21,35 +21,44 @@ During codebase exploration, also look for existing documentation:
 
 ### File structure
 
-Most repos have a single context:
+This project uses a monorepo with `backend/` and `frontend/` directories:
 
 ```
-/
-├── CONTEXT.md
+e-commerce-project/
+├── CONTEXT.md                   ← domain glossary (created lazily)
+├── contexts/
+│   ├── API_CONTRACT.md          ← full endpoint contract
+│   ├── CODEBASE_INDEX.MD        ← codebase index
+│   ├── CODEBASE_STRUCTURE.MD    ← structure overview
+│   └── .cursorrules             ← project coding rules
 ├── docs/
-│   └── adr/
-│       ├── 0001-event-sourced-orders.md
-│       └── 0002-postgres-for-write-model.md
-└── src/
+│   ├── adr/                     ← architectural decisions (created lazily)
+│   └── codebase-review/         ← past code reviews
+├── backend/
+│   ├── prisma/schema.prisma     ← DB schema (source of truth for domain models)
+│   └── src/modules/             ← feature modules
+└── frontend/
+    └── src/app/
+        ├── features/            ← feature modules
+        └── shared/models/       ← TypeScript interfaces for domain shapes
 ```
 
-If a `CONTEXT-MAP.md` exists at the root, the repo has multiple contexts. The map points to where each one lives:
+### Key domain models (from Prisma schema)
 
-```
-/
-├── CONTEXT-MAP.md
-├── docs/
-│   └── adr/                          ← system-wide decisions
-├── src/
-│   ├── ordering/
-│   │   ├── CONTEXT.md
-│   │   └── docs/adr/                 ← context-specific decisions
-│   └── billing/
-│       ├── CONTEXT.md
-│       └── docs/adr/
-```
+When grilling about domain concepts, these are the established entities:
 
-Create files lazily — only when you have something to write. If no `CONTEXT.md` exists, create one when the first term is resolved. If no `docs/adr/` exists, create it when the first ADR is needed.
+- **User** (id, email, password, name, phone, address fields, role: USER/ADMIN)
+- **Category** (id, name → has many Products)
+- **Product** (id, name, title_unaccent, description, price, stock, imageUrl, status: AVAILABLE/UNAVAILABLE/DRAFT)
+- **Order** (id, userId, status: PENDING/CONFIRMED/SHIPPING/DONE/CANCELLED, paymentStatus, total, shippingAddress)
+- **OrderItem** (orderId, productId, quantity, unitPrice)
+- **Feedback** (userId, productId, orderId, typeId, rating, comment, sentiment)
+- **FeedbackActionPlan** (feedbackId, title, description, status, assigneeId)
+- **PaymentTransaction** (orderId, vnp_TxnRef, isSuccess, rawQuery)
+- **SystemConfig** (key-value runtime config)
+- **StoreSetting** (store branding: name, logo, address)
+
+If `CONTEXT.md` or `CONTEXT-MAP.md` exists, read it. If neither exists, proceed silently — create a root `CONTEXT.md` lazily when the first term is resolved.
 
 ## During the session
 
@@ -61,13 +70,32 @@ When the user uses a term that conflicts with the existing language in `CONTEXT.
 
 When the user uses vague or overloaded terms, propose a precise canonical term. "You're saying 'account' — do you mean the Customer or the User? Those are different things."
 
+Common fuzzy terms in this project:
+- **"item"** — could mean `Product`, `OrderItem`, or `CartItem`. Clarify which.
+- **"status"** — could mean `OrderStatus`, `PaymentStatus`, `ProductStatus`, or `ActionPlanStatus`. Be specific.
+- **"user"** — could mean any authenticated person, or specifically a non-admin `Role.USER`. Clarify.
+- **"review"** / **"feedback"** — this project uses `Feedback` with a `FeedbackType`. Don't say "review" unless that's what the user means.
+
 ### Discuss concrete scenarios
 
 When domain relationships are being discussed, stress-test them with specific scenarios. Invent scenarios that probe edge cases and force the user to be precise about the boundaries between concepts.
 
+Project-specific edge cases to probe:
+- Can a user cancel an order after payment but before confirmation?
+- What happens to stock when an order is cancelled? (checkout reservation vs confirmed stock)
+- Can a product be deleted if it has existing orders/feedback?
+- What's the feedback flow? Can a user leave feedback before order is DONE?
+- How does the AI sentiment analysis interact with feedback action plans?
+
 ### Cross-reference with code
 
 When the user states how something works, check whether the code agrees. If you find a contradiction, surface it: "Your code cancels entire Orders, but you just said partial cancellation is possible — which is right?"
+
+Key files to cross-reference:
+- `backend/src/modules/order/order.service.ts` — order status transitions
+- `backend/prisma/schema.prisma` — entity relationships and constraints
+- `contexts/API_CONTRACT.md` — endpoint specifications
+- `backend/src/modules/auth/auth.service.ts` — auth flow logic
 
 ### Update CONTEXT.md inline
 

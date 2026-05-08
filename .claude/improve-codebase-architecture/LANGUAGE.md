@@ -46,6 +46,16 @@ What maintainers get from depth. Change, bugs, knowledge, and verification conce
 - An **Adapter** sits at a **Seam** and satisfies the **Interface**.
 - **Depth** produces **Leverage** for callers and **Locality** for maintainers.
 
+## Applying to this project
+
+In this e-commerce codebase, the vocabulary maps as follows:
+
+- Each **backend module** (`backend/src/modules/<name>/`) has a three-file interface: `route.ts` (URL shape), `controller.ts` (request validation + response envelope), `service.ts` (business logic + Prisma queries). The `service.ts` is the deepest file; the route is the thinnest.
+- The **storage module** (`config/storage.ts` + `modules/upload/`) has a well-placed seam: the `S3Client` is an adapter that can point at MinIO (dev) or real S3 (prod) via `AWS_ENDPOINT`. This is a textbook two-adapter seam.
+- The **auth middleware** (`authMiddleware`, `optionalAuthMiddleware`) is a seam between unauthenticated and authenticated request handling. The `isSecure()` helper in `auth.controller.ts` adapts cookie behaviour based on HTTPS context.
+- The **Redis/RabbitMQ configs** (`config/redis.ts`, `config/rabbitmq.ts`) use a lazy-connect pattern — the seam is at the connection level, but there's currently only one adapter (the real client). Tests would benefit from an in-memory adapter.
+- **Prisma** is not behind a seam — services call `prisma` directly. This is fine for this project's scale, but means service tests require a database (local-substitutable, category 2 in [DEEPENING.md](DEEPENING.md)).
+
 ## Rejected framings
 
 - **Depth as ratio of implementation-lines to interface-lines** (Ousterhout): rewards padding the implementation. We use depth-as-leverage instead.

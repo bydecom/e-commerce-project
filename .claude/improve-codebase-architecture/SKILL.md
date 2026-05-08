@@ -1,6 +1,6 @@
 ---
 name: improve-codebase-architecture
-description: Find deepening opportunities in a codebase, informed by the domain language in CONTEXT.md and the decisions in docs/adr/. Use when the user wants to improve architecture, find refactoring opportunities, consolidate tightly-coupled modules, or make a codebase more testable and AI-navigable.
+description: Find deepening opportunities in this e-commerce codebase (Express 5 + Angular 17 + Prisma + MinIO/S3), informed by the domain language in CONTEXT.md and the decisions in docs/adr/. Use when the user wants to improve architecture, find refactoring opportunities, consolidate tightly-coupled modules, or make the codebase more testable and AI-navigable.
 ---
 
 # Improve Codebase Architecture
@@ -28,11 +28,34 @@ Key principles (see [LANGUAGE.md](LANGUAGE.md) for the full list):
 
 This skill is _informed_ by the project's domain model. The domain language gives names to good seams; ADRs record decisions the skill should not re-litigate.
 
+## Project context
+
+Before exploring, understand the architecture:
+
+- **Backend:** Express 5 + TypeScript. Every feature under `backend/src/modules/<name>/` with `route.ts → controller.ts → service.ts`.
+- **Frontend:** Angular 17 standalone components with signals. Features lazy-loaded under `frontend/src/app/features/`.
+- **Data:** Prisma ORM → PostgreSQL. Int PKs, not UUIDs.
+- **Storage:** `@aws-sdk/client-s3` → MinIO (dev) / S3 (prod). Presigned URL upload pattern.
+- **Auth:** JWT access (in-memory) + refresh token (HttpOnly cookie, hashed in Redis).
+- **AI:** Gemini API with provider abstraction in `ai/providers/`. Qdrant vector DB.
+- **Messaging:** RabbitMQ via `amqplib`. Config in `config/rabbitmq.ts`.
+- **Existing reference docs:** `contexts/API_CONTRACT.md`, `contexts/CODEBASE_INDEX.MD`, `backend/prisma/schema.prisma`.
+
+### Known shallow areas (starting points for exploration)
+
+These are areas where the current architecture may benefit from deepening:
+
+1. **Controllers doing service work** — some controllers contain validation logic beyond Zod parsing. The controller should be mechanical: parse → call service → wrap response.
+2. **Direct Prisma calls without transaction boundaries** — some multi-write operations may not use `prisma.$transaction()` consistently.
+3. **AI module complexity** — `modules/ai/` has many sub-services (chat-orchestrator, admin-chat-orchestrator, feedback-analyzer, product-description-enhancer, mini-advice). The interface may be wider than necessary.
+4. **Config duplication** — runtime config exists in both `.env` and `SystemConfig` DB table. The `getConfigInt()` / `getConfigString()` interface may not be deep enough.
+5. **Redis usage scattered** — Redis is used for JWT blacklist, refresh tokens, product cache, checkout reservations, OTP storage. No unified cache interface.
+
 ## Process
 
 ### 1. Explore
 
-Read the project's domain glossary and any ADRs in the area you're touching first.
+Read the project's domain glossary (`CONTEXT.md` if it exists) and any ADRs in `docs/adr/` first.
 
 Then use the Agent tool with `subagent_type=Explore` to walk the codebase. Don't follow rigid heuristics — explore organically and note where you experience friction:
 

@@ -46,9 +46,22 @@ _Avoid_: Client, buyer, account
 - **Group terms under subheadings** when natural clusters emerge. If all terms belong to a single cohesive area, a flat list is fine.
 - **Write an example dialogue.** A conversation between a dev and a domain expert that demonstrates how the terms interact naturally and clarifies boundaries between related concepts.
 
+## This project's initial terms
+
+When creating `CONTEXT.md` for this e-commerce project, these are the starting-point domain concepts (derived from `backend/prisma/schema.prisma`):
+
+**Core commerce:** Product, Category, Order, OrderItem, Cart (localStorage, not DB-backed)
+**Users & auth:** User, Role (USER/ADMIN), pending registration, email verification
+**Payments:** PaymentTransaction, VNPay integration, PaymentStatus (PENDING/PAID/FAILED)
+**Feedback:** Feedback, FeedbackType, FeedbackActionPlan, SentimentLabel (AI-analyzed)
+**Store config:** StoreSetting (branding), SystemConfig (runtime key-value)
+**Status machines:** OrderStatus (PENDING→CONFIRMED→SHIPPING→DONE, PENDING→CANCELLED), ProductStatus (AVAILABLE/UNAVAILABLE/DRAFT), ActionPlanStatus (PENDING/IN_PROGRESS/DONE/REJECTED)
+
+Terms that should NOT go in CONTEXT.md (they're infrastructure, not domain): Redis, JWT, presigned URL, S3, MinIO, Prisma, Zod, middleware.
+
 ## Single vs multi-context repos
 
-**Single context (most repos):** One `CONTEXT.md` at the repo root.
+**Single context (this project):** One `CONTEXT.md` at the repo root. This project is a monorepo with frontend and backend, but they share one domain context.
 
 **Multiple contexts:** A `CONTEXT-MAP.md` at the repo root lists the contexts, where they live, and how they relate to each other:
 
@@ -73,5 +86,3 @@ The skill infers which structure applies:
 - If `CONTEXT-MAP.md` exists, read it to find contexts
 - If only a root `CONTEXT.md` exists, single context
 - If neither exists, create a root `CONTEXT.md` lazily when the first term is resolved
-
-When multiple contexts exist, infer which one the current topic relates to. If unclear, ask.

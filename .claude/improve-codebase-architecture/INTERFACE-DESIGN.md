@@ -42,3 +42,35 @@ Each sub-agent outputs:
 Present designs sequentially so the user can absorb each one, then compare them in prose. Contrast by **depth** (leverage at the interface), **locality** (where change concentrates), and **seam placement**.
 
 After comparing, give your own recommendation: which design you think is strongest and why. If elements from different designs would combine well, propose a hybrid. Be opinionated — the user wants a strong read, not a menu.
+
+## Project-specific interface patterns
+
+When designing interfaces for this e-commerce project, respect these existing patterns:
+
+### Backend module interface shape
+
+Every module exposes its interface through three files. When redesigning, maintain this layering:
+
+```
+route.ts       → URL paths + middleware chain (authMiddleware, requireRole, validateBody)
+controller.ts  → Parse request → call service → wrap in success()/httpError()
+service.ts     → Business logic + Prisma queries (the deepest layer)
+```
+
+The controller is the thinnest — it should be nearly mechanical. If a controller has branching logic, that logic belongs in the service.
+
+### Response envelope contract
+
+All new interfaces must return through `success(data, message, meta)` for success and `httpError(status, message)` for errors. This is non-negotiable — the frontend's `ApiSuccess<T>` type depends on it.
+
+### Auth context
+
+Protected endpoints receive `req.auth` with `{ userId, role, jti, exp }`. The interface should never require callers to pass auth info manually — it's middleware-injected.
+
+### Storage interface
+
+The presigned URL pattern (backend generates URL → frontend uploads directly) is the established storage interface. New features that need file uploads should use `UploadService` rather than inventing a new flow.
+
+### Pagination interface
+
+List endpoints return `{ data, meta: { page, limit, total, totalPages } }`. New list interfaces must follow this shape for frontend `PaginationComponent` compatibility.
