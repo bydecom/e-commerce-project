@@ -8,8 +8,8 @@ import {
 } from '@angular/core';
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
-import { EMPTY, Subscription } from 'rxjs';
-import { switchMap } from 'rxjs/operators';
+import { EMPTY, Subscription, Subject } from 'rxjs';
+import { switchMap, throttleTime } from 'rxjs/operators';
 import { FormsModule } from '@angular/forms';
 import { AuthService } from '../../../core/services/auth.service';
 import { ServerCartService } from '../../../core/services/server-cart.service';
@@ -59,13 +59,19 @@ export class ProductDetailComponent implements OnInit, OnDestroy {
   });
 
   private sub!: Subscription;
+  private addToCartSub!: Subscription;
   private feedbackSub: Subscription | null = null;
+  private readonly addToCart$ = new Subject<Product>();
 
   readonly feedbackLoading = signal(false);
   readonly feedbackError = signal<string | null>(null);
   readonly feedbacks = signal<ProductFeedbackDto[]>([]);
 
   ngOnInit(): void {
+    this.addToCartSub = this.addToCart$
+      .pipe(throttleTime(1000))
+      .subscribe((p) => this.executeAddToCart(p));
+
     this.sub = this.route.paramMap
       .pipe(
         switchMap((pm) => {
@@ -128,6 +134,7 @@ export class ProductDetailComponent implements OnInit, OnDestroy {
   ngOnDestroy(): void {
     if (this.sub) this.sub.unsubscribe();
     if (this.feedbackSub) this.feedbackSub.unsubscribe();
+    if (this.addToCartSub) this.addToCartSub.unsubscribe();
   }
 
   increaseQty(): void {
@@ -143,6 +150,10 @@ export class ProductDetailComponent implements OnInit, OnDestroy {
   }
 
   addToCart(p: Product): void {
+    this.addToCart$.next(p);
+  }
+
+  private executeAddToCart(p: Product): void {
     if (p.stock <= 0 || this.addingToCart()) return;
 
     // Server cart is now the source of truth for `/cart`.

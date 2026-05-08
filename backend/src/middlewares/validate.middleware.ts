@@ -32,7 +32,12 @@ export function validateQuery(schema: ZodSchema) {
       });
       return;
     }
-    req.query = result.data as Request['query'];
+    Object.defineProperty(req, 'query', {
+      value: result.data,
+      writable: true,
+      enumerable: true,
+      configurable: true
+    });
     next();
   };
 }
