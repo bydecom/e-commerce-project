@@ -1,4 +1,4 @@
-import type { OrderStatus, PaymentStatus, Prisma, PrismaClient } from '@prisma/client';
+import type { OrderStatus, PaymentStatus, Prisma, PrismaClient, Role } from '@prisma/client';
 
 type DbTx = Omit<
   PrismaClient,
@@ -62,11 +62,11 @@ async function sendOrderCompletedEmail(order: {
 
 function mapItem(
   row: {
-  productId: number;
-  quantity: number;
-  unitPrice: number;
-  product: { id: number; name: string; imageUrl: string | null };
-},
+    productId: number;
+    quantity: number;
+    unitPrice: number;
+    product: { id: number; name: string; imageUrl: string | null };
+  },
   reviewedSet: Set<string>
 ) {
   const key = `${row.productId}`;
@@ -82,35 +82,35 @@ function mapItem(
 
 function mapOrderFull(
   order: {
-  id: number;
-  userId: number;
-  status: OrderStatus;
-  total: number;
-  shippingAddress: string;
-  createdAt: Date;
-  updatedAt: Date;
-  paymentStatus: PaymentStatus;
-  items: Array<{
-    productId: number;
-    quantity: number;
-    unitPrice: number;
-    product: { id: number; name: string; imageUrl: string | null };
-  }>;
-  user: { id: number; email: string; name: string | null };
-  paymentTransactions: Array<{
     id: number;
-    vnp_TxnRef: string;
-    vnp_TransactionNo: string | null;
-    vnp_Amount: number | null;
-    vnp_BankCode: string | null;
-    vnp_PayDate: string | null;
-    vnp_ResponseCode: string | null;
-    vnp_TransactionStatus: string | null;
-    isSuccess: boolean;
-    rawQuery: Prisma.JsonValue;
+    userId: number;
+    status: OrderStatus;
+    total: number;
+    shippingAddress: string;
     createdAt: Date;
-  }>;
-},
+    updatedAt: Date;
+    paymentStatus: PaymentStatus;
+    items: Array<{
+      productId: number;
+      quantity: number;
+      unitPrice: number;
+      product: { id: number; name: string; imageUrl: string | null };
+    }>;
+    user: { id: number; email: string; name: string | null };
+    paymentTransactions: Array<{
+      id: number;
+      vnp_TxnRef: string;
+      vnp_TransactionNo: string | null;
+      vnp_Amount: number | null;
+      vnp_BankCode: string | null;
+      vnp_PayDate: string | null;
+      vnp_ResponseCode: string | null;
+      vnp_TransactionStatus: string | null;
+      isSuccess: boolean;
+      rawQuery: Prisma.JsonValue;
+      createdAt: Date;
+    }>;
+  },
   reviewedProductIds: Set<number>
 ) {
   const reviewedSet = new Set([...reviewedProductIds].map((id) => `${id}`));
@@ -181,6 +181,7 @@ export async function createOrder(body: {
   userId: number;
   items: Array<{ productId: number; quantity: number }>;
   shippingAddress: string;
+  role?: Role;
 }) {
   const userId = Math.floor(Number(body.userId));
   const shippingAddress = body.shippingAddress;
@@ -232,6 +233,15 @@ export async function createOrder(body: {
             quantity: l.quantity,
             unitPrice: l.unitPrice,
           })),
+        },
+        events: {
+          create: [{
+            type: 'ORDER_STATUS_CHANGED',
+            newValue: 'PENDING',
+            note: 'Order placed successfully',
+            changedById: userId,
+            changedByRole: body.role ?? 'USER',
+          }],
         },
       },
       include: orderListInclude,
@@ -316,7 +326,7 @@ async function restoreStockForOrder(tx: DbTx, orderId: number) {
   }
 }
 
-export async function cancelUserOrder(userId: number, orderId: number) {
+export async function cancelUserOrder(userId: number, orderId: number, role: Role = 'USER') {
   return prisma.$transaction(async (tx) => {
     const order = await tx.order.findFirst({ where: { id: orderId, userId } });
     if (!order) throw httpError(404, 'Order not found');
@@ -326,7 +336,19 @@ export async function cancelUserOrder(userId: number, orderId: number) {
     await restoreStockForOrder(tx, orderId);
     const updated = await tx.order.update({
       where: { id: orderId },
-      data: { status: 'CANCELLED' },
+      data: {
+        status: 'CANCELLED',
+        events: {
+          create: {
+            type: 'ORDER_STATUS_CHANGED',
+            oldValue: order.status,
+            newValue: 'CANCELLED',
+            changedById: userId,
+            changedByRole: role,
+            note: 'Order cancelled by user',
+          },
+        },
+      },
       include: orderListInclude,
     });
     const reviewedProductIds = await getReviewedProductIdsForOrder(userId, orderId);
@@ -352,7 +374,17 @@ export async function cancelOrderSystem(orderId: number) {
     await restoreStockForOrder(tx, orderId);
     const updated = await tx.order.update({
       where: { id: orderId },
-      data: { status: 'CANCELLED' },
+      data: {
+        status: 'CANCELLED',
+        events: {
+          create: {
+            type: 'ORDER_STATUS_CHANGED',
+            oldValue: order.status,
+            newValue: 'CANCELLED',
+            note: 'Order automatically cancelled by system (TTL expired)',
+          },
+        },
+      },
       include: orderListInclude,
     });
     return mapOrderFull(updated, new Set());
@@ -380,15 +412,15 @@ export async function listAdminOrders(query: {
     ...(statusFilter ? { status: statusFilter } : {}),
     ...(search
       ? {
-          user: {
-            is: {
-              OR: [
-                { email: { contains: search, mode: 'insensitive' } },
-                { name: { contains: search, mode: 'insensitive' } },
-              ],
-            },
+        user: {
+          is: {
+            OR: [
+              { email: { contains: search, mode: 'insensitive' } },
+              { name: { contains: search, mode: 'insensitive' } },
+            ],
           },
-        }
+        },
+      }
       : {}),
   };
 
@@ -432,7 +464,7 @@ const allowedNext: Record<OrderStatus, OrderStatus[]> = {
   CANCELLED: [],
 };
 
-export async function updateOrderStatus(orderId: number, nextStatus: OrderStatus) {
+export async function updateOrderStatus(orderId: number, nextStatus: OrderStatus, adminId?: number, adminRole?: Role) {
   const updated = await prisma.$transaction(async (tx) => {
     const order = await tx.order.findUnique({ where: { id: orderId } });
     if (!order) throw httpError(404, 'Order not found');
@@ -448,7 +480,19 @@ export async function updateOrderStatus(orderId: number, nextStatus: OrderStatus
 
     const updated = await tx.order.update({
       where: { id: orderId },
-      data: { status: nextStatus },
+      data: {
+        status: nextStatus,
+        events: {
+          create: {
+            type: 'ORDER_STATUS_CHANGED',
+            oldValue: order.status,
+            newValue: nextStatus,
+            changedById: adminId,
+            changedByRole: adminRole ?? null,
+            note: `Admin changed status from ${order.status} to ${nextStatus}`,
+          },
+        },
+      },
       include: orderListInclude,
     });
     // Admin update: no userId context => do not mark reviewed.
@@ -465,4 +509,26 @@ export async function updateOrderStatus(orderId: number, nextStatus: OrderStatus
   }
 
   return updated;
+}
+
+export async function getOrderEvents(orderId: number) {
+  const order = await prisma.order.findUnique({ where: { id: orderId } });
+  if (!order) throw httpError(404, 'Order not found');
+  const events = await prisma.orderEvent.findMany({
+    where: { orderId },
+    orderBy: { createdAt: 'desc' },
+    include: { changedBy: { select: { id: true, email: true, name: true } } },
+  });
+  return events.map((e) => ({
+    id: e.id,
+    orderId: e.orderId,
+    type: e.type,
+    oldValue: e.oldValue,
+    newValue: e.newValue,
+    note: e.note,
+    changedById: e.changedById,
+    changedByRole: e.changedByRole,
+    changedBy: e.changedBy ? { id: e.changedBy.id, email: e.changedBy.email, name: e.changedBy.name } : null,
+    createdAt: e.createdAt.toISOString(),
+  }));
 }

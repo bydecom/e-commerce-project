@@ -47,6 +47,12 @@ enum ActionPlanStatus {
   REJECTED
 }
 
+enum OrderEventType {
+  ORDER_STATUS_CHANGED
+  PAYMENT_STATUS_CHANGED
+  SYSTEM_LOG
+}
+
 model User {
   id            Int        @id @default(autoincrement())
   email         String     @unique
@@ -64,6 +70,7 @@ model User {
   orders              Order[]
   feedbacks           Feedback[]
   assignedActionPlans FeedbackActionPlan[]
+  orderEvents         OrderEvent[]
 }
 
 model Category {
@@ -104,9 +111,10 @@ model Order {
   updatedAt       DateTime      @updatedAt                   
 
   user            User          @relation(fields: [userId], references: [id])
-  items           OrderItem[]
-  feedbacks       Feedback[]
+  items               OrderItem[]
+  feedbacks           Feedback[]
   paymentTransactions PaymentTransaction[]
+  events              OrderEvent[]
 }
 
 model OrderItem {
@@ -218,3 +226,19 @@ model PaymentTransaction {
   @@index([vnp_TxnRef])
 }
 
+model OrderEvent {
+  id            Int            @id @default(autoincrement())
+  orderId       Int
+  type          OrderEventType
+  oldValue      String?
+  newValue      String?
+  note          String?
+  changedById   Int?
+  changedByRole Role?
+  createdAt     DateTime       @default(now())
+
+  order         Order          @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  changedBy     User?          @relation(fields: [changedById], references: [id])
+
+  @@index([orderId])
+}

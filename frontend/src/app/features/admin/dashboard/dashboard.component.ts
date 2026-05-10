@@ -226,7 +226,7 @@ Chart.register(...registerables);
       }
 
       @if (data(); as d) {
-        <section class="grid grid-cols-2 items-stretch gap-4 lg:grid-cols-3 xl:grid-cols-6">
+        <section class="grid grid-cols-2 items-stretch gap-4 lg:grid-cols-4 xl:grid-cols-4">
           <div class="flex h-full min-h-[8.5rem] flex-col rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
             <p class="text-xs font-medium uppercase tracking-wide text-gray-500">Total revenue</p>
             <p class="mt-2 text-2xl font-bold text-gray-900">
@@ -262,6 +262,20 @@ Chart.register(...registerables);
             <p class="text-xs font-medium uppercase tracking-wide text-rose-600">Repeat Customers</p>
             <p class="mt-2 text-2xl font-bold text-rose-700">{{ d.keyMetrics.repeatCustomers }}</p>
             <p class="mt-auto pt-2 text-xs leading-snug text-rose-400">of {{ d.keyMetrics.totalBuyers }} buyers</p>
+          </div>
+          <div class="flex h-full min-h-[8.5rem] flex-col rounded-xl border border-amber-100 bg-amber-50 p-5 shadow-sm">
+            <p class="text-xs font-medium uppercase tracking-wide text-amber-600">Avg Processing Time</p>
+            <p class="mt-2 text-2xl font-bold text-amber-700">
+              {{ d.keyMetrics.avgProcessingDays }} <span class="ml-1 text-sm font-normal text-amber-500">Days</span>
+            </p>
+            <p class="mt-auto pt-2 text-xs leading-snug text-amber-400">PENDING to DONE</p>
+          </div>
+          <div class="flex h-full min-h-[8.5rem] flex-col rounded-xl border border-red-100 bg-red-50 p-5 shadow-sm">
+            <p class="text-xs font-medium uppercase tracking-wide text-red-600">Cancellation Rate</p>
+            <p class="mt-2 text-2xl font-bold text-red-700">
+              {{ d.keyMetrics.cancellationRate }} <span class="ml-1 text-sm font-normal text-red-500">%</span>
+            </p>
+            <p class="mt-auto pt-2 text-xs leading-snug text-red-400">Of total orders</p>
           </div>
         </section>
 

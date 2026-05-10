@@ -38,3 +38,18 @@ export interface OrderDetail {
   paymentTransactions: PaymentTransactionDetail[];
   user: { id: number; email: string; name: string | null };
 }
+
+export type OrderEventType = 'ORDER_STATUS_CHANGED' | 'PAYMENT_STATUS_CHANGED' | 'SYSTEM_LOG';
+
+export interface OrderEvent {
+  id: number;
+  orderId: number;
+  type: OrderEventType;
+  oldValue: string | null;
+  newValue: string | null;
+  note: string | null;
+  changedById: number | null;
+  changedByRole: 'USER' | 'ADMIN' | null;
+  changedBy: { id: number; email: string; name: string | null } | null;
+  createdAt: string;
+}

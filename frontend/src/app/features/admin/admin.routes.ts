@@ -51,9 +51,26 @@ export const ADMIN_ROUTES: Routes = [
       {
         path: 'orders/:id',
         loadComponent: () =>
-          import('./orders/order-detail/order-detail.component').then(
-            (m) => m.AdminOrderDetailComponent
+          import('./orders/order-detail-layout/order-detail-layout.component').then(
+            (m) => m.OrderDetailLayoutComponent
           ),
+        children: [
+          { path: '', redirectTo: 'overview', pathMatch: 'full' },
+          {
+            path: 'overview',
+            loadComponent: () =>
+              import('./orders/order-detail/order-detail.component').then(
+                (m) => m.AdminOrderDetailComponent
+              ),
+          },
+          {
+            path: 'tracking',
+            loadComponent: () =>
+              import('./orders/order-audit/order-audit.component').then(
+                (m) => m.OrderAuditComponent
+              ),
+          },
+        ],
       },
       {
         path: 'feedbacks',

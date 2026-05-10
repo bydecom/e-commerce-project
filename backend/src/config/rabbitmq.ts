@@ -28,7 +28,7 @@ export async function ensureRabbitConnected(): Promise<void> {
 
   _connecting = (async () => {
     _conn = await connect(url);
-    _conn.on('error', (err) => {
+    _conn.on('error', (err: Error) => {
       // eslint-disable-next-line no-console
       console.error('RabbitMQ connection error:', err);
     });

@@ -145,6 +145,8 @@ export async function getDashboardSummary(query: Record<string, unknown> = {}) {
     topProductsRaw,
     categoryBreakdown,
     topCustomersRaw,
+    cancelledOrders,
+    completedOrdersWithEvents,
   ] = await Promise.all([
     prisma.order.aggregate({ where: doneWhere, _sum: { total: true } }),
     prisma.order.count({ where: dateWhere }),
@@ -205,7 +207,27 @@ export async function getDashboardSummary(query: Record<string, unknown> = {}) {
       orderBy: { _sum: { total: 'desc' } },
       take: 10,
     }),
+    prisma.order.count({ where: { status: 'CANCELLED', ...dateWhere } }),
+    prisma.order.findMany({
+      where: doneWhere,
+      include: { events: true },
+    }),
   ]);
+
+  const cancellationRate = totalOrders > 0 ? ((cancelledOrders / totalOrders) * 100).toFixed(1) : '0.0';
+
+  let totalProcessingTime = 0;
+  let processedCount = 0;
+  completedOrdersWithEvents.forEach((order) => {
+    const start = order.events.find((e) => e.newValue === 'PENDING')?.createdAt;
+    const end = order.events.find((e) => e.newValue === 'DONE')?.createdAt;
+    if (start && end) {
+      totalProcessingTime += end.getTime() - start.getTime();
+      processedCount++;
+    }
+  });
+  const avgProcessingDays =
+    processedCount > 0 ? (totalProcessingTime / processedCount / (1000 * 60 * 60 * 24)).toFixed(1) : '0.0';
 
   // Top customers: join userId → user info
   const topCustomerUserIds = topCustomersRaw.map((r) => r.userId);
@@ -294,6 +316,8 @@ export async function getDashboardSummary(query: Record<string, unknown> = {}) {
       avgOrderValue,
       repeatCustomers,
       totalBuyers,
+      cancellationRate: Number(cancellationRate),
+      avgProcessingDays: Number(avgProcessingDays),
     },
     actionRequired: { pendingOrders, negativeFeedbacks, lowStockProducts },
     charts: {

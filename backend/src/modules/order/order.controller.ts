@@ -12,7 +12,7 @@ export async function createOrder(req: Request, res: Response, next: NextFunctio
     const auth = req.auth;
     if (!auth) { res.status(401).json({ success: false, message: 'Unauthorized', errors: null }); return; }
     const { shippingAddress, items } = req.body;
-    const data = await orderService.createOrder({ userId: auth.userId, items, shippingAddress });
+    const data = await orderService.createOrder({ userId: auth.userId, items, shippingAddress, role: auth.role });
     res.status(201).json(success(data, 'Created'));
   } catch (err) { next(err); }
 }
@@ -43,7 +43,7 @@ export async function cancelMyOrder(req: Request, res: Response, next: NextFunct
     if (!auth) { res.status(401).json({ success: false, message: 'Unauthorized', errors: null }); return; }
     const id = parseParamInt(req.params.id);
     if (Number.isNaN(id)) { res.status(404).json({ success: false, message: 'Order not found', errors: null }); return; }
-    const data = await orderService.cancelUserOrder(auth.userId, id);
+    const data = await orderService.cancelUserOrder(auth.userId, id, auth.role);
     res.json(success(data, 'Cancelled'));
   } catch (err) { next(err); }
 }
@@ -69,7 +69,17 @@ export async function patchAdminStatus(req: Request, res: Response, next: NextFu
     const id = parseParamInt(req.params.id);
     if (Number.isNaN(id)) { res.status(404).json({ success: false, message: 'Order not found', errors: null }); return; }
     const { status } = req.body;
-    const data = await orderService.updateOrderStatus(id, status);
+    const auth = req.auth;
+    const data = await orderService.updateOrderStatus(id, status, auth?.userId, auth?.role);
     res.json(success(data, 'Updated'));
+  } catch (err) { next(err); }
+}
+
+export async function getAdminOrderEvents(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const id = parseParamInt(req.params.id);
+    if (Number.isNaN(id)) { res.status(404).json({ success: false, message: 'Order not found', errors: null }); return; }
+    const data = await orderService.getOrderEvents(id);
+    res.json(success(data));
   } catch (err) { next(err); }
 }

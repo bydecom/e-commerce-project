@@ -13,5 +13,6 @@ orderRouter.get('/me',              authMiddleware, validateQuery(paginationQuer
 orderRouter.get('/me/:id',          authMiddleware, orderController.getMyOrder);
 orderRouter.patch('/me/:id/cancel', authMiddleware, orderController.cancelMyOrder);
 orderRouter.get('/',                authMiddleware, requireRole(['ADMIN']), validateQuery(paginationQuerySchema), orderController.listAdminOrders);
+orderRouter.get('/:id/events',      authMiddleware, requireRole(['ADMIN']), orderController.getAdminOrderEvents);
 orderRouter.get('/:id',             authMiddleware, requireRole(['ADMIN']), orderController.getAdminOrder);
 orderRouter.patch('/:id/status',    authMiddleware, requireRole(['ADMIN']), validateBody(updateOrderStatusSchema), orderController.patchAdminStatus);

@@ -3,7 +3,7 @@ import { Injectable, inject } from '@angular/core';
 import { catchError, map, throwError, type Observable } from 'rxjs';
 import { environment } from '../../../environments/environment';
 import type { ApiSuccess, PaginationMeta } from '../../shared/models/api-response.model';
-import type { OrderDetail, OrderStatus } from '../../shared/models/order.model';
+import type { OrderDetail, OrderEvent, OrderStatus } from '../../shared/models/order.model';
 
 function mapHttpError(err: HttpErrorResponse) {
   const body = err.error as { message?: string } | undefined;
@@ -127,5 +127,15 @@ export class OrderApiService {
         }),
         catchError(mapHttpError)
       );
+  }
+
+  getAdminOrderEvents(orderId: number): Observable<OrderEvent[]> {
+    return this.http.get<ApiSuccess<OrderEvent[]>>(`${this.baseUrl}/${orderId}/events`).pipe(
+      map((r) => {
+        if (!r.success) throw new Error(r.message);
+        return r.data;
+      }),
+      catchError(mapHttpError)
+    );
   }
 }

@@ -787,8 +787,38 @@ async function main() {
             shippingAddress: customer.fullAddress ?? customer.streetAddress ?? '',
             createdAt: orderDate,
             items: { create: items },
+            events: {
+              create: [
+                {
+                  type: 'ORDER_STATUS_CHANGED',
+                  newValue: 'PENDING',
+                  note: 'Customer placed order successfully',
+                  changedById: customer.id,
+                  changedByRole: 'USER',
+                  createdAt: orderDate,
+                },
+              ],
+            },
           } as any,
         });
+
+        if (status !== 'PENDING') {
+          await prisma.orderEvent.create({
+            data: {
+              orderId: order.id,
+              type: 'ORDER_STATUS_CHANGED',
+              oldValue: 'PENDING',
+              newValue: status,
+              changedById: adminUser.id,
+              changedByRole: 'ADMIN',
+              note:
+                status === 'CANCELLED'
+                  ? 'Order cancelled due to payment timeout or system request'
+                  : 'Admin confirmed and started processing the order',
+              createdAt: new Date(orderDate.getTime() + ri(1, 24) * 60 * 60 * 1000),
+            },
+          });
+        }
 
         if (paymentStatus !== 'PENDING') {
           const isSuccess = paymentStatus === 'PAID';
@@ -810,6 +840,19 @@ async function main() {
                 vnp_OrderInfo: `Thanh toan don hang ${order.id}`,
               },
               createdAt: orderDate,
+            },
+          });
+
+          await prisma.orderEvent.create({
+            data: {
+              orderId: order.id,
+              type: 'PAYMENT_STATUS_CHANGED',
+              oldValue: 'PENDING',
+              newValue: isSuccess ? 'PAID' : 'FAILED',
+              note: isSuccess
+                ? `Payment successful via VNPay gateway`
+                : `Payment failed - VNPay error code: ${pick(['24', '51', '10'])}`,
+              createdAt: new Date(orderDate.getTime() + ri(1, 30) * 60 * 1000),
             },
           });
         }

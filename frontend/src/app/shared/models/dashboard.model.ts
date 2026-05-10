@@ -9,6 +9,8 @@ export interface DashboardKeyMetrics {
   avgOrderValue: number;
   repeatCustomers: number;
   totalBuyers: number;
+  avgProcessingDays: number;
+  cancellationRate: number;
 }
 
 export interface DashboardPendingOrder {
