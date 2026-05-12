@@ -10,7 +10,8 @@
     "start:prod": "npx dotenv-cli -e .env.production -- npx ts-node index.ts",
     "db:seed": "npx prisma db seed",
     "db:push:dev": "npx prisma db push",
-    "db:push:prod": "dotenv -e .env.production -- npx prisma db push"
+    "db:push:prod": "dotenv -e .env.production -- npx prisma db push",
+    "build": "tsc"
   },
   "prisma": {
     "seed": "npx ts-node prisma/seed.ts"
