@@ -1,15 +1,20 @@
 name: Deploy Angular to AWS S3 & CloudFront
 
-# 1. KHI NÀO THÌ CHẠY?
-# Kịch bản này sẽ tự động kích hoạt khi có code mới push lên nhánh "main"
 on:
   push:
     branches:
       - main
+    paths:
+      - 'frontend/**' # 🎯 CHỈ chạy khi có thay đổi trong thư mục frontend
 
 jobs:
   build-and-deploy:
-    runs-on: ubuntu-latest # GitHub sẽ mượn 1 máy ảo Ubuntu để chạy
+    runs-on: ubuntu-latest
+    
+    # 🎯 Dặn GitHub: Cứ lệnh nào có chữ 'run' thì tự động chui vào thư mục frontend mà chạy
+    defaults:
+      run:
+        working-directory: ./frontend 
 
     steps:
       - name: 📥 Kéo code về máy ảo
@@ -20,10 +25,10 @@ jobs:
         with:
           node-version: '20'
 
-      - name: 📦 Cài đặt thư viện (npm install)
+      - name: 📦 Cài đặt thư viện (npm ci)
         run: npm ci
 
-      - name: 🛠️ Build code Angular ra HTML/CSS/JS
+      - name: 🛠️ Build code Angular
         run: npm run build -- --configuration production
 
       - name: 🔑 Đăng nhập vào AWS
@@ -36,5 +41,5 @@ jobs:
       - name: 🚀 Đẩy code lên S3 Bucket
         run: aws s3 sync dist/frontend/browser s3://${{ secrets.S3_FRONTEND_BUCKET }} --delete
 
-      - name: 🧹 Xóa bộ nhớ đệm CloudFront (Invalidation)
+      - name: 🧹 Xóa bộ nhớ đệm CloudFront
         run: aws cloudfront create-invalidation --distribution-id ${{ secrets.CLOUDFRONT_DIST_ID }} --paths "/*"
