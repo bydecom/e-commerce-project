@@ -6,6 +6,7 @@ on:
       - master
     paths:
       - 'frontend/**' # 🎯 CHỈ chạy khi có thay đổi trong thư mục frontend
+  workflow_dispatch:
 
 jobs:
   build-and-deploy:
