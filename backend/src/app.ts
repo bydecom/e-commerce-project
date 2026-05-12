@@ -41,30 +41,27 @@ if (String(process.env.TRUST_PROXY ?? '').toLowerCase() === 'true') {
 
 app.use(helmet());
 
-/** Allow localhost and 127.0.0.1 (any port) during local development to avoid CORS mismatches. */
-app.use(
-  cors({
-    credentials: true,
-    origin: (origin, cb) => {
-      if (!origin) {
-        cb(null, true);
-        return;
-      }
-      if (process.env.CLIENT_URL && origin === process.env.CLIENT_URL) {
-        cb(null, true);
-        return;
-      }
-      if (process.env.NODE_ENV !== 'production') {
-        const devLocal = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/;
-        if (devLocal.test(origin)) {
-          cb(null, true);
-          return;
-        }
-      }
-      cb(new Error('CORS not allowed'));
-    },
-  })
-);
+const allowedOrigins = [
+  'https://d7ozoo9vtkn42.cloudfront.net', // Link CloudFront của ní
+  'http://localhost:4200',               // Để còn test Angular ở máy local
+  'http://localhost:3000'
+];
+
+app.use(cors({
+  origin: function (origin, callback) {
+    // Cho phép các request không có origin (như Postman hoặc thiết bị di động)
+    if (!origin) return callback(null, true);
+
+    if (allowedOrigins.indexOf(origin) !== -1) {
+      callback(null, true);
+    } else {
+      callback(new Error('CORS policy: Thằng này lạ quá, không cho vào!'));
+    }
+  },
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+  credentials: true // Quan trọng nếu ní có dùng Cookie hoặc Session
+}));
 
 const globalLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
