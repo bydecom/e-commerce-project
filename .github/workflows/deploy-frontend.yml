@@ -10,6 +10,7 @@ on:
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
+    environment: Production
     
     # 🎯 Dặn GitHub: Cứ lệnh nào có chữ 'run' thì tự động chui vào thư mục frontend mà chạy
     defaults:
