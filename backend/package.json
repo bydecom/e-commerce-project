@@ -6,8 +6,11 @@
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "dev": "nodemon --watch .env --ext ts,json,env --exec npx ts-node index.ts",
-    "start": "npx ts-node index.ts",
-    "db:seed": "npx prisma db seed"
+    "dev:prod": "nodemon --watch .env.production --ext ts,json,env --exec \"npx dotenv-cli -e .env.production -- npx ts-node index.ts\"",
+    "start:prod": "npx dotenv-cli -e .env.production -- npx ts-node index.ts",
+    "db:seed": "npx prisma db seed",
+    "db:push:dev": "npx prisma db push",
+    "db:push:prod": "dotenv -e .env.production -- npx prisma db push"
   },
   "prisma": {
     "seed": "npx ts-node prisma/seed.ts"
@@ -52,6 +55,7 @@
     "@types/pdfkit": "^0.13.5",
     "@types/swagger-ui-express": "^4.1.8",
     "@types/uuid": "^10.0.0",
+    "dotenv-cli": "^11.0.0",
     "nodemon": "^3.1.14",
     "prisma": "^6.19.3",
     "ts-node": "^10.9.2",

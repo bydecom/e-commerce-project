@@ -8,7 +8,13 @@ export async function syncPostgresToQdrant() {
   console.log('🚀 Start syncing data from PostgreSQL to Qdrant...');
 
   // 1. Create collection if not exists
-  await aiService.initQdrant();
+  try {
+    await aiService.initQdrant();
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.warn(`⚠️  Qdrant unavailable, skipping vector sync: ${msg}`);
+    return; // thoát nhẹ nhàng, không crash seed
+  }
 
   // 2. Get all AVAILABLE products from Postgres
   const products = await prisma.product.findMany({

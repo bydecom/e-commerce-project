@@ -7,6 +7,8 @@ coverage/
 
 .env
 .env.*.local
+.env.production
+.env.test
 
 backend/dist/
 frontend/out-tsc/
@@ -24,3 +26,4 @@ portainer_data/
 .DS_Store
 .vscode/
 .idea/
+bandai-backend-server.pem

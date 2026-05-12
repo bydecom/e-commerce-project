@@ -6,7 +6,10 @@ const VECTOR_SIZE = 768; // dùng outputDimensionality 768
 const EMBEDDING_MODEL = 'gemini-embedding-001';
 
 function getQdrantClient(): QdrantClient {
-  return new QdrantClient({ url: process.env.QDRANT_URL ?? 'http://localhost:6333' });
+  return new QdrantClient({
+    url: process.env.QDRANT_URL ?? 'http://localhost:6333',
+    apiKey: process.env.QDRANT_API_KEY,
+  });
 }
 
 function l2Normalize(values: number[]): number[] {

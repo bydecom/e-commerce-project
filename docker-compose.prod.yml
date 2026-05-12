@@ -1,0 +1,15 @@
+services:
+  rabbitmq:
+    image: rabbitmq:3-management-alpine
+    container_name: ecommerce_rabbitmq_prod
+    environment:
+      RABBITMQ_DEFAULT_USER: admin
+      RABBITMQ_DEFAULT_PASS: secret123
+    ports:
+      - "5672:5672"
+    volumes:
+      - rabbitmq_prod_data:/var/lib/rabbitmq
+    restart: always
+
+volumes:
+  rabbitmq_prod_data:
