@@ -10,16 +10,17 @@ const HTTPS_ENABLED = String(process.env.HTTPS_ENABLED ?? '').toLowerCase() === 
 const HTTPS_REDIRECT = String(process.env.HTTPS_REDIRECT ?? '').toLowerCase() === 'true';
 const TLS_KEY_PATH = process.env.TLS_KEY_PATH;
 const TLS_CERT_PATH = process.env.TLS_CERT_PATH;
+const HOST = process.env.HOST ?? '0.0.0.0';
 
 function startHttpServer() {
   const server = http.createServer(app);
-  server.listen(PORT, () => {
+  server.listen(PORT, HOST, () => {
     // eslint-disable-next-line no-console
     console.log('========================================');
     // eslint-disable-next-line no-console
-    console.log(`Backend: http://localhost:${PORT}`);
+    console.log(`Backend: http://${HOST}:${PORT}`);
     // eslint-disable-next-line no-console
-    console.log(`Health:  http://localhost:${PORT}/api/health`);
+    console.log(`Health:  http://3.25.162.48:${PORT}/api/health`);
     // eslint-disable-next-line no-console
     console.log('========================================');
   });
@@ -34,13 +35,13 @@ function startHttpsServer() {
   const cert = fs.readFileSync(TLS_CERT_PATH);
 
   const server = https.createServer({ key, cert }, app);
-  server.listen(HTTPS_PORT, () => {
+  server.listen(HTTPS_PORT, HOST, () => {
     // eslint-disable-next-line no-console
     console.log('========================================');
     // eslint-disable-next-line no-console
-    console.log(`Backend: https://localhost:${HTTPS_PORT}`);
+    console.log(`Backend: https://${HOST}:${HTTPS_PORT}`);
     // eslint-disable-next-line no-console
-    console.log(`Health:  https://localhost:${HTTPS_PORT}/api/health`);
+    console.log(`Health:  https://3.25.162.48:${HTTPS_PORT}/api/health`);
     // eslint-disable-next-line no-console
     console.log('========================================');
   });
@@ -55,9 +56,9 @@ function startHttpsServer() {
       res.end();
     });
 
-    redirectServer.listen(PORT, () => {
+    redirectServer.listen(PORT, HOST, () => {
       // eslint-disable-next-line no-console
-      console.log(`HTTP redirect: http://localhost:${PORT} -> https://localhost:${HTTPS_PORT}`);
+      console.log(`HTTP redirect: http://${HOST}:${PORT} -> https://${HOST}:${HTTPS_PORT}`);
     });
   }
 }
