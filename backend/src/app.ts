@@ -47,21 +47,21 @@ const allowedOrigins = [
   'http://localhost:3000'
 ];
 
-app.use(cors({
-  origin: function (origin, callback) {
-    // Cho phép các request không có origin (như Postman hoặc thiết bị di động)
-    if (!origin) return callback(null, true);
+// app.use(cors({
+//   origin: function (origin, callback) {
+//     // Cho phép các request không có origin (như Postman hoặc thiết bị di động)
+//     if (!origin) return callback(null, true);
 
-    if (allowedOrigins.indexOf(origin) !== -1) {
-      callback(null, true);
-    } else {
-      callback(new Error('CORS policy: Thằng này lạ quá, không cho vào!'));
-    }
-  },
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
-  credentials: true // Quan trọng nếu ní có dùng Cookie hoặc Session
-}));
+//     if (allowedOrigins.indexOf(origin) !== -1) {
+//       callback(null, true);
+//     } else {
+//       callback(new Error('CORS policy: Thằng này lạ quá, không cho vào!'));
+//     }
+//   },
+//   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+//   allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+//   credentials: true // Quan trọng nếu ní có dùng Cookie hoặc Session
+// }));
 
 const globalLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
