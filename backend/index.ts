@@ -1,3 +1,4 @@
+require('dotenv').config({ path: process.env.NODE_ENV === 'production' ? '.env.production' : '.env' });
 import { app } from './src/app';
 import http from 'http';
 import https from 'https';

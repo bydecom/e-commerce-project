@@ -1,0 +1,54 @@
+name: Deploy Backend to EC2
+
+on:
+  push:
+    branches:
+      - master
+    paths:
+      - 'backend/**'
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: Production
+
+    steps:
+      - name: 📥 Checkout code
+        uses: actions/checkout@v4
+
+      - name: ⚙️ Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: 🛠️ Build Backend (Làm trên GitHub cho mạnh)
+        run: |
+          cd backend
+          npm install
+          npx prisma generate
+          npm run build
+
+      - name: 🚚 Chuyển thư mục DIST sang EC2
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ubuntu
+          key: ${{ secrets.EC2_SSH_KEY }}
+          source: "backend/dist,backend/package.json,backend/ecosystem.config.js,backend/.env.production,backend/prisma"
+          target: "~/app/e-commerce-project/"
+          strip_components: 0
+
+      - name: 🚀 SSH vào EC2 để khởi động lại
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ubuntu
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            cd ~/app/e-commerce-project/backend
+            npm install --production
+            npx prisma generate
+            pm2 restart ecosystem.config.js --env production || pm2 start ecosystem.config.js --env production
+            pm2 save
+
