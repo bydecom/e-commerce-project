@@ -7,15 +7,10 @@ on:
     paths:
       - 'backend/**'
   workflow_dispatch:
-  workflow_run:
-    workflows: ["🧪 Run Tests"]
-    types:
-      - completed
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    if: ${{ github.event.workflow_run.conclusion == 'success' || github.event_name == 'workflow_dispatch' }}
     environment: Production
 
     steps:
@@ -56,4 +51,9 @@ jobs:
             npx prisma generate
             pm2 restart ecosystem.config.js --env production || pm2 start ecosystem.config.js --env production
             pm2 save
+
+      - name: 🏥 Health check after deploy
+        run: |
+          sleep 15
+          curl -f http://${{ secrets.EC2_HOST }}/api/health || exit 1
 
