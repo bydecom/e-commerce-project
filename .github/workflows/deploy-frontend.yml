@@ -45,3 +45,10 @@ jobs:
 
       - name: 🧹 Xóa bộ nhớ đệm CloudFront
         run: aws cloudfront create-invalidation --distribution-id ${{ secrets.CLOUDFRONT_DIST_ID }} --paths "/*"
+
+      - name: 🏥 Smoke Test (Check FE Health)
+        run: |
+          echo "Đợi 10 giây cho CloudFront cập nhật cache mới..."
+          sleep 10
+          curl -f --retry 3 https://d7ozoo9vtkn42.cloudfront.net || exit 1
+          echo "✅ Deploy Frontend thành công! Giao diện BanDai Shop mới đã lên sàn!"

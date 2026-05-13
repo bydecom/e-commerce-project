@@ -52,8 +52,10 @@ jobs:
             pm2 restart ecosystem.config.js --env production || pm2 start ecosystem.config.js --env production
             pm2 save
 
-      - name: 🏥 Health check after deploy
+      - name: 🏥 Smoke Test (Check BE Health)
         run: |
+          echo "Đợi 15 giây cho PM2 khởi động server..."
           sleep 15
-          curl -f http://${{ secrets.EC2_HOST }}/api/health || exit 1
+          curl -f --retry 3 http://${{ secrets.EC2_HOST }}:3000/api/health || exit 1
+          echo "✅ Deploy thành công! Backend đang chạy ngon lành!"
 
