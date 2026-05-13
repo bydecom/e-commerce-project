@@ -5,12 +5,8 @@ on:
     branches:
       - master
     paths:
-      - 'frontend/**' # 🎯 CHỈ chạy khi có thay đổi trong thư mục frontend
+      - 'frontend/**'
   workflow_dispatch:
-  workflow_run:
-    workflows: ["🧪 Run Tests"]
-    types:
-      - completed
 
 jobs:
   build-and-deploy:
