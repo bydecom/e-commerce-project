@@ -38,7 +38,7 @@ describe('CartService', () => {
 
   describe('getCart()', () => {
     it('should trả về danh sách items trong giỏ hàng', async () => {
-      mockRedis().hGetAll.mockResolvedValue({
+      (mockRedis().hGetAll as jest.Mock).mockResolvedValue({
         '1': JSON.stringify({ quantity: 2, name: 'iPhone 15' }),
         '2': JSON.stringify({ quantity: 1, name: 'MacBook Pro' }),
       });
@@ -51,7 +51,7 @@ describe('CartService', () => {
     });
 
     it('should trả về empty array khi giỏ hàng trống', async () => {
-      mockRedis().hGetAll.mockResolvedValue({});
+      (mockRedis().hGetAll as jest.Mock).mockResolvedValue({});
 
       const result = await getCart(1);
       expect(result).toHaveLength(0);
@@ -64,15 +64,15 @@ describe('CartService', () => {
 
   describe('removeItem()', () => {
     it('should xóa item khỏi giỏ hàng thành công', async () => {
-      mockRedis().hDel.mockResolvedValue(1);
-      mockPrisma.order.findMany.mockResolvedValue([]);
+      (mockRedis().hDel as jest.Mock).mockResolvedValue(1);
+      (mockPrisma.order.findMany as jest.Mock).mockResolvedValue([]);
 
       const result = await removeItem({ userId: 1, productId: 1 });
       expect(result.removed).toBe(true);
     });
 
     it('should trả về removed: false khi item không tồn tại', async () => {
-      mockRedis().hDel.mockResolvedValue(0);
+      (mockRedis().hDel as jest.Mock).mockResolvedValue(0);
 
       const result = await removeItem({ userId: 1, productId: 999 });
       expect(result.removed).toBe(false);
@@ -81,8 +81,8 @@ describe('CartService', () => {
 
   describe('clearCart()', () => {
     it('should xóa toàn bộ giỏ hàng', async () => {
-      mockRedis().del.mockResolvedValue(1);
-      mockPrisma.order.findMany.mockResolvedValue([]);
+      (mockRedis().del as jest.Mock).mockResolvedValue(1);
+      (mockPrisma.order.findMany as jest.Mock).mockResolvedValue([]);
 
       await expect(clearCart(1)).resolves.toBeUndefined();
       expect(mockRedis().del).toHaveBeenCalledWith('cart:user:1');
@@ -91,10 +91,10 @@ describe('CartService', () => {
 
   describe('getCartWithPricing()', () => {
     it('should tính toán giá đúng cho từng item', async () => {
-      mockRedis().hGetAll.mockResolvedValue({
+      (mockRedis().hGetAll as jest.Mock).mockResolvedValue({
         '1': JSON.stringify({ quantity: 2, name: 'iPhone 15' }),
       });
-      mockPrisma.product.findMany.mockResolvedValue([
+      (mockPrisma.product.findMany as jest.Mock).mockResolvedValue([
         { id: 1, price: 29990000 } as any,
       ]);
 
@@ -106,7 +106,7 @@ describe('CartService', () => {
     });
 
     it('should trả về empty khi giỏ hàng trống', async () => {
-      mockRedis().hGetAll.mockResolvedValue({});
+      (mockRedis().hGetAll as jest.Mock).mockResolvedValue({});
 
       const result = await getCartWithPricing(1);
       expect(result.items).toHaveLength(0);

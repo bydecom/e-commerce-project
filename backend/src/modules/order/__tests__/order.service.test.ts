@@ -46,7 +46,10 @@ const fakeOrder = {
 };
 
 describe('OrderService', () => {
-  beforeEach(() => jest.clearAllMocks());
+  beforeEach(() => {
+    jest.clearAllMocks();
+    (prisma.feedback.findMany as jest.Mock).mockResolvedValue([]);
+  });
 
   describe('createOrder()', () => {
     it('should tạo order thành công', async () => {
