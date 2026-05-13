@@ -10,9 +10,17 @@
     "rootDir": ".",
     "moduleResolution": "node",
     "resolveJsonModule": true,
-    "types": ["node"]
+    "types": [
+      "node",
+      "jest"
+    ]
   },
-  "include": ["index.ts", "src/**/*.ts", "src/**/*.d.ts", "prisma/**/*.ts"],
+  "include": [
+    "index.ts",
+    "src/**/*.ts",
+    "src/**/*.d.ts",
+    "prisma/**/*.ts"
+  ],
   "ts-node": {
     "files": true
   }
