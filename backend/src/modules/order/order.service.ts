@@ -7,9 +7,12 @@ type DbTx = Omit<
 import { prisma } from '../../db';
 import { parsePagination } from '../../utils/pagination';
 import { httpError } from '../../utils/http-error';
-import { sendMail } from '../../utils/mail';
 import { StoreSettingService } from '../store-setting/store-setting.service';
-import { buildOrderCompletedEmail } from './email-templates/order-completed-email';
+import {
+  publishOrderPlacedEmail,
+  publishOrderCompletedEmail,
+  publishOrderStatusEmail,
+} from '../../rabbitmq/publisher';
 
 const orderItemInclude = {
   product: { select: { id: true, name: true, imageUrl: true } },
@@ -21,44 +24,6 @@ const orderListInclude = {
   paymentTransactions: { orderBy: { createdAt: 'desc' } },
 } as const;
 
-async function sendOrderCompletedEmail(order: {
-  id: number;
-  total: number;
-  user: { email: string; name: string | null };
-  items: Array<{ name: string; quantity: number }>;
-}): Promise<void> {
-  const setting = await StoreSettingService.getSetting();
-  const shopName = setting?.name?.trim() || 'Shop';
-  const orderUrl = `${process.env.CLIENT_URL?.trim() || 'https://localhost:4200'}/orders/${order.id}`;
-  const customerName = order.user.name?.trim() || 'my friend';
-
-  const totalVnd = new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(order.total);
-
-  const { subject, text, html } = buildOrderCompletedEmail({
-    shopName,
-    orderId: order.id,
-    customerName,
-    orderUrl,
-    items: order.items,
-    totalVnd,
-    supportEmail: setting?.email,
-    supportPhone: setting?.phone,
-  });
-
-  try {
-    await sendMail({
-      to: order.user.email,
-      subject,
-      text,
-      html,
-    });
-    // eslint-disable-next-line no-console
-    console.log(`[Mail] Order completed mail sent to ${order.user.email}`);
-  } catch (err) {
-    // eslint-disable-next-line no-console
-    console.error('[Mail Error] Could not send order completed email:', err);
-  }
-}
 
 function mapItem(
   row: {
@@ -188,7 +153,7 @@ export async function createOrder(body: {
 
   const merged = mergeItems(body.items);
 
-  return prisma.$transaction(async (tx) => {
+  const result = await prisma.$transaction(async (tx) => {
     const user = await tx.user.findUnique({ where: { id: userId } });
     if (!user) throw httpError(400, 'Invalid userId');
 
@@ -250,6 +215,28 @@ export async function createOrder(body: {
     // New orders are not reviewed yet.
     return mapOrderFull(order, new Set());
   });
+
+  if (result.user?.email) {
+    const clientUrl = process.env.CLIENT_URL?.trim() || 'http://localhost:4200';
+    const orderUrl = `${clientUrl}/orders/${result.id}`;
+    const customerName = result.user.name?.trim() || 'there';
+    const totalVnd = new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(result.total);
+
+    void StoreSettingService.getSetting().then(async (setting) => {
+      const shopName = setting?.name?.trim() || 'Shop';
+      await publishOrderPlacedEmail({
+        to: result.user.email,
+        customerName,
+        orderId: result.id,
+        orderUrl,
+        items: result.items.map((it) => ({ name: it.name, quantity: it.quantity })),
+        totalVnd,
+        shopName,
+      });
+    }).catch((err) => console.error('[Order] Failed to publish order placed email:', err));
+  }
+
+  return result;
 }
 
 export async function listUserOrders(
@@ -465,9 +452,12 @@ const allowedNext: Record<OrderStatus, OrderStatus[]> = {
 };
 
 export async function updateOrderStatus(orderId: number, nextStatus: OrderStatus, adminId?: number, adminRole?: Role) {
+  let prevStatus: OrderStatus | null = null;
+
   const updated = await prisma.$transaction(async (tx) => {
     const order = await tx.order.findUnique({ where: { id: orderId } });
     if (!order) throw httpError(404, 'Order not found');
+    prevStatus = order.status;
 
     const allowed = allowedNext[order.status];
     if (!allowed.includes(nextStatus)) {
@@ -499,13 +489,39 @@ export async function updateOrderStatus(orderId: number, nextStatus: OrderStatus
     return mapOrderFull(updated, new Set());
   });
 
-  if (nextStatus === 'DONE' && updated.user?.email) {
-    void sendOrderCompletedEmail({
-      id: updated.id,
-      total: updated.total,
-      user: { email: updated.user.email, name: updated.user.name },
-      items: updated.items.map((it) => ({ name: it.name, quantity: it.quantity })),
-    });
+  if (updated.user?.email) {
+    const clientUrl = process.env.CLIENT_URL?.trim() || 'http://localhost:4200';
+    const orderUrl = `${clientUrl}/orders/${updated.id}`;
+    const customerName = updated.user.name?.trim() || 'there';
+
+    void StoreSettingService.getSetting().then(async (setting) => {
+      const shopName = setting?.name?.trim() || 'Shop';
+
+      if (nextStatus === 'DONE') {
+        const totalVnd = new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(updated.total);
+        await publishOrderCompletedEmail({
+          to: updated.user.email,
+          customerName,
+          orderId: updated.id,
+          orderUrl,
+          items: updated.items.map((it) => ({ name: it.name, quantity: it.quantity })),
+          totalVnd,
+          shopName,
+          supportEmail: setting?.email,
+          supportPhone: setting?.phone,
+        });
+      } else {
+        await publishOrderStatusEmail({
+          to: updated.user.email,
+          customerName,
+          orderId: updated.id,
+          orderUrl,
+          oldStatus: prevStatus ?? 'PENDING',
+          newStatus: nextStatus,
+          shopName,
+        });
+      }
+    }).catch((err) => console.error('[Order] Failed to publish email event:', err));
   }
 
   return updated;

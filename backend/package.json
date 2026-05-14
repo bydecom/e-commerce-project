@@ -14,7 +14,9 @@
     "test": "jest --passWithNoTests",
     "test:coverage": "jest --coverage",
     "test:watch": "jest --watch",
-    "test:ci": "jest --passWithNoTests --forceExit"
+    "test:ci": "jest --passWithNoTests --forceExit",
+    "worker:email": "npx ts-node src/workers/email.worker.ts",
+    "worker:email:prod": "npx dotenv-cli -e .env.production -- npx ts-node src/workers/email.worker.ts"
   },
   "prisma": {
     "seed": "npx ts-node prisma/seed.ts"
@@ -28,6 +30,7 @@
     "@google/genai": "^1.49.0",
     "@prisma/client": "^6.19.3",
     "@qdrant/js-client-rest": "^1.17.0",
+    "amqplib": "^2.0.1",
     "bcrypt": "^6.0.0",
     "cookie-parser": "^1.4.7",
     "cors": "^2.8.6",

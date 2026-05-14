@@ -28,7 +28,7 @@ export class OrderApiService {
   private readonly http = inject(HttpClient);
   private readonly baseUrl = `${environment.apiUrl}/api/orders`;
 
-  /** POST /orders — JWT bắt buộc; `userId` lấy từ token. */
+  /** POST /orders — JWT required; `userId` extracted from token. */
   create(body: CreateOrderBody): Observable<OrderDetail> {
     return this.http.post<ApiSuccess<OrderDetail>>(this.baseUrl, body).pipe(
       map((r) => {
@@ -39,7 +39,7 @@ export class OrderApiService {
     );
   }
 
-  /** GET /orders/me — JWT bắt buộc. */
+  /** GET /orders/me — JWT required. */
   listMine(params: { page?: number; limit?: number; status?: OrderStatus } = {}): Observable<{
     data: OrderDetail[];
     meta: PaginationMeta;
@@ -58,7 +58,7 @@ export class OrderApiService {
     );
   }
 
-  /** GET /orders/me — alias cho UI Order History (JWT bắt buộc). */
+  /** GET /orders/me — alias for UI Order History (JWT required). */
   getMyOrders(): Observable<OrderDetail[]> {
     return this.http.get<ApiSuccess<OrderDetail[]>>(`${this.baseUrl}/me`).pipe(
       map((r) => {

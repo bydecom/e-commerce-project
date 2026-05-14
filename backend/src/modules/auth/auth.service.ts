@@ -18,10 +18,13 @@ import {
 } from '../../utils/refresh-token';
 import {
   buildExistingAccountAlertTemplate,
-  buildOtpLoginTemplate,
   buildPasswordChangedAlertTemplate,
-  buildVerifyEmailTemplate,
 } from '../../utils/mail-templates';
+import {
+  publishVerifyEmail,
+  publishOtpEmail,
+  publishForgotEmail,
+} from '../../rabbitmq/publisher';
 import {
   isOtpGateActive,
   incrementLoginAttempts,
@@ -95,7 +98,7 @@ function newToken(): string {
 }
 
 function verifyLink(token: string): string {
-  const fromEnv = (process.env.API_BASE_URL || '').trim();
+  const fromEnv = (process.env.CLIENT_URL || '').trim();
   const port = process.env.PORT || '3000';
   const devFallback = `http://localhost:${port}`;
   const base =
@@ -103,7 +106,7 @@ function verifyLink(token: string): string {
   if (!base) {
     throw httpError(
       500,
-      'API_BASE_URL is not configured (set in .env — see backend/.env.example)'
+      'CLIENT_URL is not configured (set in .env — see backend/.env.example)'
     );
   }
   const url = new URL('/api/auth/verify-email', base);
@@ -119,19 +122,7 @@ async function issueVerificationEmail(email: string, token: string, name: string
   const setting = await StoreSettingService.getSetting();
   const shopName = setting?.name?.trim() || 'Shop';
 
-  const { subject, html, text } = buildVerifyEmailTemplate({
-    name,
-    verifyLink: link,
-    expiresInMinutes: minutes,
-    shopName,
-  });
-
-  await sendMail({
-    to: email,
-    subject,
-    text,
-    html,
-  });
+  await publishVerifyEmail({ to: email, name, verifyLink: link, expiresInMinutes: minutes, shopName });
 }
 
 // Lazy dummy hash — used so bcrypt.compare always runs even when email doesn't exist,
@@ -285,9 +276,8 @@ export async function requestOtp(input: { email: string }): Promise<void> {
     const setting = await StoreSettingService.getSetting();
     const shopName = setting?.name?.trim() || 'Shop';
     const expiresInMinutes = Math.max(1, Math.round(parseInt(process.env.OTP_TTL_SECONDS ?? '300', 10) / 60));
-    const { subject, html, text } = buildOtpLoginTemplate({ name: user.name, otp, expiresInMinutes, shopName });
 
-    await sendMail({ to: email, subject, html, text });
+    await publishOtpEmail({ to: email, name: user.name, otp, expiresInMinutes, shopName });
   } else {
     // Simulate email send time so response timing doesn't reveal whether email exists
     await new Promise<void>((resolve) => setTimeout(resolve, 800));
@@ -530,7 +520,7 @@ export async function changePassword(input: {
         console.error('[Mail Error] Password change alert failed:', err);
       });
     })
-    .catch(() => {});
+    .catch(() => { });
 }
 
 export async function requestForgotPasswordOtp(input: { email: string }): Promise<void> {
@@ -561,14 +551,7 @@ export async function requestForgotPasswordOtp(input: { email: string }): Promis
   const shopName = setting?.name?.trim() || 'Shop';
   const expiresInMinutes = Math.max(1, Math.round(getOtpTtlSeconds() / 60));
 
-  const { subject, html, text } = buildOtpLoginTemplate({
-    name: user.name,
-    otp,
-    expiresInMinutes,
-    shopName,
-  });
-
-  await sendMail({ to: email, subject, html, text });
+  await publishForgotEmail({ to: email, name: user.name, otp, expiresInMinutes, shopName });
 }
 
 export async function verifyForgotPasswordOtp(input: {
