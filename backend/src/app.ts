@@ -41,27 +41,31 @@ if (String(process.env.TRUST_PROXY ?? '').toLowerCase() === 'true') {
 
 app.use(helmet());
 
+// 1. Khai báo danh sách các domain được phép gọi vào API
 const allowedOrigins = [
-  'https://d7ozoo9vtkn42.cloudfront.net', // Link CloudFront của ní
-  'http://localhost:4200',               // Để còn test Angular ở máy local
-  'http://localhost:3000'
+  'https://d7ozoo9vtkn42.cloudfront.net', // Link Production (CloudFront)
+  'http://localhost:4200',               // Link Local (Angular)
+  'http://localhost:3000'                // Đôi khi cần cho Swagger/Postman
 ];
 
-// app.use(cors({
-//   origin: function (origin, callback) {
-//     // Cho phép các request không có origin (như Postman hoặc thiết bị di động)
-//     if (!origin) return callback(null, true);
+// 2. Kích hoạt Middleware CORS
+app.use(cors({
+  origin: function (origin, callback) {
+    // Cho phép các request không có origin (như Postman hoặc Mobile App)
+    if (!origin) return callback(null, true);
 
-//     if (allowedOrigins.indexOf(origin) !== -1) {
-//       callback(null, true);
-//     } else {
-//       callback(new Error('CORS policy: Thằng này lạ quá, không cho vào!'));
-//     }
-//   },
-//   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-//   allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
-//   credentials: true // Quan trọng nếu ní có dùng Cookie hoặc Session
-// }));
+    if (allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      // Log ra để biết thằng nào đang bị chặn nếu cần debug
+      console.warn(`CORS blocked for origin: ${origin}`);
+      callback(new Error('CORS policy: Origin not allowed'));
+    }
+  },
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+  credentials: true // BẮT BUỘC phải là true vì bác đang dùng Cookie/Refresh Token
+}));
 
 const globalLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
