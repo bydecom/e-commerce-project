@@ -14,7 +14,9 @@
     "test": "jest --passWithNoTests",
     "test:coverage": "jest --coverage",
     "test:watch": "jest --watch",
-    "test:ci": "jest --passWithNoTests --forceExit"
+    "test:ci": "jest --passWithNoTests --forceExit",
+    "worker:email": "npx ts-node src/workers/email.worker.ts",
+    "worker:email:prod": "npx dotenv-cli -e .env.production -- npx ts-node src/workers/email.worker.ts"
   },
   "prisma": {
     "seed": "npx ts-node prisma/seed.ts"

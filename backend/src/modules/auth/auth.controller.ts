@@ -59,8 +59,8 @@ export async function verifyEmail(req: Request, res: Response, next: NextFunctio
     const mode  = typeof req.query.mode  === 'string' ? req.query.mode  : '';
     const result = await authService.verifyEmail({ token });
     if (mode !== 'json' && process.env.CLIENT_URL) {
-      const url = new URL('/login', process.env.CLIENT_URL);
-      url.searchParams.set('verified', '1');
+      const url = new URL('/email-verified', process.env.CLIENT_URL);
+      url.searchParams.set('status', 'success');
       res.redirect(302, url.toString());
       return;
     }
@@ -68,8 +68,8 @@ export async function verifyEmail(req: Request, res: Response, next: NextFunctio
   } catch (err) {
     const mode = typeof req.query.mode === 'string' ? req.query.mode : '';
     if (mode !== 'json' && process.env.CLIENT_URL) {
-      const url = new URL('/login', process.env.CLIENT_URL);
-      url.searchParams.set('verified', '0');
+      const url = new URL('/email-verified', process.env.CLIENT_URL);
+      url.searchParams.set('status', 'error');
       url.searchParams.set('reason', 'invalid_or_expired');
       res.redirect(302, url.toString());
       return;

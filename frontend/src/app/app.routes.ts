@@ -27,6 +27,13 @@ export const routes: Routes = [
       import('./features/auth/verify-otp/verify-otp.component').then((m) => m.VerifyOtpComponent),
   },
   {
+    path: 'email-verified',
+    loadComponent: () =>
+      import('./features/auth/email-verified/email-verified.component').then(
+        (m) => m.EmailVerifiedComponent
+      ),
+  },
+  {
     path: 'checkout',
     canActivate: [authGuard],
     loadComponent: () =>
