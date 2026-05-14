@@ -18,10 +18,13 @@ import {
 } from '../../utils/refresh-token';
 import {
   buildExistingAccountAlertTemplate,
-  buildOtpLoginTemplate,
   buildPasswordChangedAlertTemplate,
-  buildVerifyEmailTemplate,
 } from '../../utils/mail-templates';
+import {
+  publishVerifyEmail,
+  publishOtpEmail,
+  publishForgotEmail,
+} from '../../rabbitmq/publisher';
 import {
   isOtpGateActive,
   incrementLoginAttempts,
@@ -119,19 +122,7 @@ async function issueVerificationEmail(email: string, token: string, name: string
   const setting = await StoreSettingService.getSetting();
   const shopName = setting?.name?.trim() || 'Shop';
 
-  const { subject, html, text } = buildVerifyEmailTemplate({
-    name,
-    verifyLink: link,
-    expiresInMinutes: minutes,
-    shopName,
-  });
-
-  await sendMail({
-    to: email,
-    subject,
-    text,
-    html,
-  });
+  await publishVerifyEmail({ to: email, name, verifyLink: link, expiresInMinutes: minutes, shopName });
 }
 
 // Lazy dummy hash — used so bcrypt.compare always runs even when email doesn't exist,
@@ -285,9 +276,8 @@ export async function requestOtp(input: { email: string }): Promise<void> {
     const setting = await StoreSettingService.getSetting();
     const shopName = setting?.name?.trim() || 'Shop';
     const expiresInMinutes = Math.max(1, Math.round(parseInt(process.env.OTP_TTL_SECONDS ?? '300', 10) / 60));
-    const { subject, html, text } = buildOtpLoginTemplate({ name: user.name, otp, expiresInMinutes, shopName });
 
-    await sendMail({ to: email, subject, html, text });
+    await publishOtpEmail({ to: email, name: user.name, otp, expiresInMinutes, shopName });
   } else {
     // Simulate email send time so response timing doesn't reveal whether email exists
     await new Promise<void>((resolve) => setTimeout(resolve, 800));
@@ -561,14 +551,7 @@ export async function requestForgotPasswordOtp(input: { email: string }): Promis
   const shopName = setting?.name?.trim() || 'Shop';
   const expiresInMinutes = Math.max(1, Math.round(getOtpTtlSeconds() / 60));
 
-  const { subject, html, text } = buildOtpLoginTemplate({
-    name: user.name,
-    otp,
-    expiresInMinutes,
-    shopName,
-  });
-
-  await sendMail({ to: email, subject, html, text });
+  await publishForgotEmail({ to: email, name: user.name, otp, expiresInMinutes, shopName });
 }
 
 export async function verifyForgotPasswordOtp(input: {

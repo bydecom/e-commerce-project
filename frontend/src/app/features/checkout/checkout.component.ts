@@ -263,7 +263,7 @@ export class CheckoutComponent implements OnInit {
   ngOnInit(): void {
     const s = this.checkoutSession.session();
     this.txnRef = s?.txnRef ?? null;
-    this.orderId = this.readOrderIdBestEffort();
+    this.orderId = this.txnRef ? this.readOrderIdBestEffort(this.txnRef) : null;
     if (!this.txnRef) {
       this.toast.show('Checkout session expired. Please try again.', 'error');
       void this.router.navigateByUrl('/cart');
@@ -405,10 +405,12 @@ export class CheckoutComponent implements OnInit {
     this.total.set(data.total);
   }
 
-  private readOrderIdBestEffort(): number | null {
+  private readOrderIdBestEffort(txnRef: string): number | null {
     try {
       const raw = sessionStorage.getItem('pendingCheckoutOrderId') || '';
-      const id = Math.floor(Number(raw));
+      const stored = JSON.parse(raw) as { txnRef: string; orderId: number };
+      if (stored?.txnRef !== txnRef) return null;
+      const id = Math.floor(Number(stored.orderId));
       return Number.isFinite(id) && id > 0 ? id : null;
     } catch {
       return null;
@@ -420,7 +422,7 @@ export class CheckoutComponent implements OnInit {
     if (!Number.isFinite(id) || id < 1) return;
     this.orderId = id;
     try {
-      sessionStorage.setItem('pendingCheckoutOrderId', String(id));
+      sessionStorage.setItem('pendingCheckoutOrderId', JSON.stringify({ txnRef: this.txnRef, orderId: id }));
     } catch {
       // ignore
     }
