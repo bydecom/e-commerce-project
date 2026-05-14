@@ -10,16 +10,12 @@ async function refreshTtlMs(): Promise<number> {
   return Math.min(60 * 60 * 24 * 30, Math.max(60, Math.floor(s))) * 1000;
 }
 
-function isSecure(): boolean {
-  return process.env.NODE_ENV === 'production' ||
-    String(process.env.HTTPS_ENABLED).toLowerCase() === 'true';
-}
 
 async function setRefreshCookie(res: Response, token: string): Promise<void> {
   res.cookie('refresh_token', token, {
     httpOnly: true,
-    secure: isSecure(),
-    sameSite: 'strict',
+    secure: true,        // Required for sameSite: 'none'
+    sameSite: 'none',   // Allow cross-domain (e.g. CloudFront to duckdns)
     maxAge: await refreshTtlMs(),
     path: '/api/auth',
   });
@@ -28,8 +24,8 @@ async function setRefreshCookie(res: Response, token: string): Promise<void> {
 function clearRefreshCookie(res: Response): void {
   res.clearCookie('refresh_token', {
     httpOnly: true,
-    secure: isSecure(),
-    sameSite: 'strict',
+    secure: true,
+    sameSite: 'none',
     path: '/api/auth',
   });
 }
