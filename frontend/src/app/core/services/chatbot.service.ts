@@ -17,7 +17,7 @@ export interface ChatResponse {
   actions: ChatAction[];
 }
 
-/** Gửi kèm POST /api/ai/chat để BE giải quyết đại từ (vd. "cái thứ 2") theo list sản phẩm vừa hiển thị. */
+/** Include with POST /api/ai/chat for BE to resolve pronouns (e.g., "the second one") based on the list of products just displayed. */
 export interface ChatApiContext {
   lastShownProducts: Array<{ id: number; name: string }>;
 }
