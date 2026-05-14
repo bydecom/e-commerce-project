@@ -98,7 +98,7 @@ function newToken(): string {
 }
 
 function verifyLink(token: string): string {
-  const fromEnv = (process.env.API_BASE_URL || '').trim();
+  const fromEnv = (process.env.CLIENT_URL || '').trim();
   const port = process.env.PORT || '3000';
   const devFallback = `http://localhost:${port}`;
   const base =
@@ -106,7 +106,7 @@ function verifyLink(token: string): string {
   if (!base) {
     throw httpError(
       500,
-      'API_BASE_URL is not configured (set in .env — see backend/.env.example)'
+      'CLIENT_URL is not configured (set in .env — see backend/.env.example)'
     );
   }
   const url = new URL('/api/auth/verify-email', base);
@@ -520,7 +520,7 @@ export async function changePassword(input: {
         console.error('[Mail Error] Password change alert failed:', err);
       });
     })
-    .catch(() => {});
+    .catch(() => { });
 }
 
 export async function requestForgotPasswordOtp(input: { email: string }): Promise<void> {

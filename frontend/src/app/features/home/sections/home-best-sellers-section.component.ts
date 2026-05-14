@@ -70,7 +70,7 @@ import type { Product } from '../../../shared/models/product.model';
 export class HomeBestSellersSectionComponent {
   readonly topSellers = input.required<LandingProductDto[]>();
 
-  /** Landing DTO thiếu một số field của Product — runtime đủ cho card. */
+  /** Landing DTO is missing some Product fields — runtime is sufficient for the card. */
   asProduct(p: LandingProductDto): Product {
     return p as unknown as Product;
   }

@@ -1,5 +1,5 @@
 import { Component, inject, OnInit, signal } from '@angular/core';
-import { ActivatedRoute, RouterLink } from '@angular/router';
+import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 
 @Component({
   selector: 'app-email-verified',
@@ -14,13 +14,14 @@ import { ActivatedRoute, RouterLink } from '@angular/router';
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
             </svg>
           </div>
-          <h1 class="text-2xl font-bold text-gray-900">Email Verified!</h1>
-          <p class="mt-2 text-sm text-gray-600">Your account has been verified. You can now log in.</p>
+          <h1 class="text-2xl font-bold text-gray-900">Verification successful!</h1>
+          <p class="mt-2 text-sm text-gray-600">Your account has been verified.</p>
+          <p class="mt-1 text-sm font-medium text-indigo-600 animate-pulse">Redirecting to Login page in 3 seconds...</p>
           <a
             routerLink="/login"
             class="mt-6 inline-block rounded-md bg-gray-900 px-6 py-2.5 text-sm font-medium text-white hover:bg-gray-700"
           >
-            Go to Login
+            Go to Login now
           </a>
         } @else {
           <div class="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-red-100">
@@ -28,8 +29,8 @@ import { ActivatedRoute, RouterLink } from '@angular/router';
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
             </svg>
           </div>
-          <h1 class="text-2xl font-bold text-gray-900">Verification Failed</h1>
-          <p class="mt-2 text-sm text-gray-600">The link is invalid or has expired. Please register again.</p>
+          <h1 class="text-2xl font-bold text-gray-900">Verification failed</h1>
+          <p class="mt-2 text-sm text-gray-600">The link is invalid or has expired. Please register again or request a new verification email.</p>
           <a
             routerLink="/register"
             class="mt-6 inline-block rounded-md bg-gray-900 px-6 py-2.5 text-sm font-medium text-white hover:bg-gray-700"
@@ -43,10 +44,23 @@ import { ActivatedRoute, RouterLink } from '@angular/router';
 })
 export class EmailVerifiedComponent implements OnInit {
   private route = inject(ActivatedRoute);
+  private router = inject(Router); // Inject Router for navigation
+  
   status = signal<'success' | 'error'>('error');
 
   ngOnInit(): void {
     const s = this.route.snapshot.queryParamMap.get('status');
-    this.status.set(s === 'success' ? 'success' : 'error');
+    
+    if (s === 'success') {
+      this.status.set('success');
+      
+      // Wait 3 seconds then automatically redirect to /login
+      setTimeout(() => {
+        this.router.navigate(['/login']);
+      }, 3000);
+      
+    } else {
+      this.status.set('error');
+    }
   }
 }

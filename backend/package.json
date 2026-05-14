@@ -30,6 +30,7 @@
     "@google/genai": "^1.49.0",
     "@prisma/client": "^6.19.3",
     "@qdrant/js-client-rest": "^1.17.0",
+    "amqplib": "^2.0.1",
     "bcrypt": "^6.0.0",
     "cookie-parser": "^1.4.7",
     "cors": "^2.8.6",

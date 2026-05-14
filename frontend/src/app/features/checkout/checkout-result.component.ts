@@ -76,7 +76,7 @@ type VerifyPayload = {
               <path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l2.5 2.5M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
           </div>
-          <h1 class="text-2xl font-extrabold tracking-tight text-gray-900">Đang xử lý giao dịch</h1>
+          <h1 class="text-2xl font-extrabold tracking-tight text-gray-900">Processing transaction</h1>
           <p class="mt-3 text-base text-gray-500">
             {{ error() || 'Payment is being processed, please wait a moment or check again later.' }}
           </p>
@@ -189,7 +189,7 @@ export class CheckoutResultComponent {
               done: true,
               success: false,
               pending: true,
-              error: 'Giao dịch đang được xử lý, vui lòng chờ trong giây lát hoặc kiểm tra lại sau.',
+              error: 'The transaction is being processed. Please wait a moment or check your order history later.',
             };
           }
 

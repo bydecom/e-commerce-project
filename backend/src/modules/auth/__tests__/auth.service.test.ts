@@ -22,6 +22,15 @@ jest.mock('../../../utils/mail', () => ({
   sendMail: jest.fn().mockResolvedValue(undefined),
 }));
 
+jest.mock('../../../rabbitmq/publisher', () => ({
+  publishVerifyEmail: jest.fn().mockResolvedValue(undefined),
+  publishOtpEmail: jest.fn().mockResolvedValue(undefined),
+  publishForgotEmail: jest.fn().mockResolvedValue(undefined),
+  publishOrderPlacedEmail: jest.fn().mockResolvedValue(undefined),
+  publishOrderCompletedEmail: jest.fn().mockResolvedValue(undefined),
+  publishOrderStatusEmail: jest.fn().mockResolvedValue(undefined),
+}));
+
 jest.mock('../../../utils/login-attempts', () => ({
   isOtpGateActive: jest.fn().mockResolvedValue(false),
   incrementLoginAttempts: jest.fn().mockResolvedValue(1),
@@ -136,7 +145,7 @@ describe('AuthService', () => {
     it('should gửi email verification cho user mới', async () => {
       mockPrismaUser.findUnique.mockResolvedValue(null);
 
-      const { sendMail } = require('../../../utils/mail');
+      const { publishVerifyEmail } = require('../../../rabbitmq/publisher');
       const { redisClient } = require('../../../config/redis');
       redisClient().set.mockResolvedValue('OK');
       redisClient().get.mockResolvedValue(null);
@@ -149,7 +158,7 @@ describe('AuthService', () => {
 
       expect(result.email).toBe('newuser@example.com');
       expect(result.message).toBe('Verification email sent');
-      expect(sendMail).toHaveBeenCalled();
+      expect(publishVerifyEmail).toHaveBeenCalled();
     });
 
     it('should không tạo user nếu email đã tồn tại (timing guard)', async () => {

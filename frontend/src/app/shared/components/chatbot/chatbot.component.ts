@@ -1,29 +1,29 @@
-  import { CommonModule } from '@angular/common';
-  import { Component, ElementRef, ViewChild, signal, AfterViewChecked, OnInit, inject } from '@angular/core';
-  import { FormsModule } from '@angular/forms';
-  import { Router, RouterLink } from '@angular/router';
-  import { ChatbotService, type ChatAction as ApiChatAction } from '../../../core/services/chatbot.service';
-  import { ServerCartService } from '../../../core/services/server-cart.service';
-  import { OrderStatusBadgeComponent } from '../order-status-badge/order-status-badge.component';
+import { CommonModule } from '@angular/common';
+import { Component, ElementRef, ViewChild, signal, AfterViewChecked, OnInit, inject } from '@angular/core';
+import { FormsModule } from '@angular/forms';
+import { Router, RouterLink } from '@angular/router';
+import { ChatbotService, type ChatAction as ApiChatAction } from '../../../core/services/chatbot.service';
+import { ServerCartService } from '../../../core/services/server-cart.service';
+import { OrderStatusBadgeComponent } from '../order-status-badge/order-status-badge.component';
 
-  interface ChatAction {
-    type: 'NAVIGATE_TO' | 'SUGGEST_OPTIONS' | 'SHOW_ORDERS' | 'SHOW_PRODUCTS' | 'REFRESH_CART';
-    payload?: unknown;
-  }
+interface ChatAction {
+  type: 'NAVIGATE_TO' | 'SUGGEST_OPTIONS' | 'SHOW_ORDERS' | 'SHOW_PRODUCTS' | 'REFRESH_CART';
+  payload?: unknown;
+}
 
-  interface ChatMessage {
-    text: string;
-    isUser: boolean;
-    options?: string[];
-    orders?: Array<{ id: number; status: string; total: number; date: string }>;
-    products?: Array<{ id: number; name: string; price: number; imageUrl: string | null }>;
-  }
+interface ChatMessage {
+  text: string;
+  isUser: boolean;
+  options?: string[];
+  orders?: Array<{ id: number; status: string; total: number; date: string }>;
+  products?: Array<{ id: number; name: string; price: number; imageUrl: string | null }>;
+}
 
-  @Component({
-    selector: 'app-chatbot',
-    standalone: true,
-    imports: [CommonModule, FormsModule, RouterLink, OrderStatusBadgeComponent],
-    template: `
+@Component({
+  selector: 'app-chatbot',
+  standalone: true,
+  imports: [CommonModule, FormsModule, RouterLink, OrderStatusBadgeComponent],
+  template: `
       <div class="fixed bottom-6 right-8 z-[9999]">
         @if (showChat()) {
           <div
@@ -121,7 +121,7 @@
                               </h3>
                               <div class="mt-1 flex items-center justify-between">
                                 <p class="text-sm font-bold text-indigo-600">
-                                  {{ product.price | number: '1.0-0' }}đ
+                                  {{ product.price | number: '1.0-0' }} VND
                                 </p>
                                 <a
                                   [routerLink]="['/products', product.id]"
@@ -271,8 +271,8 @@
         </button>
       </div>
     `,
-    styles: [
-      `
+  styles: [
+    `
         .hide-scrollbar::-webkit-scrollbar {
           display: none;
         }
@@ -281,205 +281,205 @@
           scrollbar-width: none;
         }
       `,
-    ],
-  })
-  export class ChatbotComponent implements OnInit, AfterViewChecked {
-    private readonly router = inject(Router);
-    private readonly chatbotApi = inject(ChatbotService);
-    private readonly serverCart = inject(ServerCartService);
-    @ViewChild('messagesContainer') private messagesContainer!: ElementRef<HTMLElement>;
+  ],
+})
+export class ChatbotComponent implements OnInit, AfterViewChecked {
+  private readonly router = inject(Router);
+  private readonly chatbotApi = inject(ChatbotService);
+  private readonly serverCart = inject(ServerCartService);
+  @ViewChild('messagesContainer') private messagesContainer!: ElementRef<HTMLElement>;
 
-    readonly showChat = signal(false);
-    readonly isFullScreen = signal(false);
-    readonly isTyping = signal(false);
+  readonly showChat = signal(false);
+  readonly isFullScreen = signal(false);
+  readonly isTyping = signal(false);
 
-    inputText = '';
+  inputText = '';
 
-    readonly messages = signal<ChatMessage[]>([]);
+  readonly messages = signal<ChatMessage[]>([]);
 
-    /** Last products from SHOW_PRODUCTS — sent to the API as context on the next message. */
-    private lastShownProductsCtx: Array<{ id: number; name: string }> = [];
+  /** Last products from SHOW_PRODUCTS — sent to the API as context on the next message. */
+  private lastShownProductsCtx: Array<{ id: number; name: string }> = [];
 
-    ngOnInit(): void {
-      this.fetchInitialGreeting();
+  ngOnInit(): void {
+    this.fetchInitialGreeting();
+  }
+
+  ngAfterViewChecked(): void {
+    this.scrollToBottom();
+  }
+
+  toggleChat(): void {
+    if (this.showChat() && this.isFullScreen()) {
+      this.isFullScreen.set(false);
+      return;
     }
+    this.showChat.update((v) => !v);
+  }
 
-    ngAfterViewChecked(): void {
-      this.scrollToBottom();
+  closeChat(): void {
+    this.isFullScreen.set(false);
+    this.showChat.set(false);
+  }
+
+  toggleFullScreen(): void {
+    this.isFullScreen.update((v) => !v);
+  }
+
+  handleEnter(event: Event): void {
+    const e = event as KeyboardEvent;
+    if (!e.shiftKey) {
+      e.preventDefault();
+      this.sendMessage();
     }
+  }
 
-    toggleChat(): void {
-      if (this.showChat() && this.isFullScreen()) {
-        this.isFullScreen.set(false);
+  resetConversation(): void {
+    this.messages.set([]);
+    this.fetchInitialGreeting();
+  }
+
+  private fetchInitialGreeting(): void {
+    this.isTyping.set(true);
+    this.chatbotApi.sendMessage('hello').subscribe({
+      next: (res) => {
+        this.isTyping.set(false);
+        if (!res?.success) return;
+        const newMsg: ChatMessage = { text: res.data.text, isUser: false };
+        const actions = Array.isArray(res.data.actions) ? (res.data.actions as ApiChatAction[]) : [];
+        if (actions.length) this.executeActions(actions, newMsg);
+        this.messages.set([newMsg]);
+      },
+      error: () => {
+        this.isTyping.set(false);
+        this.messages.set([
+          {
+            text: 'Hello! I am BanDai AI Assistant. I can help you find products or check your order information.',
+            isUser: false,
+            options: ['View cart', 'Find products', 'My orders'],
+          },
+        ]);
+      },
+    });
+  }
+
+  sendQuickReply(option: string): void {
+    const lowerOpt = option.toLowerCase();
+    const isLocalIntercept =
+      lowerOpt.includes('cart') || lowerOpt.includes('orders') || lowerOpt.includes('find products');
+
+    if (isLocalIntercept) {
+      this.messages.update((msgs) => [...msgs, { text: option, isUser: true }]);
+
+      if (lowerOpt.includes('cart')) {
+        this.messages.update((msgs) => [
+          ...msgs,
+          { text: 'I will take you to the cart page right now!', isUser: false },
+        ]);
+        void this.router.navigate(['/cart']);
         return;
       }
-      this.showChat.update((v) => !v);
-    }
 
-    closeChat(): void {
-      this.isFullScreen.set(false);
-      this.showChat.set(false);
-    }
-
-    toggleFullScreen(): void {
-      this.isFullScreen.update((v) => !v);
-    }
-
-    handleEnter(event: Event): void {
-      const e = event as KeyboardEvent;
-      if (!e.shiftKey) {
-        e.preventDefault();
-        this.sendMessage();
+      if (lowerOpt.includes('orders')) {
+        this.messages.update((msgs) => [
+          ...msgs,
+          { text: 'I will take you to the orders page right now!', isUser: false },
+        ]);
+        void this.router.navigate(['/orders']);
+        return;
       }
+
+      this.messages.update((msgs) => [
+        ...msgs,
+        {
+          text: 'What product do you want to find? Please enter the keyword (e.g. "acer", "iphone", "laptop") into the chat box!',
+          isUser: false,
+        },
+      ]);
+      return;
     }
 
-    resetConversation(): void {
-      this.messages.set([]);
-      this.fetchInitialGreeting();
-    }
+    this.inputText = option;
+    this.sendMessage();
+  }
 
-    private fetchInitialGreeting(): void {
-      this.isTyping.set(true);
-      this.chatbotApi.sendMessage('hello').subscribe({
+  sendMessage(): void {
+    const text = this.inputText.trim();
+    if (!text) return;
+
+    this.messages.update((msgs) => [...msgs, { text, isUser: true }]);
+    this.inputText = '';
+
+    this.isTyping.set(true);
+    this.chatbotApi
+      .sendMessage(
+        text,
+        this.lastShownProductsCtx.length > 0 ? { lastShownProducts: this.lastShownProductsCtx } : undefined
+      )
+      .subscribe({
         next: (res) => {
           this.isTyping.set(false);
-          if (!res?.success) return;
-          const newMsg: ChatMessage = { text: res.data.text, isUser: false };
+          if (!res?.success) {
+            this.messages.update((msgs) => [
+              ...msgs,
+              { text: "Sorry, I don't understand your request.", isUser: false },
+            ]);
+            return;
+          }
+
+          const botMsg: ChatMessage = { text: res.data.text, isUser: false };
           const actions = Array.isArray(res.data.actions) ? (res.data.actions as ApiChatAction[]) : [];
-          if (actions.length) this.executeActions(actions, newMsg);
-          this.messages.set([newMsg]);
+          if (actions.length) this.executeActions(actions, botMsg);
+          this.messages.update((msgs) => [...msgs, botMsg]);
         },
         error: () => {
           this.isTyping.set(false);
-          this.messages.set([
-            {
-              text: 'Hello! I am BanDai AI Assistant. I can help you find products or check your order information.',
-              isUser: false,
-              options: ['View cart', 'Find products', 'My orders'],
-            },
+          this.messages.update((msgs) => [
+            ...msgs,
+            { text: 'Sorry, the AI server is busy. Please try again later!', isUser: false },
           ]);
         },
       });
+  }
+
+  private executeActions(actions: ApiChatAction[], botMessage: ChatMessage): void {
+    // Reload cart from API before NAVIGATE_TO so header/badge updates even when the next action changes route.
+    if (actions.some((a) => a.type === 'REFRESH_CART')) {
+      void this.serverCart.refresh().subscribe();
     }
 
-    sendQuickReply(option: string): void {
-      const lowerOpt = option.toLowerCase();
-      const isLocalIntercept =
-        lowerOpt.includes('cart') || lowerOpt.includes('orders') || lowerOpt.includes('find products');
-
-      if (isLocalIntercept) {
-        this.messages.update((msgs) => [...msgs, { text: option, isUser: true }]);
-
-        if (lowerOpt.includes('cart')) {
-          this.messages.update((msgs) => [
-            ...msgs,
-            { text: 'I will take you to the cart page right now!', isUser: false },
-          ]);
-          void this.router.navigate(['/cart']);
-          return;
+    for (const action of actions) {
+      switch (action.type) {
+        case 'REFRESH_CART':
+          break;
+        case 'NAVIGATE_TO': {
+          const path = action.payload?.path;
+          if (path) void this.router.navigate([path]);
+          break;
         }
-
-        if (lowerOpt.includes('orders')) {
-          this.messages.update((msgs) => [
-            ...msgs,
-            { text: 'I will take you to the orders page right now!', isUser: false },
-          ]);
-          void this.router.navigate(['/orders']);
-          return;
+        case 'SUGGEST_OPTIONS': {
+          botMessage.options = Array.isArray(action.payload?.options) ? action.payload.options : [];
+          break;
         }
-
-        this.messages.update((msgs) => [
-          ...msgs,
-          {
-            text: 'What product do you want to find? Please enter the keyword (e.g. "acer", "iphone", "laptop") into the chat box!',
-            isUser: false,
-          },
-        ]);
-        return;
-      }
-
-      this.inputText = option;
-      this.sendMessage();
-    }
-
-    sendMessage(): void {
-      const text = this.inputText.trim();
-      if (!text) return;
-
-      this.messages.update((msgs) => [...msgs, { text, isUser: true }]);
-      this.inputText = '';
-
-      this.isTyping.set(true);
-      this.chatbotApi
-        .sendMessage(
-          text,
-          this.lastShownProductsCtx.length > 0 ? { lastShownProducts: this.lastShownProductsCtx } : undefined
-        )
-        .subscribe({
-          next: (res) => {
-            this.isTyping.set(false);
-            if (!res?.success) {
-              this.messages.update((msgs) => [
-                ...msgs,
-                { text: "Sorry, I don't understand your request.", isUser: false },
-              ]);
-              return;
-            }
-
-            const botMsg: ChatMessage = { text: res.data.text, isUser: false };
-            const actions = Array.isArray(res.data.actions) ? (res.data.actions as ApiChatAction[]) : [];
-            if (actions.length) this.executeActions(actions, botMsg);
-            this.messages.update((msgs) => [...msgs, botMsg]);
-          },
-          error: () => {
-            this.isTyping.set(false);
-            this.messages.update((msgs) => [
-              ...msgs,
-              { text: 'Sorry, the AI server is busy. Please try again later!', isUser: false },
-            ]);
-          },
-        });
-    }
-
-    private executeActions(actions: ApiChatAction[], botMessage: ChatMessage): void {
-      // Reload cart from API before NAVIGATE_TO so header/badge updates even when the next action changes route.
-      if (actions.some((a) => a.type === 'REFRESH_CART')) {
-        void this.serverCart.refresh().subscribe();
-      }
-
-      for (const action of actions) {
-        switch (action.type) {
-          case 'REFRESH_CART':
-            break;
-          case 'NAVIGATE_TO': {
-            const path = action.payload?.path;
-            if (path) void this.router.navigate([path]);
-            break;
-          }
-          case 'SUGGEST_OPTIONS': {
-            botMessage.options = Array.isArray(action.payload?.options) ? action.payload.options : [];
-            break;
-          }
-          case 'SHOW_ORDERS': {
-            botMessage.orders = Array.isArray(action.payload?.orders) ? action.payload.orders : [];
-            break;
-          }
-          case 'SHOW_PRODUCTS': {
-            const list = Array.isArray(action.payload?.products) ? action.payload.products : [];
-            botMessage.products = list;
-            this.lastShownProductsCtx = list.slice(0, 20).map((p) => ({ id: p.id, name: p.name }));
-            break;
-          }
+        case 'SHOW_ORDERS': {
+          botMessage.orders = Array.isArray(action.payload?.orders) ? action.payload.orders : [];
+          break;
         }
-      }
-    }
-
-    private scrollToBottom(): void {
-      if (!this.messagesContainer) return;
-      try {
-        this.messagesContainer.nativeElement.scrollTop = this.messagesContainer.nativeElement.scrollHeight;
-      } catch {
+        case 'SHOW_PRODUCTS': {
+          const list = Array.isArray(action.payload?.products) ? action.payload.products : [];
+          botMessage.products = list;
+          this.lastShownProductsCtx = list.slice(0, 20).map((p) => ({ id: p.id, name: p.name }));
+          break;
+        }
       }
     }
   }
+
+  private scrollToBottom(): void {
+    if (!this.messagesContainer) return;
+    try {
+      this.messagesContainer.nativeElement.scrollTop = this.messagesContainer.nativeElement.scrollHeight;
+    } catch {
+    }
+  }
+}
 

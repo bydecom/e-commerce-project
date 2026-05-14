@@ -13,6 +13,12 @@ jest.mock('../../../utils/mail', () => ({
   sendMail: jest.fn().mockResolvedValue(undefined),
 }));
 
+jest.mock('../../../rabbitmq/publisher', () => ({
+  publishOrderPlacedEmail: jest.fn().mockResolvedValue(undefined),
+  publishOrderCompletedEmail: jest.fn().mockResolvedValue(undefined),
+  publishOrderStatusEmail: jest.fn().mockResolvedValue(undefined),
+}));
+
 jest.mock('../../store-setting/store-setting.service', () => ({
   StoreSettingService: {
     getSetting: jest.fn().mockResolvedValue({ name: 'BanDai Shop', email: 'shop@test.com', phone: '0123' }),

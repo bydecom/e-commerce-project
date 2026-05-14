@@ -4,7 +4,7 @@ import { Router } from '@angular/router';
 import { catchError, throwError } from 'rxjs';
 import { ToastService } from '../services/toast.service';
 
-/** 429 được component form auth xử lý inline — tránh toast chồng */
+/** 429 is handled inline by auth form components — avoids overlapping toasts */
 function shouldSkip429GlobalToast(url: string): boolean {
   return (
     url.includes('/api/auth/login') ||
