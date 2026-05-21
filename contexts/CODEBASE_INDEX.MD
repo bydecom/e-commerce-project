@@ -14,16 +14,18 @@ Demo scope — 5 working days, 2 developers.
 
 ## Tech Stack
 
-| Layer | Technology |
-|-------|-----------|
-| Frontend | Angular 17+ standalone, Tailwind CSS, SCSS, TypeScript strict |
-| Backend | Node.js 20, **Express 5**, **TypeScript**, Prisma ORM |
-| Database | PostgreSQL 16 (with `pg_trgm` extension for search) |
-| Cache | Redis 7 (pending registration + verify tokens; JWT `jti` blacklist on `/auth/logout`) |
-| AI | Google Gemini API (`gemini-2.5-flash-lite`) |
-| Email | Nodemailer + Mailpit (dev only) |
-| Docs | Swagger UI at `/api-docs` |
-| DevOps | Docker Desktop, docker-compose (infra only — apps run on host) |
+| Layer | Local Development | Production Environment |
+|-------|-------------------|-------------------------|
+| **Frontend** | Angular 17+ standalone, Tailwind, SCSS | AWS S3 + CloudFront CDN |
+| **Backend** | Node.js 20, Express 5, TS, Prisma | AWS EC2 (PM2 managed cluster: API + workers) |
+| **Database** | PostgreSQL 16 (pg_trgm extension) | Neon (Serverless PostgreSQL) |
+| **Cache / State** | Redis 7 (local container) | Upstash (Serverless Redis) |
+| **AI / Search** | Google Gemini API + local Qdrant | Google Gemini API + Qdrant Cloud |
+| **Email** | Nodemailer + Mailpit | Google Mail Service (SMTP) |
+| **Storage** | MinIO (local S3-compatible) | AWS S3 (with CloudFront CDN planned) |
+| **Message Broker** | RabbitMQ 3 (local container) | RabbitMQ 3 (Docker co-located on AWS EC2) |
+| **Payment** | VNPay sandbox | VNPay sandbox (IPN active on production server) |
+| **Docs / Tools** | Swagger UI (`/api-docs`), pgAdmin, Redis Commander, Portainer | - |
 
 ---
 
