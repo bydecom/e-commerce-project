@@ -4,15 +4,16 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Stack
 
-- **Frontend:** Angular 17 (standalone components, signals, SSR via `@angular/ssr`), SCSS, Tailwind CSS, TypeScript strict
-- **Backend:** Node.js 20, Express 5, TypeScript, Prisma ORM, PostgreSQL (`Int` PKs everywhere — no UUIDs)
-- **Auth:** JWT access token (Bearer, in-memory only on client) + refresh token (HttpOnly cookie, stored hashed in Redis)
-- **AI:** Google Gemini (`@google/genai`) + Qdrant vector DB for semantic product search
-- **Email:** Nodemailer → Mailpit (dev)
-- **Cache / state:** Redis (JWT blacklist, token storage, product cache, checkout stock reservations)
-- **Object Storage:** MinIO (local dev, S3-compatible) → AWS S3 (production). SDK: `@aws-sdk/client-s3` + `@aws-sdk/s3-request-presigner`
-- **Message Broker:** RabbitMQ (AMQP via `amqplib`). Config: `backend/src/config/rabbitmq.ts`
-- **Payment:** VNPay sandbox
+- **Frontend:** Angular 17 (standalone components, signals, SSR via `@angular/ssr`), SCSS, Tailwind CSS, TypeScript strict. **Production Hosting:** AWS S3 + CloudFront CDN.
+- **Backend:** Node.js 20, Express 5, TypeScript, Prisma ORM. **Production Hosting:** AWS EC2 managed by PM2 process manager (API + workers).
+- **Auth:** JWT access token (Bearer, in-memory only on client) + refresh token (HttpOnly cookie, stored hashed in Redis).
+- **AI:** Google Gemini (`@google/genai`) + Qdrant vector DB. **Production AI Database:** Qdrant Cloud.
+- **Email:** Nodemailer → Mailpit (dev) → Google Mail Service (production).
+- **Cache / state:** Redis (JWT blacklist, token storage, product cache, checkout stock reservations). **Production Cache:** Upstash (Serverless Redis).
+- **Database:** PostgreSQL (`Int` PKs everywhere — no UUIDs). **Production Database:** Neon (Serverless PostgreSQL).
+- **Object Storage:** MinIO (local dev, S3-compatible) → AWS S3 (production). SDK: `@aws-sdk/client-s3` + `@aws-sdk/s3-request-presigner`.
+- **Message Broker:** RabbitMQ (AMQP via `amqplib`). Config: `backend/src/config/rabbitmq.ts`. **Production MQ:** Docker container running on AWS EC2 (co-located with BE).
+- **Payment:** VNPay sandbox.
 
 ## Dev Commands
 

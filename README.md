@@ -7,6 +7,7 @@ A full-stack e-commerce monorepo: **Express 5 + TypeScript + Prisma** on the bac
 ## Table of contents
 
 - [Tech stack](#tech-stack)
+- [Production infrastructure](#production-infrastructure)
 - [Prerequisites](#prerequisites)
 - [Repository structure](#repository-structure)
 - [Getting started](#getting-started)
@@ -27,12 +28,29 @@ A full-stack e-commerce monorepo: **Express 5 + TypeScript + Prisma** on the bac
 |-------|--------------|
 | Backend | Node.js 20, Express 5, TypeScript, Prisma, Redis, Nodemailer, JWT, Zod validation |
 | Frontend | Angular 17 (standalone components, signals), Tailwind CSS, SCSS |
-| Data | PostgreSQL 16 (pg_trgm), Redis 7 |
+| Data | PostgreSQL 16 (pg_trgm) — Neon (prod), Redis 7 — Upstash (prod) |
 | Object Storage | MinIO (local, S3-compatible) → AWS S3 (production). SDK: `@aws-sdk/client-s3` |
 | Message Broker | RabbitMQ 3 (AMQP via `amqplib`) |
-| AI | Google Gemini (`@google/genai`), Qdrant vector DB |
+| AI | Google Gemini (`@google/genai`), Qdrant vector DB — Qdrant Cloud (prod) |
 | Payment | VNPay sandbox |
+| Email | Mailpit (local) → Google Mail Service (production) |
 | Dev tooling | Docker Compose, Mailpit, pgAdmin, Redis Commander, Portainer |
+
+---
+
+## Production infrastructure
+
+| Component | Service | Notes |
+|-----------|---------|-------|
+| Frontend | **AWS S3 + CloudFront** | Static hosting with CDN edge caching |
+| Backend API + Workers | **AWS EC2** | PM2 manages API server + email worker |
+| RabbitMQ | **Docker on EC2** (co-located with BE) | `docker-compose.prod.yml` |
+| PostgreSQL | **Neon** (Serverless Postgres) | Managed, auto-scaling |
+| Redis | **Upstash** (Serverless Redis) | Cache, rate-limit, stock reservation |
+| Qdrant | **Qdrant Cloud** | Vector search, semantic embeddings |
+| Object Storage | **AWS S3** | Presigned URL upload; CloudFront CDN layer planned |
+| Email | **Google Mail Service** | Production SMTP |
+| Payment | **VNPay** (sandbox) | IPN webhook via public EC2 |
 
 ---
 
