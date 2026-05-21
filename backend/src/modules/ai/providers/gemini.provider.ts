@@ -5,6 +5,14 @@ function getEnvTrim(name: string, fallback: string): string {
   return String(process.env[name] ?? fallback).trim();
 }
 
+async function withTimeout<T>(promise: Promise<T>, timeoutMs: number, errorMessage = 'Operation timed out'): Promise<T> {
+  let timer: NodeJS.Timeout;
+  const timeoutPromise = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(new Error(errorMessage)), timeoutMs);
+  });
+  return Promise.race([promise, timeoutPromise]).finally(() => clearTimeout(timer));
+}
+
 export class GeminiAIProvider implements IAIProvider {
   private readonly ai: GoogleGenAI;
   private readonly defaultModel: string;
@@ -29,11 +37,19 @@ export class GeminiAIProvider implements IAIProvider {
       config.responseSchema = input.responseSchema;
     }
 
-    const aiResponse = await this.ai.models.generateContent({
+    const timeoutMs = parseInt(process.env.GEMINI_TIMEOUT_MS ?? '15000', 10);
+
+    const apiCall = this.ai.models.generateContent({
       model: input.model ?? this.defaultModel,
       config,
       contents: [{ role: 'user', parts: [{ text: prompt }] }],
     });
+
+    const aiResponse = await withTimeout(
+      apiCall,
+      timeoutMs,
+      `Gemini API call timed out after ${timeoutMs}ms`
+    );
 
     const jsonText = aiResponse.text ?? '{}';
     return JSON.parse(jsonText) as T;

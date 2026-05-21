@@ -30,7 +30,7 @@ export async function authMiddleware(req: Request, res: Response, next: NextFunc
       res.status(401).json({ success: false, message: 'Unauthorized' });
       return;
     }
-    if (await isJwtBlacklisted(jti)) {
+    if (await isJwtBlacklisted(jti, exp)) {
       res.status(401).json({ success: false, message: 'Unauthorized' });
       return;
     }
@@ -75,7 +75,7 @@ export async function optionalAuthMiddleware(
       next();
       return;
     }
-    if (await isJwtBlacklisted(jti)) {
+    if (await isJwtBlacklisted(jti, exp)) {
       next();
       return;
     }

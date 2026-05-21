@@ -59,6 +59,14 @@ export async function syncPostgresToQdrant() {
 
 // Run independently: npx ts-node src/scripts/sync-qdrant.ts
 if (require.main === module) {
+  const shutdown = async (signal: string) => {
+    console.log(`\n[SyncQdrant] Received ${signal} — disconnecting...`);
+    await prisma.$disconnect();
+    process.exit(0);
+  };
+  process.on('SIGTERM', () => void shutdown('SIGTERM'));
+  process.on('SIGINT', () => void shutdown('SIGINT'));
+
   syncPostgresToQdrant()
     .then(() => process.exit(0))
     .catch((err) => {
