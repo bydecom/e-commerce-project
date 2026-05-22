@@ -182,8 +182,9 @@ async function run(): Promise<void> {
 
       conn.on('error', (err: Error) => console.error('[EmailWorker] Connection error:', err));
       conn.on('close', () => {
-        console.warn('[EmailWorker] Connection closed, reconnecting...');
         activeConn = null;
+        if (isShuttingDown) return;
+        console.warn('[EmailWorker] Connection closed, reconnecting...');
       });
 
       const ch = await setupChannel(conn);

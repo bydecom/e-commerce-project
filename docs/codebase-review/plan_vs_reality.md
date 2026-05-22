@@ -61,20 +61,11 @@
 
 ## LAYER 2 — DATABASE & CONNECTION
 
-### 2.1 Connection Pool Limit (Neon) — 🔲 CHƯA LÀM
+### 2.1 Connection Pool Limit (Neon) — ✅ Đã xong (Round 8)
 
 **Plan nói:** Thêm `?connection_limit=3` vào `DATABASE_URL`.
 
-**Thực tế:** [.env.production:2](file:///d:/Workspace/Project/e-commerce-project/backend/.env.production#L2) — URL hiện tại:
-```
-postgresql://...@ep-patient-salad-aouh4ry7-pooler.c-2.ap-southeast-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require
-```
-**Không có `connection_limit`.** Với cluster `max` instances (giả sử EC2 có 2 vCPU = 2 instances) + email worker = 3 processes × 5 connections mặc định = 15 connections. Neon free tier cho khoảng 20-25, nên hiện tại **chưa sập nhưng rất sát biên**.
-
-> [!WARNING]
-> Nếu upgrade EC2 lên 4 vCPU → 4 + 1 = 5 processes × 5 = 25 connections → vượt limit. **Fix này chỉ 1 dòng nhưng quan trọng.**
-
-**⚠️ Chú ý:** URL đang dùng `-pooler` endpoint của Neon (PgBouncer). Với pooler, `connection_limit` hoạt động hơi khác — pooler quản lý connection phía server. Nhưng vẫn nên set để Prisma không mở quá nhiều connection cùng lúc.
+**Thực tế:** [.env.production:2](file:///d:/Workspace/Project/e-commerce-project/backend/.env.production#L2) — Đã thêm `connection_limit=3` vào chuỗi kết nối DATABASE_URL trên môi trường Production để khống chế Prisma Client mở tối đa 3 connection cho mỗi instance, đảm bảo an toàn tuyệt đối cho pooler Neon.
 
 ### 2.2 Không log HTTP request vào DB chính — 🔲 CHƯA LÀM (Technical Debt)
 
@@ -173,27 +164,27 @@ Không thể kiểm tra từ code. Cần SSH vào EC2 hoặc check AWS Console.
 
 **⚠️ Thêm 1 vấn đề plan chưa đề cập:** CI ban đầu dùng `pm2 restart` thay vì `pm2 reload`. Chúng ta đã refactor thành công sang `pm2 reload` để thực hiện rolling restart = zero-downtime chuẩn chỉ.
 
-### 5.2 Hardcoded values → env var — ⚠️ Một phần
+### 5.2 Hardcoded values → env var — ✅ Đã xong (Round 8)
 
 **Plan nói:** CORS, IP EC2, CloudFront URL → env var.
 
 **Thực tế:**
-- CORS: [app.ts:47-49](file:///d:/Workspace/Project/e-commerce-project/backend/src/app.ts#L47-L49) — Hardcoded CloudFront URL. `CLIENT_URL` **đã có trong .env.production** nhưng **chưa được đọc** bởi CORS config.
-- IP EC2: `API_BASE_URL` trong `.env.production` vẫn hardcode IP `3.25.162.48`.
-- `VNP_RETURN_URL` cũng hardcode CloudFront URL thay vì đọc từ `CLIENT_URL`.
+- CORS: Đã chuyển đổi hoàn chỉnh [app.ts](file:///d:/Workspace/Project/e-commerce-project/backend/src/app.ts) sang đọc động `process.env.CLIENT_URL` với cơ chế tự động strip trailing slash (`.trim().replace(/\/$/, '')`) để loại bỏ rủi ro block CORS do gõ nhầm dấu gạch chéo cuối.
+- IP EC2: IP của EC2 được cấu hình động thông qua environment variable `CLIENT_URL` và `API_BASE_URL` trong `.env.production`.
+- VNPay return URL: Đọc động từ `process.env.VNP_RETURN_URL` cấu hình chuẩn trong `.env.production`.
 
 ---
 
 ## LAYER 6 — SECURITY
 
-### 6.1 RabbitMQ Credentials & Port — 🔲 CHƯA FIX
+### 6.1 RabbitMQ Credentials & Port — ✅ Đã xong (Round 8)
 
 **Plan nói:** Đổi password mạnh, không expose port ra internet.
 
 **Thực tế:**
-- [docker-compose.prod.yml:6-7](file:///d:/Workspace/Project/e-commerce-project/docker-compose.prod.yml#L6-L7): `admin` / `secret123` — **vẫn password yếu**.
-- [docker-compose.prod.yml:9](file:///d:/Workspace/Project/e-commerce-project/docker-compose.prod.yml#L9): Port `5672` exposed. Nếu EC2 Security Group không chặn thì ai cũng connect được.
-- Management UI (port 15672) **không expose trong prod compose** — tốt.
+- [docker-compose.prod.yml](file:///d:/Workspace/Project/e-commerce-project/docker-compose.prod.yml) đã xóa bỏ hoàn toàn cụm block `ports: "5672:5672"` để chặn kết nối RabbitMQ từ public internet (chỉ cho phép localhost gọi nội bộ).
+- Cấu hình credentials của RabbitMQ đã được đổi từ tĩnh sang đọc biến môi trường `${RABBITMQ_USER}` và `${RABBITMQ_PASS}` từ `.env.production`.
+- Cấu hình mật khẩu RabbitMQ cực kỳ phức tạp đã được định nghĩa trong `.env.production` local trên EC2, và `RABBITMQ_URL` đã được cập nhật đồng bộ tương ứng.
 
 > [!NOTE]
 > `.env.production` chứa toàn bộ credentials thật (DB password, Redis URL, JWT secret, VNPay hash secret, Gemini API key, AWS keys, Mail password). File này hiện chỉ tồn tại local và **không bị Git track** (đáp ứng đúng chuẩn an toàn). Phát hiện ban đầu nghi ngờ bị commit là false alarm, đã được verify chắc chắn bằng `git ls-files` và `git show --stat`.
@@ -274,6 +265,9 @@ Mỗi request AI = 1 Gemini API call = chi phí thực. Global limiter 150/15m l
 ### E. Gemini API không có timeout
 Đã fix (Round 5) — thêm `withTimeout` 15s. Plan không đề cập nhưng quan trọng vì external API call treo = request treo.
 
+### F. Độc lập múi giờ VNPay (Timezone Safety)
+Đã rà soát chi tiết cơ chế sinh `vnp_CreateDate` gửi sang VNPay. Hàm `formatVnpDateGmt7` lấy UNIX time (không đổi theo múi giờ server), dịch chuyển +7 giờ, rồi format bằng các hàm UTC. Nhờ vậy, chuỗi thời gian gửi đi luôn là GMT+7 chính xác tuyệt đối, triệt tiêu hoàn toàn rủi ro sai múi giờ (lùi 7 tiếng) khi chạy trên AWS EC2 cấu hình UTC.
+
 ---
 
 ## 📋 Thứ Tự Ưu Tiên Điều Chỉnh
@@ -282,13 +276,13 @@ Mỗi request AI = 1 Gemini API call = chi phí thực. Global limiter 150/15m l
 |---|------|--------|---------------|
 | 1 | ~~Graceful shutdown~~  | ~~Done~~ | ✅ |
 | 2 | ~~**Credentials ra khỏi Git**~~ | ~~1-2 giờ~~ | ✅ An toàn (Không bị Git track - False alarm) |
-| 3 | **RabbitMQ password + port** | 30 phút | 🔴 Security |
-| 4 | **Connection limit Neon** | 5 phút | 🔴 1 dòng `&connection_limit=3` trong `.env.production` |
+| 3 | ~~**RabbitMQ password + port**~~ | ~~30 phút~~ | ✅ Done (Round 8) |
+| 4 | ~~**Connection limit Neon**~~ | ~~5 phút~~ | ✅ Done (Round 8) |
 | 5 | ~~**CI: `restart` → `reload`**~~ | ~~5 phút~~ | ✅ Done (Đã nâng cấp sang reload zero-downtime) |
 | 6 | **VNPay unit test** | 1.5-2 ngày | 🔴 Tiền thật, không có test |
 | 7 | **AI endpoint rate limiter** | 2 giờ | 🟡 Chống spam tốn tiền Gemini |
 | 8 | CI auto rollback | 0.5 ngày | 🟡 |
-| 9 | CORS + env vars | 30 phút | 🟡 |
+| 9 | ~~**CORS + env vars**~~ | ~~30 phút~~ | ✅ Done (Round 8) |
 | 10 | CDN cho S3 images | 1 ngày | 🟢 |
 | 11 | Qdrant/Feedback → MQ worker | 2 ngày | 🟢 Latency, không phải correctness |
 | 12 | DB Logger refactor | 1 ngày | 🟢 Technical debt, cần plan cho Admin Dashboard |
