@@ -7,12 +7,12 @@ function envInt(name: string, fallback: number): number {
 }
 
 function getAttemptLimit(): number { return envInt('LOGIN_ATTEMPT_LIMIT', 4); }
-function getAttemptTtl(): number   { return envInt('LOGIN_ATTEMPT_TTL_SECONDS', 86400); }
-function getOtpTtl(): number       { return envInt('OTP_TTL_SECONDS', 300); }
-function getOtpCooldown(): number  { return envInt('OTP_RESEND_COOLDOWN_SECONDS', 60); }
+function getAttemptTtl(): number { return envInt('LOGIN_ATTEMPT_TTL_SECONDS', 86400); }
+function getOtpTtl(): number { return envInt('OTP_TTL_SECONDS', 300); }
+function getOtpCooldown(): number { return envInt('OTP_RESEND_COOLDOWN_SECONDS', 60); }
 
-function keyAttempts(email: string): string    { return `login_attempts:${email}`; }
-function keyOtp(email: string): string         { return `otp:${email}`; }
+function keyAttempts(email: string): string { return `login_attempts:${email}`; }
+function keyOtp(email: string): string { return `otp:${email}`; }
 function keyOtpCooldown(email: string): string { return `otp_resend_cooldown:${email}`; }
 
 function hashOtp(otp: string): string {

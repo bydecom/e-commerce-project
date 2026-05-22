@@ -5,6 +5,7 @@ import cors from 'cors';
 import cookieParser from 'cookie-parser';
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
+import RedisStore from 'rate-limit-redis';
 import hpp from 'hpp';
 import { prisma } from './db';
 
@@ -25,7 +26,7 @@ import { errorMiddleware } from './middlewares/error.middleware';
 import { dbLoggerMiddleware } from './middlewares/logger.middleware';
 import { setupSwagger } from './config/swagger';
 import { systemLogRouter } from './modules/system-log/system-log.route';
-import { ensureRedisConnected } from './config/redis';
+import { ensureRedisConnected, redisClient } from './config/redis';
 import { cartRouter } from './modules/cart/cart.route';
 import { paymentRouter } from './modules/payment/payment.route';
 import { locationRouter } from './modules/location/location.route';
@@ -67,11 +68,32 @@ app.use(cors({
   credentials: true // BẮT BUỘC phải là true vì bác đang dùng Cookie/Refresh Token
 }));
 
+// ─── 1.4 Rate Limit with Redis Store ────────────────────────────────────────
+// MemoryStore = each PM2 cluster instance has its own counter.
+// 4 instances → user can send 150 × 4 = 600 requests. Rate limit becomes meaningless.
+// RedisStore shares a single counter across all cluster instances.
+// In dev/test, fall back to in-memory (no Redis dependency needed for local dev).
+// ─────────────────────────────────────────────────────────────────────────────
+function createRateLimitStore(): RedisStore | undefined {
+  if (process.env.NODE_ENV !== 'production') return undefined; // MemoryStore default for dev
+  try {
+    return new RedisStore({
+      // `sendCommand` is the adapter that rate-limit-redis uses internally
+      sendCommand: (...args: string[]) => redisClient().sendCommand(args),
+    });
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.warn('[RateLimit] Failed to create RedisStore, falling back to MemoryStore:', err);
+    return undefined;
+  }
+}
+
 const globalLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: process.env.NODE_ENV === 'production' ? 150 : 10_000,
   standardHeaders: true,
   legacyHeaders: false,
+  store: createRateLimitStore(),
   skip: (req) => {
     if (process.env.NODE_ENV !== 'production') {
       return true;
@@ -101,11 +123,27 @@ ensureRedisConnected().catch((err) => {
   console.error('Redis connection failed:', err);
 });
 
-// Best-effort cleanup loop for expired checkout stock holds.
-startReservationCleanupLoop({
+// ─── 1.5 Cleanup Loop with Distributed Lock ────────────────────────────────
+// The cleanup loop runs every 5s to release expired checkout stock holds.
+// In Cluster Mode (4+ instances), ALL instances would run this loop simultaneously,
+// causing duplicate DB queries and race conditions.
+// Solution: The loop now acquires a Redis distributed lock (SETNX) before running.
+// Only the instance that wins the lock executes the cleanup; others skip that tick.
+// ─────────────────────────────────────────────────────────────────────────────
+let _cleanupHandle: { stop: () => void } | null = null;
+
+_cleanupHandle = startReservationCleanupLoop({
   intervalMs: 5_000,
   batchSize: 100,
 });
+
+/** Called by index.ts during graceful shutdown to stop the cleanup interval. */
+export function stopCleanupLoop(): void {
+  if (_cleanupHandle) {
+    _cleanupHandle.stop();
+    _cleanupHandle = null;
+  }
+}
 
 const success = (data: unknown, message = 'OK', meta: unknown = null) => ({
   success: true,

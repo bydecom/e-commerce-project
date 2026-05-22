@@ -302,12 +302,23 @@ export async function releaseReservationBestEffort(txnRef: string, itemsHint?: R
   await redis.eval(RELEASE_LUA, { keys, arguments: [ref] }).catch(() => undefined);
 }
 
+// ─── Distributed Lock for Cluster Mode ──────────────────────────────────────
+// In PM2 Cluster Mode, multiple instances run this cleanup loop simultaneously.
+// Without a lock, all instances query the same expired reservations and race to
+// cancel orders + release stock → duplicate DB queries, log spam, wasted resources.
+// Solution: SETNX a short-lived lock key before each cleanup tick. Only the
+// instance that wins the lock proceeds; others skip that tick entirely.
+// ─────────────────────────────────────────────────────────────────────────────
+const CLEANUP_LOCK_KEY = 'stock:cleanup:lock';
+
 export function startReservationCleanupLoop(opts?: {
   intervalMs?: number;
   batchSize?: number;
 }): { stop: () => void } {
   const intervalMs = Math.max(2_000, Math.floor(opts?.intervalMs ?? 5_000));
   const batchSize = Math.max(10, Math.floor(opts?.batchSize ?? 50));
+  // Lock TTL should be slightly shorter than interval to avoid stale locks blocking next tick
+  const lockTtlSeconds = Math.max(1, Math.ceil(intervalMs / 1000) - 1);
 
   let stopped = false;
   const timer = setInterval(() => {
@@ -316,6 +327,14 @@ export function startReservationCleanupLoop(opts?: {
       try {
         await ensureRedisConnected();
         const redis = redisClient();
+
+        // Try to acquire distributed lock (SETNX with TTL)
+        const acquired = await redis.set(CLEANUP_LOCK_KEY, process.pid.toString(), {
+          NX: true,  // Only set if key does NOT exist
+          EX: lockTtlSeconds,
+        });
+        if (!acquired) return; // Another instance holds the lock — skip this tick
+
         const now = Date.now();
         const expired = await redis.zRangeByScore(HOLD_EXP_ZSET, 0, now, {
           LIMIT: { offset: 0, count: batchSize },

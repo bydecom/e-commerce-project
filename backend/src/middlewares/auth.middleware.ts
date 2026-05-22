@@ -30,7 +30,7 @@ export async function authMiddleware(req: Request, res: Response, next: NextFunc
       res.status(401).json({ success: false, message: 'Unauthorized' });
       return;
     }
-    if (await isJwtBlacklisted(jti)) {
+    if (await isJwtBlacklisted(jti, exp)) {
       res.status(401).json({ success: false, message: 'Unauthorized' });
       return;
     }
@@ -43,7 +43,7 @@ export async function authMiddleware(req: Request, res: Response, next: NextFunc
 
 /**
  * Attach `req.auth` when valid Bearer JWT is present and not blacklisted; if no token / token error / expired, skip (no 401).
- * Used for endpoints that need both guest and logged-in user (e.g. POST /api/ai/chat).
+ * Used for endpoints that need both guest and logged-in user (e.g POST /api/ai/chat).
  */
 export async function optionalAuthMiddleware(
   req: Request,
@@ -75,7 +75,7 @@ export async function optionalAuthMiddleware(
       next();
       return;
     }
-    if (await isJwtBlacklisted(jti)) {
+    if (await isJwtBlacklisted(jti, exp)) {
       next();
       return;
     }

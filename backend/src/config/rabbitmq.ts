@@ -63,3 +63,21 @@ export async function publishEvent(opts: PublishOptions): Promise<void> {
   });
 }
 
+/** Close RabbitMQ connection gracefully (used during shutdown). */
+export async function closeRabbitConnection(): Promise<void> {
+  try {
+    if (_channel) {
+      await _channel.close();
+      _channel = null;
+    }
+    if (_conn) {
+      await _conn.close();
+      _conn = null;
+    }
+  } catch {
+    // Ignore errors during shutdown — connection may already be gone
+    _channel = null;
+    _conn = null;
+  }
+}
+

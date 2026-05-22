@@ -153,29 +153,38 @@ async function startConsuming(ch: Channel): Promise<void> {
     if (!msg) return;
     let payload: unknown;
     try { payload = JSON.parse(msg.content.toString('utf8')); } catch { payload = {}; }
-    void handleMessage(ch, msg.fields.routingKey, payload, false, msg.fields.deliveryTag);
+    handleMessage(ch, msg.fields.routingKey, payload, false, msg.fields.deliveryTag)
+      .catch((err) => console.error('[EmailWorker] Floating Promise Error in handleMessage (Auth Queue):', err));
   });
 
   await ch.consume(QUEUE_ORDER, (msg) => {
     if (!msg) return;
     let payload: unknown;
     try { payload = JSON.parse(msg.content.toString('utf8')); } catch { payload = {}; }
-    void handleMessage(ch, msg.fields.routingKey, payload, true, msg.fields.deliveryTag);
+    handleMessage(ch, msg.fields.routingKey, payload, true, msg.fields.deliveryTag)
+      .catch((err) => console.error('[EmailWorker] Floating Promise Error in handleMessage (Order Queue):', err));
   });
 
   console.log('[EmailWorker] Consuming from', QUEUE_AUTH, 'and', QUEUE_ORDER);
 }
+let activeConn: ChannelModel | null = null;
+let isShuttingDown = false;
 
 async function run(): Promise<void> {
   let url = process.env.RABBITMQ_URL?.trim();
   if (!url) throw new Error('RABBITMQ_URL is not configured');
 
   while (true) {
+    if (isShuttingDown) break;
     try {
       const conn: ChannelModel = await connect(url);
+      activeConn = conn;
 
       conn.on('error', (err: Error) => console.error('[EmailWorker] Connection error:', err));
-      conn.on('close', () => console.warn('[EmailWorker] Connection closed, reconnecting...'));
+      conn.on('close', () => {
+        console.warn('[EmailWorker] Connection closed, reconnecting...');
+        activeConn = null;
+      });
 
       const ch = await setupChannel(conn);
       ch.on('error', (err: Error) => console.error('[EmailWorker] Channel error:', err));
@@ -183,14 +192,55 @@ async function run(): Promise<void> {
       await startConsuming(ch);
 
       // Keep the process alive until connection closes
-      await new Promise<void>((resolve) => conn.on('close', resolve));
+      await new Promise<void>((resolve) => {
+        conn.on('close', resolve);
+      });
     } catch (err) {
       console.error('[EmailWorker] Startup error, retrying in', RECONNECT_DELAY_MS, 'ms:', err);
     }
 
+    if (isShuttingDown) break;
     await new Promise<void>((resolve) => setTimeout(resolve, RECONNECT_DELAY_MS));
   }
 }
+
+async function gracefulShutdown(signal: string): Promise<void> {
+  if (isShuttingDown) return;
+  isShuttingDown = true;
+  console.log(`\n[EmailWorker] Received ${signal} — closing connection gracefully...`);
+
+  // Force kill after 5s if stuck
+  const forceKillTimer = setTimeout(() => {
+    console.error('[EmailWorker] Force kill — timeout exceeded (5s)');
+    process.exit(1);
+  }, 5_000);
+  forceKillTimer.unref();
+
+  try {
+    if (activeConn) {
+      await activeConn.close();
+      console.log('[EmailWorker] RabbitMQ connection closed cleanly');
+    }
+  } catch (err) {
+    console.error('[EmailWorker] Error closing connection:', err);
+  }
+
+  console.log('[EmailWorker] Exited cleanly.');
+  process.exit(0);
+}
+
+process.on('SIGTERM', () => void gracefulShutdown('SIGTERM'));
+process.on('SIGINT', () => void gracefulShutdown('SIGINT'));
+
+process.on('unhandledRejection', (reason: unknown) => {
+  console.error('[EmailWorker FATAL] Unhandled Promise Rejection:', reason);
+  void gracefulShutdown('unhandledRejection');
+});
+
+process.on('uncaughtException', (error: Error) => {
+  console.error('[EmailWorker FATAL] Uncaught Exception:', error);
+  void gracefulShutdown('uncaughtException');
+});
 
 run().catch((err) => {
   console.error('[EmailWorker] Fatal error:', err);
