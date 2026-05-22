@@ -567,3 +567,29 @@ process.on('uncaughtException', ...);
 >
 > **Kết luận:** Cả 7 vấn đề đều thuộc loại "chỉ thấy trên production logs hoặc môi trường cloud thực tế, không bị phát hiện trên dev". Việc rà soát chi tiết từng dòng logic (đặc biệt là logic timezone của VNPay) giúp đội ngũ tự tin tuyệt đối vào mức độ sẵn sàng (Production Readiness) của hệ thống khi chạy trên môi trường AWS EC2 thực tế.
 
+---
+
+> [!IMPORTANT]
+> ### 💬 Round 8 — Hướng 1 "Đánh nhanh thắng nhanh" (Bảo mật, Cấu hình & Dọn dẹp CORS/IP)
+> **Mục tiêu:** Giải quyết triệt để cụm rủi ro cấu hình và an toàn hệ thống cấp thiết nhất trên Production: Neon Connection Pool, Public Ports của RabbitMQ, và CORS AllowedOrigins cứng.
+>
+> **Kết quả triển khai:**
+>
+> **1. Khống chế thành công Neon Connection Limit (Task 4):**
+> - **Triển khai:** Đã bổ sung thành công tham số `&connection_limit=3` trực tiếp vào cuối `DATABASE_URL` trong [.env.production](file:///d:/Workspace/Project/e-commerce-project/backend/.env.production).
+> - **Lợi ích:** Giới hạn chặt chẽ số lượng kết nối tối đa từ mỗi instance API của Prisma, bảo vệ DB Pooler của Neon không bao giờ bị vượt ngưỡng giới hạn kết nối dẫn đến Interactive Transaction Timeout khi PM2 co giãn Cluster.
+>
+> **2. Gia cố Bảo mật & Khóa mõm cổng RabbitMQ (Task 3):**
+> - **Triển khai:** 
+>   - Gỡ bỏ hoàn toàn block expose port `5672` ra public internet trong [docker-compose.prod.yml](file:///d:/Workspace/Project/e-commerce-project/docker-compose.prod.yml). Giờ đây RabbitMQ chỉ chấp nhận kết nối local (localhost) từ chính con EC2, chặn đứng 100% rủi ro bị scan IP & brute-force từ bên ngoài.
+>   - Chuyển cấu hình `RABBITMQ_DEFAULT_USER` và `RABBITMQ_DEFAULT_PASS` sang đọc động từ biến môi trường của hệ thống thay vì ghi cứng password mặc định.
+>   - Khai báo cặp credentials siêu mạnh, phức tạp trong `.env.production` local và cập nhật `RABBITMQ_URL` tương ứng an toàn tuyệt đối.
+>
+> **3. Bỏ Hardcoded CORS & Dynamic allowedOrigins (Task 9):**
+> - **Triển khai:**
+>   - Sửa [app.ts](file:///d:/Workspace/Project/e-commerce-project/backend/src/app.ts) để đọc động danh sách CORS cho phép từ biến môi trường `process.env.CLIENT_URL`.
+>   - **Gia cố an toàn:** Bổ sung xử lý `.trim().replace(/\/$/, '')` để tự động làm sạch và loại bỏ hoàn toàn dấu gạch chéo (`/`) ở cuối URL nếu có trong cấu hình env, triệt tiêu hoàn toàn rủi ro bị block CORS do định dạng.
+>   - Cập nhật chuẩn `CLIENT_URL` và `VNP_RETURN_URL` trong `.env.production`.
+>
+> **Kết luận:** Hướng 1 đã hoàn thành xuất sắc, gia cố vững chắc cho lớp phòng thủ hạ tầng và cấu hình hệ thống trên môi trường Production!
+
