@@ -3,12 +3,14 @@
 Tài liệu này **phản biện từng mục** trong plan trước, dựa trên code thật đã quét.
 
 > [!NOTE]
-> **Lịch sử tài liệu:** Document này đã qua 5 vòng review:
+> **Lịch sử tài liệu:** Document này đã qua 7 vòng review:
 > - **Round 1** — AI draft phản biện dựa trên codebase scan
 > - **Round 2** — Owner phản hồi 3 điểm, AI sửa lại (symlink, feedback schema, effort estimates)
 > - **Round 3** — External reviewer nhận xét về cách làm việc và confirm thứ tự ưu tiên
 > - **Round 4** — Deep scan codebase phát hiện thêm 5 lỗi nghiêm trọng khi lên Production (Database Logging, Cleanup Loop Race Condition, Upload S3 Bypass CDN, Neon connection limit, missing global handlers)
 > - **Round 5** — Implementation Layer 1 (5 mục Process & Runtime) + Owner review 3 điểm sai trong implementation: `listen_timeout` cơ chế, cold start buffer, HTTPS ready race condition
+> - **Round 6** — Phản biện kiến trúc & Giải pháp Lai (Hybrid Blacklist Verification) để cân bằng giữa bảo mật tuyệt đối (Fail-Closed) và độ sẵn sàng cao (Fail-Open) khi Redis gặp sự cố ngắn hạn.
+> - **Round 7** — Xác minh Production Logs trên EC2 sau đợt deploy đầu tiên. Phát hiện và xử lý 3 lỗi ẩn trên Production: Race condition khởi tạo RedisStore sớm của middleware rate limit, điều chỉnh `listen_timeout` lên 8000ms cho cold start Neon, và dọn dẹp kết nối Prisma trong tập lệnh vector đồng bộ.
 >
 > Các block `💬 Tranh luận` trong document ghi lại quá trình hình thành quyết định. **Context tại sao chọn giải pháp này quan trọng hơn bản thân giải pháp** — khi quay lại sau 3 tháng hoặc onboard người mới, phần tranh luận sẽ có giá trị hơn phần kết luận.
 
@@ -503,3 +505,34 @@ process.on('uncaughtException', ...);
 >   - **Script đồng bộ Vector:** Bổ sung graceful connection disconnect cho Prisma khi nhận tín hiệu kết thúc (`SIGTERM`/`SIGINT`).
 >
 > **Kết luận:** Quyết định thiết kế kết hợp hài hòa cả hai yếu tố: Giới hạn tối đa cửa sổ tấn công (Attack Window) dưới 5 phút, đồng thời giữ vững 99.9% tính sẵn sàng của hệ thống cho các phiên hoạt động gần hết hạn.
+
+---
+
+> [!IMPORTANT]
+> ### 💬 Round 7 — Xác minh Production Logs & Hotfix (Owner rà soát PM2 logs thực tế)
+> **Nguồn phát hiện:** Owner SSH vào EC2, đọc `pm2 logs` sau khi deploy bản mới có `pm2 reload`.
+>
+> **Xác nhận tích cực:**
+> - `pm2 reload` zero-downtime đã hoạt động đúng: log xác nhận `New worker listening` → `Stopping app:bandai-api id:_old_5`. Instance mới lên trước, cũ tắt sau.
+> - Email worker hoạt động bình thường, không có error log nghiêm trọng.
+>
+> **Vấn đề 1 — RedisStore khởi tạo trước khi Redis connect (đã fix):**
+> - **Log:** `express-rate-limit: async error during store initialization. ClientClosedError: The client is closed`
+> - **Nguyên nhân gốc:** `createRateLimitStore()` chạy đồng bộ lúc module load, gọi `redisClient().sendCommand()` ngay lập tức. Nhưng `ensureRedisConnected()` chưa hoàn tất → client chưa open → `ClientClosedError`.
+> - **Hệ quả:** Rate limit fallback về MemoryStore trong vài giây đầu sau mỗi restart. Cluster mode → mỗi instance counter riêng trong window đó.
+> - **Fix:** Wrap `sendCommand` adapter thành `async` — gọi `await ensureRedisConnected()` lazy trước mỗi lần `sendCommand`. Request đầu tiên sẽ trigger kết nối, các request sau dùng lại client đã mở.
+>
+> **Vấn đề 2 — `listen_timeout: 5000` buffer quá sát (đã fix):**
+> - **Log:** `[Startup] Ready in 3010ms` — chỉ còn buffer ~2s.
+> - **Rủi ro:** Neon cold start chậm hơn bình thường (ví dụ sau đợt idle dài) + Redis handshake chậm → vượt 5s → PM2 coi instance mới là failed start → traffic drop.
+> - **Fix:** Nâng `listen_timeout` lên `8000ms` (công thức: startup thực tế × 2.5). Comment hướng dẫn cách tune từ `pm2 logs`.
+>
+> **Vấn đề 3 — Log hiển thị IP gây nhầm lẫn (đã fix):**
+> - **Log:** `Health: http://0.0.0.0:3000/api/health` — `HOST=0.0.0.0` đúng cho `server.listen()` (bind tất cả interfaces) nhưng gây nhầm lẫn khi đọc log.
+> - **Fix:** Startup log hiển thị `localhost` thay vì giá trị biến `HOST`. IP thật (EC2 public IP) thuộc về infrastructure, không nên xuất hiện trong application log.
+>
+> **Phát hiện phụ — `.env.production` an toàn:**
+> - Owner verify bằng `git ls-files` và `git show --stat`: file `.env.production` **không bị Git track**, chỉ tồn tại local trên EC2. Nghi vấn ban đầu về credential leak là false alarm.
+>
+> **Kết luận:** 3 vấn đề đều thuộc loại "chỉ thấy trên production logs, không reproduce trên dev". Đây là lý do phải deploy → đọc logs → hotfix → deploy lại, không có shortcut nào khác.
+

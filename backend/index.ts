@@ -121,9 +121,9 @@ function startHttpServer() {
     // eslint-disable-next-line no-console
     console.log('========================================');
     // eslint-disable-next-line no-console
-    console.log(`Backend: http://${HOST}:${PORT}`);
+    console.log(`Backend: http://localhost:${PORT}`);
     // eslint-disable-next-line no-console
-    console.log(`Health:  http://${HOST}:${PORT}/api/health`);
+    console.log(`Health:  http://localhost:${PORT}/api/health`);
     // eslint-disable-next-line no-console
     console.log('========================================');
   });
@@ -155,9 +155,9 @@ function startHttpsServer() {
       // eslint-disable-next-line no-console
       console.log('========================================');
       // eslint-disable-next-line no-console
-      console.log(`Backend: https://${HOST}:${HTTPS_PORT}`);
+      console.log(`Backend: https://localhost:${HTTPS_PORT}`);
       // eslint-disable-next-line no-console
-      console.log(`Health:  https://${HOST}:${HTTPS_PORT}/api/health`);
+      console.log(`Health:  https://localhost:${HTTPS_PORT}/api/health`);
       // eslint-disable-next-line no-console
       console.log('========================================');
       resolve();
