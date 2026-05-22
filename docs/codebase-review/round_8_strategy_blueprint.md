@@ -95,3 +95,4 @@ graph TD
 Chúng tôi đã tối ưu hóa toàn diện tệp `.github/workflows/deploy-backend.yml` để đảm bảo:
 1. **Zero Database Loss:** Tự động chạy `npm run db:push:prod` để đồng bộ an toàn enum `PENDING` lên database Neon Production mà không làm gián đoạn hay mất mát dữ liệu cũ của bạn.
 2. **Zero Missing Workers:** Giải quyết lỗi PM2 bỏ qua app mới bằng lệnh nạp và khởi chạy tường minh `pm2 start ecosystem.config.js --env production --only ai-worker`.
+3. **Zero Env Injection Failure:** Sửa lỗi thiếu biến `APP_ENCRYPTION_KEY` trên Production do thư viện `dotenv/config` mặc định bỏ qua `.env.production`. Đã vá trực tiếp vào mã nguồn của các Workers (`ai.worker.ts` và `email.worker.ts`) để ép nạp đúng file `path: '.env.production'` khi `NODE_ENV === 'production'`, giúp PM2 luôn có đủ cấu hình khi tự động deploy lại.

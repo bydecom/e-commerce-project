@@ -687,5 +687,6 @@ process.on('uncaughtException', ...);
 > > - **PM2 Ecosystem:** Cấu hình thêm app `ai-worker` chạy ở chế độ `fork` để tránh tranh chấp concurrency.
 > > - **Vá bẫy PM2 Restart:** Sửa đổi file deploy workflow để gọi `pm2 start ... --only ai-worker` riêng biệt, tránh việc `pm2 reload` bỏ sót ứng dụng mới chưa từng khởi chạy.
 > > - **Tự động đồng bộ Database:** Tích hợp bước tự động chạy `npm run db:push:prod` trên EC2 để đồng bộ cấu trúc mới (`PENDING` enum) lên DB Neon Production một cách an toàn mà không làm mất mát hay ảnh hưởng đến bất kỳ dữ liệu cũ nào của bạn.
+> > - **Vá bẫy PM2 Env Injection:** Khi các Worker chạy tách biệt khỏi API, lệnh `import 'dotenv/config'` sẽ chỉ đọc file `.env` mặc định, dẫn tới việc rớt các biến cấu hình quan trọng (như `APP_ENCRYPTION_KEY`) trên EC2. Đã khắc phục triệt để bằng cách cấu hình nạp động `dotenv.config({ path: '.env.production' })` trực tiếp trong `ai.worker.ts` và `email.worker.ts`.
 > >
 > > **Kết luận:** Round 8 đã khép lại thắng lợi rực rỡ trên cả 3 Hướng! Hệ thống e-commerce giờ đây không chỉ bảo mật, an toàn về dòng tiền giao dịch thật, bảo vệ tốt túi tiền API AI mà còn sở hữu một kiến trúc bất đồng bộ hiện đại, hiệu năng cực cao và sẵn sàng scale lớn!

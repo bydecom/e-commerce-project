@@ -1,4 +1,12 @@
-import 'dotenv/config';
+import * as dotenv from 'dotenv';
+import * as fs from 'fs';
+
+// Tự động load .env.production trên EC2, còn chạy local thì load .env bình thường
+if (process.env.NODE_ENV === 'production' && fs.existsSync('.env.production')) {
+  dotenv.config({ path: '.env.production' });
+} else {
+  dotenv.config(); // fallback local
+}
 import { connect, type Channel, type ChannelModel } from 'amqplib';
 import { prisma } from '../db';
 import { initQdrant, upsertProductVector } from '../modules/ai/ai.service';
