@@ -44,10 +44,10 @@ app.use(helmet());
 
 // 1. Khai báo danh sách các domain được phép gọi vào API
 const allowedOrigins = [
-  'https://d7ozoo9vtkn42.cloudfront.net', // Link Production (CloudFront)
+  process.env.CLIENT_URL ? process.env.CLIENT_URL.trim().replace(/\/$/, '') : null, // Link Production (CloudFront, strip trailing slash)
   'http://localhost:4200',               // Link Local (Angular)
   'http://localhost:3000'                // Đôi khi cần cho Swagger/Postman
-];
+].filter(Boolean);
 
 // 2. Kích hoạt Middleware CORS
 app.use(cors({

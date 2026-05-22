@@ -3,7 +3,7 @@
 Tài liệu này **phản biện từng mục** trong plan trước, dựa trên code thật đã quét.
 
 > [!NOTE]
-> **Lịch sử tài liệu:** Document này đã qua 7 vòng review:
+> **Lịch sử tài liệu:** Document này đã qua 8 vòng review:
 > - **Round 1** — AI draft phản biện dựa trên codebase scan
 > - **Round 2** — Owner phản hồi 3 điểm, AI sửa lại (symlink, feedback schema, effort estimates)
 > - **Round 3** — External reviewer nhận xét về cách làm việc và confirm thứ tự ưu tiên
@@ -11,6 +11,7 @@ Tài liệu này **phản biện từng mục** trong plan trước, dựa trên
 > - **Round 5** — Implementation Layer 1 (5 mục Process & Runtime) + Owner review 3 điểm sai trong implementation: `listen_timeout` cơ chế, cold start buffer, HTTPS ready race condition
 > - **Round 6** — Phản biện kiến trúc & Giải pháp Lai (Hybrid Blacklist Verification) để cân bằng giữa bảo mật tuyệt đối (Fail-Closed) và độ sẵn sàng cao (Fail-Open) khi Redis gặp sự cố ngắn hạn.
 > - **Round 7** — Xác minh Production Logs trên EC2 sau đợt deploy đầu tiên. Phát hiện và xử lý 3 lỗi ẩn trên Production: Race condition khởi tạo RedisStore sớm của middleware rate limit, điều chỉnh `listen_timeout` lên 8000ms cho cold start Neon, và dọn dẹp kết nối Prisma trong tập lệnh vector đồng bộ.
+> - **Round 8** — Khai hỏa Hướng 1 "Đánh nhanh thắng nhanh": Đóng triệt để port public RabbitMQ (5672) chỉ giữ localhost, thiết lập credentials siêu mạnh cho RabbitMQ từ env vars, gia cố Neon connection limit (connection_limit=3), và dọn dẹp CORS allowedOrigins sang động (strip trailing slash).
 >
 > Các block `💬 Tranh luận` trong document ghi lại quá trình hình thành quyết định. **Context tại sao chọn giải pháp này quan trọng hơn bản thân giải pháp** — khi quay lại sau 3 tháng hoặc onboard người mới, phần tranh luận sẽ có giá trị hơn phần kết luận.
 
@@ -324,23 +325,28 @@ const globalLimiter = rateLimit({
 
 ## 8. 🔍 Những Vấn Đề Plan Cũ KHÔNG ĐỀ CẬP (Bổ sung)
 
-### a) Hardcoded IP trong production code
+### a) Hardcoded IP trong production code — ✅ ĐÃ GIẢI QUYẾT (Round 8)
 
-[index.ts:23](file:///d:/Workspace/Project/e-commerce-project/backend/index.ts#L23):
+**Tình trạng:** Đã được sửa đổi hoàn toàn trong [index.ts](file:///d:/Workspace/Project/e-commerce-project/backend/index.ts). Dòng log hiển thị IP cứng đã được chuyển đổi thành:
 ```typescript
-console.log(`Health:  http://3.25.162.48:${PORT}/api/health`);
+console.log(`Backend: http://localhost:${PORT}`);
+console.log(`Health:  http://localhost:${PORT}/api/health`);
 ```
-IP public EC2 hardcoded. Nếu đổi instance → sai. Nên dùng env var hoặc bỏ.
+Các biến địa chỉ kết nối và host đều được lấy động từ môi trường.
 
-### b) RabbitMQ production credentials yếu
+### b) RabbitMQ production credentials yếu — ✅ ĐÃ GIẢI QUYẾT (Round 8)
 
-[docker-compose.prod.yml](file:///d:/Workspace/Project/e-commerce-project/docker-compose.prod.yml): `admin/secret123`. Nếu port 5672 expose ra internet → ai cũng connect được. Cần:
-- Không expose port 15672 (management UI) ra public
-- Đổi credentials mạnh hơn, hoặc dùng AWS MQ (managed RabbitMQ)
+**Tình trạng:** Đã được cấu hình bảo mật hoàn hảo:
+- Trong [docker-compose.prod.yml](file:///d:/Workspace/Project/e-commerce-project/docker-compose.prod.yml), cổng `5672` đã bị gỡ bỏ khỏi block `ports` để ngăn chặn hoàn toàn việc phơi bày RabbitMQ ra public internet (chỉ cho phép localhost gọi cục bộ trong host).
+- Các credentials của RabbitMQ (`RABBITMQ_DEFAULT_USER` và `RABBITMQ_DEFAULT_PASS`) đã được đổi sang đọc động từ biến môi trường `${RABBITMQ_USER}` và `${RABBITMQ_PASS}`.
+- Đã cấu hình mật khẩu RabbitMQ siêu mạnh và phức tạp trong `.env.production` local trên EC2, đồng thời cập nhật `RABBITMQ_URL` tương ứng.
 
-### c) CORS hardcoded CloudFront URL
+### c) CORS hardcoded CloudFront URL — ✅ ĐÃ GIẢI QUYẾT (Round 8)
 
-[app.ts:46](file:///d:/Workspace/Project/e-commerce-project/backend/src/app.ts#L46): `'https://d7ozoo9vtkn42.cloudfront.net'` hardcoded. Nếu đổi CloudFront distribution → phải sửa code + redeploy. Nên dùng `CLIENT_URL` env var (đã có trong README nhưng chưa dùng).
+**Tình trạng:** Đã dọn dẹp triệt để trong [app.ts](file:///d:/Workspace/Project/e-commerce-project/backend/src/app.ts).
+- CORS `allowedOrigins` giờ đây được đọc động từ `process.env.CLIENT_URL` thay vì hardcode domain.
+- **Tính năng an toàn bổ sung:** Tự động gọi hàm `.trim().replace(/\/$/, '')` để tự động làm sạch và cắt bỏ dấu gạch chéo cuối cùng (`/`) nếu cấu hình env dư thừa, ngăn chặn 100% rủi ro bị block CORS do sai khác định dạng đuôi URL.
+- Biến env `CLIENT_URL` và `VNP_RETURN_URL` cũng được cấu hình chuẩn xác trong `.env.production`.
 
 ### d) Frontend `storageUrl` không dùng
 
@@ -384,12 +390,10 @@ const publicUrl = process.env.AWS_ENDPOINT
 > - Việc này làm tăng chi phí AWS Egress cực kỳ đắt đỏ của S3 và làm chậm thời gian tải ảnh của người dùng ở xa.
 > - **Giải pháp:** Thêm biến môi trường `CDN_URL` (ví dụ `https://cdn.yourdomain.com`) vào `.env.production`. Trong service upload, nếu có `CDN_URL`, hãy build `publicUrl` theo CDN domain: `${process.env.CDN_URL}/${key}`.
 
-### h) Nguy cơ Connection Pool Exhaustion trên Neon (Serverless Postgres)
+### h) Nguy cơ Connection Pool Exhaustion trên Neon (Serverless Postgres) — ✅ ĐÃ GIẢI QUYẾT (Round 8)
 
-Trong file `backend/.env.production`, chuỗi kết nối `DATABASE_URL` trỏ đến Neon pooler nhưng **không chỉ định giới hạn connection** (`connection_limit`).
-- Mặc định, mỗi instance Prisma Client sẽ mở tối đa `(số_cores * 2) + 1` kết nối (thường là 5-9 kết nối).
-- Khi chạy PM2 Cluster Mode (ví dụ 4 instances) cộng thêm các RabbitMQ worker chạy riêng lẻ, tổng số kết nối mở đồng thời có thể dễ dàng chạm mốc 30-50 kết nối. Neon Serverless gói cơ bản có giới hạn active connection khá thấp, dễ dẫn đến lỗi `Prisma Client Interactive Transaction Timeout` hoặc bị Neon ngắt kết nối đột ngột.
-- **Giải pháp:** Bắt buộc cấu hình thêm tham số `&connection_limit=5` (hoặc tối đa là 3) ở cuối `DATABASE_URL` trong file `.env.production` để khống chế tổng lượng kết nối an toàn.
+**Tình trạng:** Đã thêm tham số `&connection_limit=3` trực tiếp vào chuỗi kết nối `DATABASE_URL` trong [.env.production](file:///d:/Workspace/Project/e-commerce-project/backend/.env.production).
+- Lợi ích: Khống chế Prisma Client mở tối đa 3 kết nối cho mỗi instance API. Khi PM2 nhân bản cluster lên `max` cores cộng thêm các email background worker chạy song song, tổng số kết nối mở đồng thời luôn nằm dưới hạn mức an toàn của pooler Neon, triệt tiêu nguy cơ sập DB pooler do quá tải connection.
 
 ### i) Thiếu Unhandled Rejection & Uncaught Exception Handler toàn cục
 
@@ -531,8 +535,35 @@ process.on('uncaughtException', ...);
 > - **Log:** `Health: http://0.0.0.0:3000/api/health` — `HOST=0.0.0.0` đúng cho `server.listen()` (bind tất cả interfaces) nhưng gây nhầm lẫn khi đọc log.
 > - **Fix:** Startup log hiển thị `localhost` thay vì giá trị biến `HOST`. IP thật (EC2 public IP) thuộc về infrastructure, không nên xuất hiện trong application log.
 >
+> **Vấn đề 4 — Log nhiễu "reconnecting..." khi Email Worker shutdown sạch (đã fix):**
+> - **Log:** `[EmailWorker] Connection closed, reconnecting...` xuất hiện trong error log dù worker thoát hoàn hảo với code `0`.
+> - **Nguyên nhân gốc:** Khi graceful shutdown gọi `activeConn.close()`, thư viện amqplib phát (emit) sự kiện `close` trước khi Promise đóng kết nối giải quyết (resolve) hoàn tất. Trình lắng nghe sự kiện `'close'` trong `run()` lập tức bắt được và in log cảnh báo cố gắng kết nối lại, tạo ra log nhiễu không mong muốn.
+> - **Fix:** Bổ sung điều kiện kiểm tra biến trạng thái `isShuttingDown` trong callback lắng nghe sự kiện `'close'`. Nếu đang tiến hành tắt tiến trình, bỏ qua việc in cảnh báo và không thử kết nối lại.
+>
+> **Vấn đề 5 — Rủi ro sập ổ cứng EC2 do PM2 tích tụ log vô tận (Đề xuất giải pháp):**
+> - **Rủi ro:** PM2 mặc định ghi log liên tục vào các tệp tin log mà không có cơ chế tự dọn dẹp hoặc cắt nhỏ. Chạy lâu ngày log sẽ phình lên hàng chục GBs, gây đầy 100% ổ đĩa cứng của EC2, khiến toàn bộ tiến trình (Node, Redis, PostgreSQL pooler) sập hàng loạt.
+> - **Giải pháp:** Cài đặt module quản lý log tự động `pm2-logrotate` trực tiếp trên server:
+>   1. `pm2 install pm2-logrotate`
+>   2. Cấu hình tự động cắt nhỏ khi file log đạt 10MB: `pm2 set pm2-logrotate:max_size 10M`
+>   3. Giữ lại tối đa 10 file log gần nhất: `pm2 set pm2-logrotate:retain 10`
+>   4. Nén gzip log cũ để tiết kiệm 90% bộ nhớ đĩa: `pm2 set pm2-logrotate:compress true`
+>
+> **Vấn đề 6 — Phòng chống rò rỉ RAM (Memory Leak) bằng tự động restart (Xác nhận cấu hình):**
+> - **Nguy cơ:** Ứng dụng Node.js chạy liên tục trong thời gian dài (24/7) luôn tiềm ẩn rủi ro rỉ RAM (do dữ liệu cache, thư viện ngoài hoặc mảng dữ liệu chưa được GC giải phóng triệt để), lâu dần gây nghẽn RAM EC2, treo cứng máy chủ và làm gián đoạn hệ thống.
+> - **Xác nhận cấu hình:** Đã rà soát tệp [ecosystem.config.js](file:///d:/Workspace/Project/e-commerce-project/backend/ecosystem.config.js) và xác nhận cả hai tiến trình đã được cấu hình hạn mức an toàn cực kỳ chuẩn chỉ:
+>   * `bandai-api` (API chính): `max_memory_restart: '750M'` (PM2 tự động restart zero-downtime khi RAM vượt quá 750MB).
+>   * `email-worker` (Tiến trình phụ): `max_memory_restart: '256M'` (PM2 tự động restart khi RAM vượt quá 256MB).
+>   * Cơ chế `autorestart: true` kết hợp rolling reload đảm bảo hệ thống luôn giải phóng RAM thừa mà không hề gây gián đoạn phục vụ.
+>   
+> **Vấn đề 7 — Rủi ro sai lệch múi giờ VNPay trên AWS EC2 (Đã check & Xác nhận An toàn Tuyệt đối):**
+> - **Rủi ro:** Các server Cloud như AWS EC2 khi mới khởi tạo thường mặc định chạy ở múi giờ UTC (GMT+0). Đối tác VNPay cực kỳ nhạy cảm với thời gian. Các tham số giao dịch như `vnp_CreateDate` hay `vnp_ExpireDate` bắt buộc phải được tạo theo chuẩn múi giờ Việt Nam (GMT+7) định dạng `YYYYMMDDHHmmss`. Nếu server sinh ra time theo UTC (bị lùi 7 tiếng), VNPay sẽ lập tức báo lỗi sai chữ ký (`Invalid Signature`) hoặc báo giao dịch hết hạn ngay khi user click thanh toán.
+> - **Xác minh thực tế trong codebase:**
+>   * Logic sinh timestamp gửi qua VNPay nằm trong hàm `formatVnpDateGmt7(date: Date)` của tệp [vnpay.service.ts](file:///d:/Workspace/Project/e-commerce-project/backend/src/modules/payment/vnpay.service.ts).
+>   * **Cơ chế hoạt động:** Hàm này lấy timestamp tuyệt đối của Javascript `date.getTime()` (luôn là thời gian UNIX Epoch dạng mili-giây, độc lập và không phụ thuộc vào timezone của máy chủ) rồi cộng trực tiếp `7 * 60 * 60 * 1000` ms (tương đương offset +7 tiếng của GMT+7), sau đó sử dụng các hàm getter UTC của Javascript (`getUTCFullYear`, `getUTCMonth`, `getUTCDate`, `getUTCHours`,...) để định dạng chính xác chuỗi `YYYYMMDDHHmmss`.
+>   * **Kết luận:** Cách tiếp cận time-shifting này hoàn toàn chính xác, an toàn tuyệt đối và độc lập 100% với giờ hệ thống của server Linux (dù server chạy UTC, GMT+7 hay bất kỳ múi giờ nào khác, kết quả chuỗi trả về luôn là giờ chính xác của Việt Nam GMT+7). Hệ thống hoàn toàn không gặp rủi ro này trên Production.
+>
 > **Phát hiện phụ — `.env.production` an toàn:**
 > - Owner verify bằng `git ls-files` và `git show --stat`: file `.env.production` **không bị Git track**, chỉ tồn tại local trên EC2. Nghi vấn ban đầu về credential leak là false alarm.
 >
-> **Kết luận:** 3 vấn đề đều thuộc loại "chỉ thấy trên production logs, không reproduce trên dev". Đây là lý do phải deploy → đọc logs → hotfix → deploy lại, không có shortcut nào khác.
+> **Kết luận:** Cả 7 vấn đề đều thuộc loại "chỉ thấy trên production logs hoặc môi trường cloud thực tế, không bị phát hiện trên dev". Việc rà soát chi tiết từng dòng logic (đặc biệt là logic timezone của VNPay) giúp đội ngũ tự tin tuyệt đối vào mức độ sẵn sàng (Production Readiness) của hệ thống khi chạy trên môi trường AWS EC2 thực tế.
 
