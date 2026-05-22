@@ -14,9 +14,11 @@ export const getPresignedUploadUrl = async (mimetype: string, extension: string)
 
   const uploadUrl = await getSignedUrl(s3Client, command, { expiresIn: 300 });
 
-  const publicUrl = process.env.AWS_ENDPOINT
-    ? `${process.env.AWS_ENDPOINT}/${BUCKET_NAME}/${key}`
-    : `https://${BUCKET_NAME}.s3.${process.env.AWS_REGION}.amazonaws.com/${key}`;
+  const publicUrl = process.env.CLOUDFRONT_URL
+    ? `${process.env.CLOUDFRONT_URL}/${key}`
+    : process.env.AWS_ENDPOINT
+      ? `${process.env.AWS_ENDPOINT}/${BUCKET_NAME}/${key}`
+      : `https://${BUCKET_NAME}.s3.${process.env.AWS_REGION}.amazonaws.com/${key}`;
 
   return { uploadUrl, publicUrl };
 };
