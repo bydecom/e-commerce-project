@@ -4,6 +4,7 @@ import { ensureRedisConnected, redisClient } from '../../config/redis';
 import { parsePagination } from '../../utils/pagination';
 import { httpError } from '../../utils/http-error';
 import * as aiService from '../ai/ai.service';
+import { publishProductVectorSync } from '../../rabbitmq/publisher';
 import { getConfigInt } from '../system-config/system-config.service';
 
 function toTitleUnaccent(input: string): string {
@@ -118,21 +119,21 @@ export async function listProducts(query: {
 
   const priceFilter: Prisma.FloatFilter | undefined =
     (minPrice !== undefined && !Number.isNaN(minPrice)) ||
-    (maxPrice !== undefined && !Number.isNaN(maxPrice))
+      (maxPrice !== undefined && !Number.isNaN(maxPrice))
       ? {
-          ...(minPrice !== undefined && !Number.isNaN(minPrice) ? { gte: minPrice } : {}),
-          ...(maxPrice !== undefined && !Number.isNaN(maxPrice) ? { lte: maxPrice } : {}),
-        }
+        ...(minPrice !== undefined && !Number.isNaN(minPrice) ? { gte: minPrice } : {}),
+        ...(maxPrice !== undefined && !Number.isNaN(maxPrice) ? { lte: maxPrice } : {}),
+      }
       : undefined;
 
   const where: Prisma.ProductWhereInput = {
     ...(search
       ? {
-          OR: [
-            { name: { contains: search, mode: 'insensitive' } },
-            { title_unaccent: { contains: toTitleUnaccent(search), mode: 'insensitive' } },
-          ],
-        }
+        OR: [
+          { name: { contains: search, mode: 'insensitive' } },
+          { title_unaccent: { contains: toTitleUnaccent(search), mode: 'insensitive' } },
+        ],
+      }
       : {}),
     ...(categoryIds ? { categoryId: { in: categoryIds } } : {}),
     ...(priceFilter ? { price: priceFilter } : {}),
@@ -195,11 +196,11 @@ export async function searchSmartHybridList(query: {
 
   const priceFilter: Prisma.FloatFilter | undefined =
     (minPrice !== undefined && !Number.isNaN(minPrice)) ||
-    (maxPrice !== undefined && !Number.isNaN(maxPrice))
+      (maxPrice !== undefined && !Number.isNaN(maxPrice))
       ? {
-          ...(minPrice !== undefined && !Number.isNaN(minPrice) ? { gte: minPrice } : {}),
-          ...(maxPrice !== undefined && !Number.isNaN(maxPrice) ? { lte: maxPrice } : {}),
-        }
+        ...(minPrice !== undefined && !Number.isNaN(minPrice) ? { gte: minPrice } : {}),
+        ...(maxPrice !== undefined && !Number.isNaN(maxPrice) ? { lte: maxPrice } : {}),
+      }
       : undefined;
 
   const baseWhere: Prisma.ProductWhereInput = {
@@ -467,17 +468,15 @@ export async function createProduct(body: {
 
   // Auto-sync Qdrant when product is AVAILABLE
   if (p.status === 'AVAILABLE') {
-    try {
-      await aiService.initQdrant();
-      await aiService.upsertProductVector({
-        id: p.id,
-        name: p.name,
-        description: p.description,
-        categoryName: p.category?.name ?? null,
-      });
-    } catch (err) {
-      console.error('[Qdrant] Sync on create failed:', err);
-    }
+    await publishProductVectorSync({
+      productId: p.id,
+      name: p.name,
+      description: p.description ?? null,
+      price: p.price,
+      categoryName: p.category?.name ?? null,
+    }).catch((err) => {
+      console.error('[ProductService] Failed to publish vector sync job:', err);
+    });
   }
   return mapProduct(p);
 }
@@ -521,7 +520,7 @@ export async function updateProduct(
     include: { category: { select: { id: true, name: true } } },
   });
 
-    // Auto-sync Qdrant when status changes
+  // Auto-sync Qdrant when status changes
   const prevStatus = existing.status as ProductStatus;
   const nextStatus = p.status as ProductStatus;
 
@@ -532,12 +531,14 @@ export async function updateProduct(
 
   try {
     if (isStatusChangedToAvailable || isUpdatingAvailableVector) {
-      await aiService.initQdrant();
-      await aiService.upsertProductVector({
-        id: p.id,
+      await publishProductVectorSync({
+        productId: p.id,
         name: p.name,
-        description: p.description,
+        description: p.description ?? null,
+        price: p.price,
         categoryName: p.category?.name ?? null,
+      }).catch((err) => {
+        console.error('[ProductService] Failed to publish vector sync job:', err);
       });
     } else if (prevStatus === 'AVAILABLE' && nextStatus !== 'AVAILABLE') {
       await aiService.deleteProductVector(p.id);
@@ -636,9 +637,9 @@ export async function getLandingPageData(): Promise<{
   const products =
     productIds.length > 0
       ? await prisma.product.findMany({
-          where: { id: { in: productIds }, status: 'AVAILABLE' },
-          select: { id: true, name: true, price: true, imageUrl: true },
-        })
+        where: { id: { in: productIds }, status: 'AVAILABLE' },
+        select: { id: true, name: true, price: true, imageUrl: true },
+      })
       : [];
   const byId = new Map(products.map((p) => [p.id, p]));
 

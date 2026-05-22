@@ -29,6 +29,7 @@ enum PaymentStatus {
 }
 
 enum SentimentLabel {
+  PENDING
   POSITIVE
   NEUTRAL
   NEGATIVE

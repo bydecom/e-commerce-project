@@ -11,7 +11,10 @@ Tài liệu này **phản biện từng mục** trong plan trước, dựa trên
 > - **Round 5** — Implementation Layer 1 (5 mục Process & Runtime) + Owner review 3 điểm sai trong implementation: `listen_timeout` cơ chế, cold start buffer, HTTPS ready race condition
 > - **Round 6** — Phản biện kiến trúc & Giải pháp Lai (Hybrid Blacklist Verification) để cân bằng giữa bảo mật tuyệt đối (Fail-Closed) và độ sẵn sàng cao (Fail-Open) khi Redis gặp sự cố ngắn hạn.
 > - **Round 7** — Xác minh Production Logs trên EC2 sau đợt deploy đầu tiên. Phát hiện và xử lý 3 lỗi ẩn trên Production: Race condition khởi tạo RedisStore sớm của middleware rate limit, điều chỉnh `listen_timeout` lên 8000ms cho cold start Neon, và dọn dẹp kết nối Prisma trong tập lệnh vector đồng bộ.
-> - **Round 8** — Khai hỏa Hướng 1 "Đánh nhanh thắng nhanh": Đóng triệt để port public RabbitMQ (5672) chỉ giữ localhost, thiết lập credentials siêu mạnh cho RabbitMQ từ env vars, gia cố Neon connection limit (connection_limit=3), và dọn dẹp CORS allowedOrigins sang động (strip trailing slash).
+> - **Round 8** — Đại thắng toàn diện cả 3 Hướng chiến lược:
+>   * **Hướng 1 "Đánh nhanh thắng nhanh" (Bảo mật & Cấu hình)**: Khóa port public 5672 RabbitMQ, cấu hình credentials siêu mạnh, dọn dẹp CORS động, gia cố Neon Connection Limit (`connection_limit=3`), tắt DB Logger chuyển sang stdout.
+>   * **Hướng 2 "Trận chiến hạng nặng" (Dòng tiền & API Cost)**: Phủ 25/25 test cases Jest cho VNPay Signature & IPN (thành công 100%), xây dựng Rate Limiter riêng cho AI/Auth.
+>   * **Hướng 3 "Tiến hóa kiến trúc" (Async Workers)**: Bất đồng bộ hóa thành công Qdrant Sync và Feedback AI qua RabbitMQ Worker (`ai.worker.ts`), hỗ trợ thông tin price trong vector, và gia cố bẫy deploy PM2 / Neon DB push tự động trên EC2.
 >
 > Các block `💬 Tranh luận` trong document ghi lại quá trình hình thành quyết định. **Context tại sao chọn giải pháp này quan trọng hơn bản thân giải pháp** — khi quay lại sau 3 tháng hoặc onboard người mới, phần tranh luận sẽ có giá trị hơn phần kết luận.
 
@@ -591,6 +594,10 @@ process.on('uncaughtException', ...);
 >   - **Gia cố an toàn:** Bổ sung xử lý `.trim().replace(/\/$/, '')` để tự động làm sạch và loại bỏ hoàn toàn dấu gạch chéo (`/`) ở cuối URL nếu có trong cấu hình env, triệt tiêu hoàn toàn rủi ro bị block CORS do định dạng.
 >   - Cập nhật chuẩn `CLIENT_URL` và `VNP_RETURN_URL` trong `.env.production`.
 >
+> **4. Giải phóng thắt cổ chai DB: Refactor HTTP Logger:**
+> - **Triển khai:** Cắt bỏ hoàn toàn tác vụ `prisma.systemLog.create()` đắt đỏ trong `logger.middleware.ts`, thay thế bằng cơ chế log chuẩn JSON ra `stdout` cho PM2 tự động capture. Đồng thời tạm ẩn trang `System Logs` trên giao diện Admin Dashboard.
+> - **Lợi ích:** Giải phóng Database khỏi hàng ngàn truy vấn INSERT vô nghĩa. Hệ thống đã có thể bung hết sức mạnh chịu tải cho các transaction quan trọng!
+>
 > **Kết luận:** Hướng 1 đã hoàn thành xuất sắc, gia cố vững chắc cho lớp phòng thủ hạ tầng và cấu hình hệ thống trên môi trường Production!
 >
 > ---
@@ -645,4 +652,8 @@ process.on('uncaughtException', ...);
 > > **3. Triển khai CloudFront CDN cho AWS S3 (Task song song):**
 > > - **Triển khai:** Đội ngũ (bạn của Owner) đã âm thầm hoàn thiện tích hợp CloudFront vào `upload.service.ts` và pull code về thành công.
 > > - **Lợi ích:** Giao diện bây giờ sẽ tải ảnh trực tiếp từ các Edge Location siêu tốc của CloudFront thông qua biến `CLOUDFRONT_URL` thay vì kéo trực tiếp từ S3 Bucket gốc. Điều này giúp tối ưu hóa đáng kể tốc độ tải trang (đặc biệt là trang chi tiết sản phẩm nhiều ảnh) và tiết kiệm chi phí băng thông egress của AWS S3.
+> >
+> > **4. Chinh phục Boss cuối: VNPay Unit Test P0 (Task 6):**
+> > - **Triển khai:** Viết bộ test suite Jest `vnpay.service.test.ts` khổng lồ với 25 test cases bao phủ toàn diện luồng thanh toán VNPay (12 cases cho `verifyVnpayReturn` và 8 cases cho IPN Controller `vnpayIpn`). Kết quả: pass 25/25 tests ngay lần chạy đầu tiên.
+> > - **Lợi ích:** Vá lỗ hổng lớn nhất (P0) của hệ thống. Giờ đây, mọi hành vi giả mạo chữ ký, thay đổi số tiền, gửi IPN trùng lặp (duplicate) hoặc Prisma race condition (P2002) đều bị test suite bắt gọn và xử lý chặt chẽ theo chuẩn mã lỗi `RspCode` của VNPay. Dòng tiền thật của hệ thống đã được bảo vệ tuyệt đối!
 

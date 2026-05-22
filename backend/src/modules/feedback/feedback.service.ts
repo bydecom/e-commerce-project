@@ -2,8 +2,7 @@ import type { ActionPlanStatus, Prisma, SentimentLabel } from '@prisma/client';
 import { prisma } from '../../db';
 import { parsePagination } from '../../utils/pagination';
 import { httpError } from '../../utils/http-error';
-import { analyzeFeedback } from '../ai/feedback/feedback-analyzer';
-
+import { publishFeedbackAnalyze } from '../../rabbitmq/publisher';
 const actionPlanInclude = {
   assignee: { select: { id: true, name: true } },
 } as const;
@@ -90,13 +89,13 @@ export async function listAdminFeedbacks(query: {
     ...(typeId ? { typeId } : {}),
     ...(search
       ? {
-          OR: [
-            { user: { is: { email: { contains: search, mode: 'insensitive' } } } },
-            { user: { is: { name: { contains: search, mode: 'insensitive' } } } },
-            { product: { is: { name: { contains: search, mode: 'insensitive' } } } },
-            { comment: { contains: search, mode: 'insensitive' } },
-          ],
-        }
+        OR: [
+          { user: { is: { email: { contains: search, mode: 'insensitive' } } } },
+          { user: { is: { name: { contains: search, mode: 'insensitive' } } } },
+          { product: { is: { name: { contains: search, mode: 'insensitive' } } } },
+          { comment: { contains: search, mode: 'insensitive' } },
+        ],
+      }
       : {}),
   };
 
@@ -188,12 +187,9 @@ export async function createFeedback(data: {
     }
   }
 
-  const analysis = comment?.trim()
-    ? await analyzeFeedback(comment.trim())
-    : { resolvedTypeId: null, sentiment: 'NEUTRAL' as const, suggestedActionPlans: [] };
-
-  let finalTypeId = analysis.resolvedTypeId ?? typeId;
-
+  // Resolve typeId mặc định nếu không truyền vào
+  // (AI worker sẽ update lại sau khi phân tích xong)
+  let finalTypeId = typeId;
   if (!finalTypeId) {
     const unknownType = await prisma.feedbackType.findFirst({
       where: { name: 'Unknown', isActive: true },
@@ -202,6 +198,8 @@ export async function createFeedback(data: {
     finalTypeId = unknownType.id;
   }
 
+  // Tạo feedback ngay với sentiment = PENDING
+  // AI worker sẽ analyze và UPDATE sau
   const created = await prisma.feedback.create({
     data: {
       userId,
@@ -210,18 +208,7 @@ export async function createFeedback(data: {
       typeId: finalTypeId,
       rating,
       comment: comment?.trim() ?? null,
-      sentiment: analysis.sentiment,
-      ...(analysis.suggestedActionPlans.length > 0
-        ? {
-            actionPlans: {
-              create: analysis.suggestedActionPlans.map((plan) => ({
-                title: plan.title,
-                description: plan.description,
-                status: 'PENDING' as const,
-              })),
-            },
-          }
-        : {}),
+      sentiment: 'PENDING', // ← thay vì chờ Gemini
     },
     include: {
       type: { select: { id: true, name: true } },
@@ -230,6 +217,24 @@ export async function createFeedback(data: {
       actionPlans: true,
     },
   });
+
+  // Publish async job nếu có comment cần analyze
+  if (comment?.trim()) {
+    await publishFeedbackAnalyze({
+      feedbackId: created.id,
+      comment: comment.trim(),
+    }).catch((err) => {
+      // Không throw — feedback đã tạo thành công
+      // Worker sẽ không chạy nhưng feedback vẫn lưu được
+      console.error('[FeedbackService] Failed to publish feedback analyze job:', err);
+    });
+  } else {
+    // Không có comment → không cần AI → set NEUTRAL ngay
+    await prisma.feedback.update({
+      where: { id: created.id },
+      data: { sentiment: 'NEUTRAL' },
+    }).catch(() => undefined);
+  }
 
   return created;
 }

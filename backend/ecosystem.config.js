@@ -61,6 +61,18 @@ module.exports = {
       env_production: {
         NODE_ENV: 'production'
       }
+    },
+    {
+      name: 'ai-worker',
+      script: './dist/src/workers/ai.worker.js',
+      instances: 1,           // fork mode — 1 instance duy nhất, tránh duplicate job
+      exec_mode: 'fork',
+      node_args: '--dns-result-order=ipv4first',
+      autorestart: true,
+      max_memory_restart: '256M',
+      env_production: {
+        NODE_ENV: 'production',
+      },
     }
   ]
 };

@@ -1,5 +1,7 @@
 import { publishEvent } from '../config/rabbitmq';
-import { EmailEvent, EXCHANGE } from './events.enum';
+import { EmailEvent, EXCHANGE, AiEvent, EXCHANGE_AI } from './events.enum';
+
+// ── Email Payloads ─────────────────────────────────────────────
 
 export type VerifyEmailPayload = {
   to: string;
@@ -49,6 +51,23 @@ export type OrderStatusEmailPayload = {
   shopName: string;
 };
 
+// ── AI Payloads ────────────────────────────────────────────────
+
+export type ProductVectorSyncPayload = {
+  productId: number;
+  name: string;
+  description: string | null;
+  price: number;
+  categoryName: string | null;
+};
+
+export type FeedbackAnalyzePayload = {
+  feedbackId: number;
+  comment: string;
+};
+
+// ── Email Publishers ───────────────────────────────────────────
+
 export async function publishVerifyEmail(payload: VerifyEmailPayload): Promise<void> {
   await publishEvent({ exchange: EXCHANGE, routingKey: EmailEvent.AUTH_VERIFY, payload });
 }
@@ -71,4 +90,14 @@ export async function publishOrderCompletedEmail(payload: OrderCompletedEmailPay
 
 export async function publishOrderStatusEmail(payload: OrderStatusEmailPayload): Promise<void> {
   await publishEvent({ exchange: EXCHANGE, routingKey: EmailEvent.ORDER_STATUS_CHANGED, payload });
+}
+
+// ── AI Publishers ──────────────────────────────────────────────
+
+export async function publishProductVectorSync(payload: ProductVectorSyncPayload): Promise<void> {
+  await publishEvent({ exchange: EXCHANGE_AI, routingKey: AiEvent.PRODUCT_VECTOR_SYNC, payload });
+}
+
+export async function publishFeedbackAnalyze(payload: FeedbackAnalyzePayload): Promise<void> {
+  await publishEvent({ exchange: EXCHANGE_AI, routingKey: AiEvent.FEEDBACK_ANALYZE, payload });
 }
