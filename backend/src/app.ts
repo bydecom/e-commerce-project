@@ -117,6 +117,40 @@ const globalLimiter = rateLimit({
     message: 'System is busy. Please try again later.',
   },
 });
+
+const aiRateLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes window
+  max: process.env.NODE_ENV === 'production' ? 10 : 100, // Max 10 requests per 15 minutes per IP
+  standardHeaders: true,
+  legacyHeaders: false,
+  store: createRateLimitStore(),
+  skip: (req) => {
+    if (process.env.NODE_ENV !== 'production') return true;
+    const ip = req.ip || req.socket.remoteAddress || '';
+    return ip === '::1' || ip === '127.0.0.1' || ip === '::ffff:127.0.0.1';
+  },
+  message: {
+    success: false,
+    message: 'Too many AI requests. Please wait a moment before trying again.',
+  },
+});
+
+const authRateLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes window
+  max: process.env.NODE_ENV === 'production' ? 20 : 100, // Max 20 authentication attempts per 15 mins
+  standardHeaders: true,
+  legacyHeaders: false,
+  store: createRateLimitStore(),
+  skip: (req) => {
+    if (process.env.NODE_ENV !== 'production') return true;
+    const ip = req.ip || req.socket.remoteAddress || '';
+    return ip === '::1' || ip === '127.0.0.1' || ip === '::ffff:127.0.0.1';
+  },
+  message: {
+    success: false,
+    message: 'Too many authentication attempts. Please try again later.',
+  },
+});
 app.use('/api', globalLimiter);
 
 app.use(express.json());
@@ -171,7 +205,7 @@ app.get('/api/health', async (_req: Request, res: Response) => {
   }
 });
 
-app.use('/api/auth', authRouter);
+app.use('/api/auth', authRateLimiter, authRouter);
 app.use('/api/users', userRouter);
 app.use('/api/products', productRouter);
 app.use('/api/categories', categoryRouter);
@@ -179,7 +213,7 @@ app.use('/api/orders', orderRouter);
 app.use('/api/feedbacks', feedbackRouter);
 app.use('/api/feedback-types', feedbackTypeRouter);
 app.use('/api/dashboard', dashboardRouter);
-app.use('/api/ai', aiRouter);
+app.use('/api/ai', aiRateLimiter, aiRouter);
 app.use('/api/store-settings', storeSettingRoute);
 app.use('/api/system-config', systemConfigRouter);
 app.use('/api/system-logs', systemLogRouter);

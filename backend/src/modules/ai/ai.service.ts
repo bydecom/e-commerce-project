@@ -62,11 +62,13 @@ export async function upsertProductVector(product: {
   id: number;
   name: string;
   description: string | null;
+  price?: number;
   categoryName?: string | null;
 }): Promise<void> {
   const text = [
     product.name,
     product.categoryName ? `Category: ${product.categoryName}` : null,
+    product.price !== undefined ? `Price: $${product.price}` : null,
     product.description,
   ]
     .filter(Boolean)

@@ -48,8 +48,16 @@ jobs:
           script: |
             cd ~/app/e-commerce-project/backend
             npm install --production
+            
+            # 1. Cập nhật schema database Neon Production an toàn (Thêm PENDING enum)
+            npm run db:push:prod
+            
+            # 2. Tạo lại Prisma Client trên EC2
             npx prisma generate
-            pm2 reload ecosystem.config.js --env production || pm2 start ecosystem.config.js --env production
+            
+            # 3. Reload các app cũ (zero-downtime) & Đảm bảo khởi động ai-worker mới
+            pm2 reload ecosystem.config.js --env production
+            pm2 start ecosystem.config.js --env production --only ai-worker
             pm2 save
 
       - name: 🏥 Smoke Test (Check BE Health)
