@@ -592,4 +592,57 @@ process.on('uncaughtException', ...);
 >   - Cập nhật chuẩn `CLIENT_URL` và `VNP_RETURN_URL` trong `.env.production`.
 >
 > **Kết luận:** Hướng 1 đã hoàn thành xuất sắc, gia cố vững chắc cho lớp phòng thủ hạ tầng và cấu hình hệ thống trên môi trường Production!
+>
+> ---
+>
+> > [!WARNING]
+> > ### 🚨 Cập nhật Sự cố & Bài học xương máu từ Thực tế Production (Trận chiến Live Hotfix)
+> > Ngay sau khi deploy cấu hình mới lên server AWS EC2, hệ thống đã va chạm thực tế và xuất hiện 3 lỗi vận hành đặc thù cực kỳ giá trị. Owner đã chiến đấu kiên cường và xử lý triệt để trực tiếp trên Production:
+> >
+> > **1. RabbitMQ 403 (ACCESS-REFUSED) trên môi trường Bare-Metal:**
+> > - **Bối cảnh & Lỗi:** Tiến trình `email-worker` và `bandai-api` quăng lỗi sập kết nối liên tục: `ACCESS_REFUSED - Login was refused using authentication mechanism PLAIN...`
+> > - **Phát hiện thú vị:** Con EC2 Production thực tế **chưa hề cài đặt Docker**! Các file `docker-compose.prod.yml` chỉ nằm im làm cảnh, còn RabbitMQ thực tế đang chạy trực tiếp (bare-metal) trên OS Ubuntu của EC2 từ các đợt cấu hình thủ công xa xưa. Do đó, các config mật khẩu mới trong docker compose hoàn toàn vô tác dụng, và hệ thống đang chạy với database credentials mặc định hoặc cũ.
+> > - **Giải quyết:** Owner đã trực tiếp chạy các dòng lệnh bare-metal của hệ quản trị RabbitMQ để khai báo user bảo mật mới:
+> >   ```bash
+> >   sudo rabbitmqctl add_user bandai_admin 'MotMatKhauSieuDaiVaPhucTapChoRabbitMQ123!'
+> >   sudo rabbitmqctl set_user_tags bandai_admin administrator
+> >   sudo rabbitmqctl set_permissions -p / bandai_admin ".*" ".*" ".*"
+> >   ```
+> >   Đồng thời dọn dẹp các dòng cấu hình credentials mặc định thừa thãi trong file `.env.production` để tránh xung đột.
+> >
+> > **2. Lỗi 500 (Internal Server Error) do tranh chấp DNS IPv6 trên AWS EC2:**
+> > - **Bối cảnh & Lỗi:** Giao diện gọi API lấy danh sách Phường/Xã từ dịch vụ hành chính công `/api/locations/wards/11` bị trả về lỗi 500: `TypeError: fetch failed` từ thư viện `undici` ngầm của Node.js.
+> > - **Nguyên nhân gốc:** Từ Node.js 17+, hàm `fetch` native mặc định sẽ ưu tiên phân giải địa chỉ DNS và kết nối qua ngõ IPv6 trước. Tuy nhiên, các máy ảo AWS EC2 mặc định **chưa được cấu hình định tuyến IPv6 ra ngoài Internet** (chỉ hỗ trợ IPv4). Lệnh `curl` thông minh tự động fallback sang IPv4 nên chạy thông, còn `fetch` của Node.js bị tắc nghẽn và timeout hoàn toàn.
+> > - **Giải quyết:** Thêm đối số chạy Node `node_args: '--dns-result-order=ipv4first'` vào cả hai tiến trình `bandai-api` và `email-worker` trong [ecosystem.config.js](file:///d:/Workspace/Project/e-commerce-project/backend/ecosystem.config.js) để ép Node.js ưu tiên phân giải IPv4 trước, tương tự cơ chế của trình duyệt và lệnh `curl`.
+> >
+> > **3. Lỗi `RABBITMQ_URL is not configured` của Email Worker độc lập:**
+> > - **Bối cảnh & Lỗi:** Con `email-worker` chạy ở chế độ `fork` độc lập không tự nạp được các biến môi trường từ `.env.production` dẫn đến crash liên tục với thông báo biến chưa cấu hình.
+> > - **Giải quyết:** Đồng bộ hóa cách khởi chạy PM2 bằng công cụ `dotenv-cli` có sẵn trong dự án thay vì chạy khỏa thân lệnh PM2:
+> >   ```bash
+> >   pm2 delete all
+> >   npx dotenv-cli -e .env.production -- pm2 start ecosystem.config.js
+> >   ```
+> >   Việc này đảm bảo `dotenv-cli` tự động tiêm đầy đủ 100% các biến môi trường vào global context trước khi PM2 fork/cluster các tiến trình con.
+> >
+> > **Bài học đắt giá:** "Mọi thứ chạy ngon dưới Local chưa chắc đã chạy đúng trên Cloud Production." Sự khác biệt về hạ tầng mạng (IPv6) và phương thức chạy dịch vụ (Docker vs Bare-Metal) là những cạm bẫy kinh điển. Việc ghi chép lại các bước xử lý này giúp hoàn thiện 100% quy trình vận hành Zero-Downtime của dự án!
+>
+> ---
+>
+> > [!IMPORTANT]
+> > ### 💬 Round 8 — Hướng 2 "Trận chiến hạng nặng" (Bảo vệ Túi tiền AI & Xác thực)
+> > **Mục tiêu:** Mở màn Hướng 2 bằng việc vá lỗ hổng lớn nhất của Layer 1: Chặn đứng rủi ro bị hacker spam tốn tiền các API AI (Gemini) và chống Brute-force Login/OTP.
+> >
+> > **Kết quả triển khai:**
+> >
+> > **1. Cắm AI Endpoint Rate Limiter riêng biệt (Task 7):**
+> > - **Triển khai:** Đã viết thêm `aiRateLimiter` cực kỳ khắt khe (chỉ cho phép tối đa 10 requests / 15 phút) trong [app.ts](file:///d:/Workspace/Project/e-commerce-project/backend/src/app.ts) và cắm trực tiếp vào Router `/api/ai`. 
+> > - **Lợi ích:** Hệ thống hiện tại có 4 endpoints gọi AI (phân tích feedback, sinh text, chat, upsert vector) - tất cả đều tiêu tốn tiền thật từ API Gemini. Việc tách riêng Rate Limiter này giúp "bọc thép" túi tiền của hệ thống, loại bỏ hoàn toàn nguy cơ bị bot spam làm cạn kiệt ngân sách API.
+> >
+> > **2. Cắm Auth Rate Limiter chặn Brute-force:**
+> > - **Triển khai:** Thừa thắng xông lên, đội ngũ đã bổ sung luôn `authRateLimiter` (tối đa 20 requests / 15 phút) cho Router `/api/auth`.
+> > - **Lợi ích:** Trực tiếp phòng chống các cuộc tấn công Brute-force dò mật khẩu và spam gửi mã OTP qua email, giảm tải cho Worker gửi mail và Database. Cả hai limiter đều được chia sẻ trạng thái đồng bộ qua RedisStore, tương thích hoàn hảo với PM2 Cluster mode.
+> >
+> > **3. Triển khai CloudFront CDN cho AWS S3 (Task song song):**
+> > - **Triển khai:** Đội ngũ (bạn của Owner) đã âm thầm hoàn thiện tích hợp CloudFront vào `upload.service.ts` và pull code về thành công.
+> > - **Lợi ích:** Giao diện bây giờ sẽ tải ảnh trực tiếp từ các Edge Location siêu tốc của CloudFront thông qua biến `CLOUDFRONT_URL` thay vì kéo trực tiếp từ S3 Bucket gốc. Điều này giúp tối ưu hóa đáng kể tốc độ tải trang (đặc biệt là trang chi tiết sản phẩm nhiều ảnh) và tiết kiệm chi phí băng thông egress của AWS S3.
 

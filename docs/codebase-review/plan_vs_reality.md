@@ -42,12 +42,11 @@
 
 **Thực tế:** [app.ts:77-109](file:///d:/Workspace/Project/e-commerce-project/backend/src/app.ts#L77-L109) — RedisStore cho production, fallback MemoryStore cho dev. Đúng.
 
-**⚠️ Plan bonus chưa làm — endpoint-specific limiters:**
-- Login: chưa có limiter riêng (dùng chung global 150/15m)
-- OTP: chưa có limiter riêng
-- AI endpoints: **không có limiter riêng** → đây là rủi ro thật. Mỗi request AI gọi Gemini API tốn tiền. Hacker spam 150 requests/15 phút × 4 endpoints = có thể gây chi phí đáng kể.
+**✅ Plan bonus đã hoàn thành (Hướng 2):**
+- **Auth Limiters:** Đã tạo `authRateLimiter` riêng (tối đa 20 reqs/15m) cắm vào `/api/auth` để chống brute-force đăng nhập và spam OTP.
+- **AI Limiters:** Đã tạo `aiRateLimiter` siêu chặt (tối đa 10 reqs/15m) cắm vào `/api/ai`. Bảo vệ an toàn tuyệt đối "túi tiền" gọi API Gemini của hệ thống khỏi các cuộc tấn công spam tốn phí.
 
-**Verdict:** Core done, nhưng endpoint-specific limiters nên là P1 riêng.
+**Verdict:** Đã hoàn thành xuất sắc 100% Layer 1. Cấu hình bảo mật Rate Limit đã đạt chuẩn Production!
 
 ### 1.5 Cleanup Loop Distributed Lock — ✅ Đã xong
 
@@ -127,18 +126,11 @@
 
 ## LAYER 4 — STORAGE & CDN
 
-### 4.1 CloudFront CDN cho S3 Images — 🔲 CHƯA LÀM
+### 4.1 CloudFront CDN cho S3 Images — ✅ Đã xong (Round 8)
 
 **Plan nói:** Build `publicUrl` dùng CDN domain thay vì S3 direct.
 
-**Thực tế:** [upload.service.ts:17-19](file:///d:/Workspace/Project/e-commerce-project/backend/src/modules/upload/upload.service.ts#L17-L19) — Vẫn trả S3 direct URL:
-```typescript
-const publicUrl = process.env.AWS_ENDPOINT
-  ? `${process.env.AWS_ENDPOINT}/${BUCKET_NAME}/${key}`
-  : `https://${BUCKET_NAME}.s3.${process.env.AWS_REGION}.amazonaws.com/${key}`;
-```
-
-**Fix đơn giản:** Thêm env var `CDN_URL`, nếu có thì dùng `${CDN_URL}/${key}`, nếu không thì fallback S3. Khoảng 5 dòng code.
+**Thực tế:** [upload.service.ts:17-21](file:///d:/Workspace/Project/e-commerce-project/backend/src/modules/upload/upload.service.ts#L17-L21) — Đã thêm env var `CLOUDFRONT_URL`. Nếu có biến này, hệ thống sẽ ưu tiên trả về URL qua CloudFront Edge Location thay vì truy cập thẳng vào Bucket S3. Điều này giúp tăng tốc độ tải ảnh đáng kể cho người dùng cuối và giảm băng thông S3 gốc. Biến môi trường cũng đã được cung cấp đủ trong `.env.production`.
 
 ### 4.2 S3 Bucket Policy — 🔲 Cần verify
 
@@ -228,7 +220,7 @@ Không thể kiểm tra từ code. Cần SSH vào EC2 hoặc check AWS Console.
 | 1.1 | Graceful shutdown | ✅ Done | ✅ Đúng | Bonus: email worker cũng có |
 | 1.2 | Unhandled rejection | ✅ Done | ✅ Đúng | |
 | 1.3 | PM2 Cluster Mode | ✅ Done | ⚠️ Thiếu | Plan không đề cập `wait_ready` + `process.send('ready')` |
-| 1.4 | Rate Limit Redis | ✅ Done | ⚠️ Thiếu | Chưa có endpoint-specific limiters (AI, login, OTP) |
+| 1.4 | Rate Limit Redis | ✅ Done | ✅ Đúng | Đã bổ sung endpoint-specific limiters (AI, Auth) |
 | 1.5 | Distributed Lock | ✅ Done | ✅ Đúng | |
 | 2.1 | Connection Pool | 🔲 | ✅ Đúng | **Fix ngay: 1 dòng env var.** Đang dùng pooler endpoint nên chưa sập |
 | 2.2 | Bỏ DB Logger | 🔲 | ⚠️ Thiếu | Plan không đề cập ràng buộc Admin Dashboard |
@@ -237,7 +229,7 @@ Không thể kiểm tra từ code. Cần SSH vào EC2 hoặc check AWS Console.
 | 3.2 | Feedback → MQ worker | 🔲 | ⚠️ Exaggerate | Tương tự 3.1 — đã có fallback |
 | 3.3 | VNPay IPN sync | ✅ Đúng | ✅ Đúng | Code match plan 100% |
 | 3.4 | Queue tách biệt | ⚠️ Partial | ✅ Đúng | Có 2 queue, mở rộng khi cần |
-| 4.1 | CDN cho S3 | 🔲 | ✅ Đúng | ~5 dòng code + AWS config |
+| 4.1 | CDN cho S3 | ✅ Done | ✅ Đúng | Đã tích hợp biến CLOUDFRONT_URL |
 | 4.2 | S3 Bucket Policy | 🔲 | ✅ Đúng | Cần check AWS Console |
 | 5.1 | Auto Rollback | ⚠️ Partial | ⚠️ Thiếu | Có smoke test, đã sửa CI sang `pm2 reload` zero-downtime |
 | 5.2 | Env vars | 🔲 | ✅ Đúng | CORS + VNP_RETURN_URL hardcoded |
@@ -280,9 +272,9 @@ Mỗi request AI = 1 Gemini API call = chi phí thực. Global limiter 150/15m l
 | 4 | ~~**Connection limit Neon**~~ | ~~5 phút~~ | ✅ Done (Round 8) |
 | 5 | ~~**CI: `restart` → `reload`**~~ | ~~5 phút~~ | ✅ Done (Đã nâng cấp sang reload zero-downtime) |
 | 6 | **VNPay unit test** | 1.5-2 ngày | 🔴 Tiền thật, không có test |
-| 7 | **AI endpoint rate limiter** | 2 giờ | 🟡 Chống spam tốn tiền Gemini |
+| 7 | ~~**AI endpoint rate limiter**~~ | ~~2 giờ~~ | ✅ Done (Hướng 2) - Đã cắm Rate Limiter riêng cho AI/Auth |
 | 8 | CI auto rollback | 0.5 ngày | 🟡 |
 | 9 | ~~**CORS + env vars**~~ | ~~30 phút~~ | ✅ Done (Round 8) |
-| 10 | CDN cho S3 images | 1 ngày | 🟢 |
+| 10 | ~~CDN cho S3 images~~ | ~~1 ngày~~ | ✅ Done (Round 8) |
 | 11 | Qdrant/Feedback → MQ worker | 2 ngày | 🟢 Latency, không phải correctness |
 | 12 | DB Logger refactor | 1 ngày | 🟢 Technical debt, cần plan cho Admin Dashboard |

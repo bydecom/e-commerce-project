@@ -14,6 +14,7 @@ module.exports = {
       // ───────────────────────────────────────────────────────────────
       instances: 'max',
       exec_mode: 'cluster',
+      node_args: '--dns-result-order=ipv4first',
 
       autorestart: true,
       watch: false,
@@ -51,6 +52,7 @@ module.exports = {
       // They consume from RabbitMQ which already handles concurrency.
       instances: 1,
       exec_mode: 'fork',
+      node_args: '--dns-result-order=ipv4first',
 
       autorestart: true,
       watch: false,
