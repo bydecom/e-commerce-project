@@ -73,13 +73,23 @@ app.use(cors({
 // 4 instances → user can send 150 × 4 = 600 requests. Rate limit becomes meaningless.
 // RedisStore shares a single counter across all cluster instances.
 // In dev/test, fall back to in-memory (no Redis dependency needed for local dev).
+//
+// IMPORTANT: RedisStore calls sendCommand() immediately when rateLimit processes
+// the first request. If Redis isn't connected yet, sendCommand() throws
+// "ClientClosedError". We solve this by ensuring the sendCommand adapter calls
+// ensureRedisConnected() lazily — the first request triggers the connection,
+// and subsequent calls reuse the open client.
 // ─────────────────────────────────────────────────────────────────────────────
 function createRateLimitStore(): RedisStore | undefined {
   if (process.env.NODE_ENV !== 'production') return undefined; // MemoryStore default for dev
   try {
     return new RedisStore({
-      // `sendCommand` is the adapter that rate-limit-redis uses internally
-      sendCommand: (...args: string[]) => redisClient().sendCommand(args),
+      // rate-limit-redis calls sendCommand for every request.
+      // We wrap it to lazily ensure Redis is connected first.
+      sendCommand: async (...args: string[]) => {
+        await ensureRedisConnected();
+        return redisClient().sendCommand(args);
+      },
     });
   } catch (err) {
     // eslint-disable-next-line no-console

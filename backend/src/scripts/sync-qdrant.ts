@@ -68,10 +68,11 @@ if (require.main === module) {
   process.on('SIGINT', () => void shutdown('SIGINT'));
 
   syncPostgresToQdrant()
-    .then(() => process.exit(0))
     .catch((err) => {
       console.error(err);
-      process.exit(1);
+      process.exitCode = 1;
     })
-    .finally(() => prisma.$disconnect());
+    .finally(async () => {
+      await prisma.$disconnect();
+    });
 }

@@ -30,13 +30,14 @@ module.exports = {
       //   is fully initialized (Redis/DB connected, routes mounted).
       // listen_timeout: Max time (ms) PM2 waits for the 'ready' signal.
       //   If the new instance doesn't send it in time, PM2 treats it
-      //   as a failed start. 5s gives enough buffer for cold start on
-      //   EC2 (Neon Serverless Prisma connect ~1-2s + Redis + module load).
-      //   Tune this value based on actual pm2 logs startup time + 50% buffer.
+      //   as a failed start. Production startup measured ~3s, so 8s gives
+      //   enough buffer for Neon cold start spikes (connect ~1-2s) + Redis
+      //   + module load. Tune: check `pm2 logs` for "Ready in Xms", set
+      //   listen_timeout = X * 2.5.
       // In index.ts, server.listen() callback calls process.send?.('ready').
       // ───────────────────────────────────────────────────────────────
       wait_ready: true,
-      listen_timeout: 5000,
+      listen_timeout: 8000,
 
       env_production: {
         NODE_ENV: 'production'
