@@ -483,3 +483,23 @@ process.on('uncaughtException', ...);
 > - **Fix:** Dùng `Promise.all([httpsReady, redirectReady])` rồi mới gọi `process.send('ready')`.
 >
 > **Kết luận:** Cả 3 điểm đều là lỗi "đúng trên dev, sai trên production" — chỉ phát hiện khi hiểu rõ cơ chế bên dưới (PM2 IPC protocol, Neon cold start latency, TCP port binding order). Workflow AI implement → Owner review → fix lại tiếp tục chứng minh hiệu quả.
+
+---
+
+> [!TIP]
+> ### 💬 Round 6 — Phản biện kiến trúc & Giải pháp Lai (Hybrid Blacklist Verification)
+> **Bối cảnh:** AI đề xuất bọc `try/catch` cho `isJwtBlacklisted` để Fail-Open (trả về `false` - cho qua khi Redis down) nhằm bảo vệ High Availability của toàn bộ các API đã xác thực.
+>
+> **Owner phản biện:** Fail-Open hoàn toàn có lỗ hổng bảo mật nghiêm trọng. Nếu Redis down 5 phút, một token đã bị logout hoặc tài khoản bị ban (với thời gian sống còn dài) vẫn có thể gọi API checkout/payment thoải mái trong 5 phút đó. Trái lại, Fail-Closed (trả về `true` - chặn lại) thì làm sập dịch vụ đối với 100% người dùng hợp lệ khi Redis gặp sự cố ngắn hạn. Đây không phải quyết định kỹ thuật thuần túy mà là sự đánh đổi Product (Security vs Availability).
+>
+> **Giải pháp Lai (Hybrid) được thống nhất & triển khai:**
+> - **Cơ chế:** Middleware xác thực truyền trực tiếp `exp` (unix timestamp) có sẵn từ JWT đã giải mã vào `isJwtBlacklisted(jti, exp)` để tối ưu hóa hiệu năng (không decode JWT 2 lần).
+> - **Logic xử lý khi Redis down:**
+>   - **Fail-Closed (`return true`):** Nếu thời gian sống còn lại của token **lớn hơn 5 phút** (`remainingMs > 5 * 60 * 1000`), rủi ro bảo mật cao -> Chặn đứng yêu cầu.
+>   - **Fail-Open (`return false`):** Nếu token gần hết hạn **dưới 5 phút**, rủi ro thấp -> Cho phép đi qua để đảm bảo trải nghiệm khách hàng không bị gián đoạn.
+> - **Các điểm quét & gia cố khác trong đợt quét:**
+>   - **Gemini API:** Ép timeout tối đa 15s (`withTimeout` qua `Promise.race`) để tránh nghẽn thread Node.js khi API ngoài bị treo.
+>   - **VNPay Store:** Xác nhận lưu trữ trạng thái checkout trên Upstash Redis dùng chung (cluster-safe) chứ không dùng Memory Map cục bộ.
+>   - **Script đồng bộ Vector:** Bổ sung graceful connection disconnect cho Prisma khi nhận tín hiệu kết thúc (`SIGTERM`/`SIGINT`).
+>
+> **Kết luận:** Quyết định thiết kế kết hợp hài hòa cả hai yếu tố: Giới hạn tối đa cửa sổ tấn công (Attack Window) dưới 5 phút, đồng thời giữ vững 99.9% tính sẵn sàng của hệ thống cho các phiên hoạt động gần hết hạn.
