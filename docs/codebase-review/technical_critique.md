@@ -3,7 +3,7 @@
 Tài liệu này **phản biện từng mục** trong plan trước, dựa trên code thật đã quét.
 
 > [!NOTE]
-> **Lịch sử tài liệu:** Document này đã qua 8 vòng review:
+> **Lịch sử tài liệu:** Document này đã qua 9 vòng review:
 > - **Round 1** — AI draft phản biện dựa trên codebase scan
 > - **Round 2** — Owner phản hồi 3 điểm, AI sửa lại (symlink, feedback schema, effort estimates)
 > - **Round 3** — External reviewer nhận xét về cách làm việc và confirm thứ tự ưu tiên
@@ -15,6 +15,11 @@ Tài liệu này **phản biện từng mục** trong plan trước, dựa trên
 >   * **Hướng 1 "Đánh nhanh thắng nhanh" (Bảo mật & Cấu hình)**: Khóa port public 5672 RabbitMQ, cấu hình credentials siêu mạnh, dọn dẹp CORS động, gia cố Neon Connection Limit (`connection_limit=3`), tắt DB Logger chuyển sang stdout.
 >   * **Hướng 2 "Trận chiến hạng nặng" (Dòng tiền & API Cost)**: Phủ 25/25 test cases Jest cho VNPay Signature & IPN (thành công 100%), xây dựng Rate Limiter riêng cho AI/Auth.
 >   * **Hướng 3 "Tiến hóa kiến trúc" (Async Workers)**: Bất đồng bộ hóa thành công Qdrant Sync và Feedback AI qua RabbitMQ Worker (`ai.worker.ts`), hỗ trợ thông tin price trong vector, và gia cố bẫy deploy PM2 / Neon DB push tự động trên EC2.
+> - **Round 9** — Điểm chạm hoàn hảo (Edge Cases & Invalidation):
+>   * Giải quyết triệt để lỗi "bóng ma" HTTP 304 Caching bằng cách vô hiệu hóa ETag.
+>   * Sửa lỗi Prisma Required Relation (`{ is: ... }`) và Zod query stripping gây tê liệt tính năng search/filter.
+>   * Thiết lập Event Bus (`orderUpdated$`) tại Frontend giúp Invalidate In-memory Cache thông minh.
+>   * Đồng bộ hóa chặt chẽ Regex E.164 (`^\+?[0-9]{9,15}$`) cho số điện thoại ở Profile User và Hotline Store Settings trên cả BE & FE kèm UI cảnh báo đỏ.
 >
 > Các block `💬 Tranh luận` trong document ghi lại quá trình hình thành quyết định. **Context tại sao chọn giải pháp này quan trọng hơn bản thân giải pháp** — khi quay lại sau 3 tháng hoặc onboard người mới, phần tranh luận sẽ có giá trị hơn phần kết luận.
 
