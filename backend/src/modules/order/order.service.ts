@@ -384,6 +384,9 @@ export async function listAdminOrders(query: {
   status?: string;
   search?: string;
 }) {
+  console.log('[DEBUG] query:', query);
+  console.log('[DEBUG] search param:', query.search);
+
   const { page, limit, offset } = parsePagination({
     page: query.page,
     limit: query.limit ?? '20',
@@ -394,22 +397,25 @@ export async function listAdminOrders(query: {
       : undefined;
 
   const search = typeof query.search === 'string' ? query.search.trim() : '';
+  console.log('[DEBUG] search after parse:', search, '| length:', search.length);
 
   const where: Prisma.OrderWhereInput = {
     ...(statusFilter ? { status: statusFilter } : {}),
-    ...(search
-      ? {
-        user: {
-          is: {
-            OR: [
-              { email: { contains: search, mode: 'insensitive' } },
-              { name: { contains: search, mode: 'insensitive' } },
-            ],
-          },
-        },
-      }
-      : {}),
   };
+
+  if (search) {
+    const searchAsId = parseInt(search, 10);
+    const isValidId = !isNaN(searchAsId) && searchAsId > 0 && String(searchAsId) === search;
+
+    const orConditions: Prisma.OrderWhereInput[] = [
+      { user: { email: { contains: search, mode: 'insensitive' } } },
+      { user: { name: { contains: search, mode: 'insensitive' } } },
+      ...(isValidId ? [{ id: searchAsId }] : []),
+    ];
+
+    // AND đảm bảo status filter không bị override
+    where.AND = [{ OR: orConditions }];
+  }
 
   const [total, rows] = await prisma.$transaction([
     prisma.order.count({ where }),

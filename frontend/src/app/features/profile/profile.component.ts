@@ -231,7 +231,10 @@ interface LocationItem {
                           [class.ring-red-300]="form.controls.phone.invalid && form.controls.phone.touched"
                         />
                         @if (form.controls.phone.touched && form.controls.phone.errors?.['maxlength']) {
-                          <p class="mt-1 text-xs text-red-600">Phone number cannot exceed 30 characters.</p>
+                          <p class="mt-1 text-sm text-red-600">Phone max length is 30 characters</p>
+                        }
+                        @if (form.controls.phone.touched && form.controls.phone.errors?.['pattern']) {
+                          <p class="mt-1 text-sm text-red-600">Invalid phone number format</p>
                         }
                       </div>
                     </div>
@@ -341,7 +344,7 @@ export class ProfileComponent implements OnInit {
 
   readonly form = this.fb.nonNullable.group({
     name: ['', [Validators.maxLength(100)]],
-    phone: ['', [Validators.maxLength(30)]],
+    phone: ['', [Validators.maxLength(30), Validators.pattern(/^\+?[0-9]{9,15}$/)]],
     provinceId: ['', [Validators.required]],
     wardId: [{ value: '', disabled: true }, [Validators.required]],
     streetAddress: ['', [Validators.required, Validators.maxLength(200)]],
@@ -366,26 +369,26 @@ export class ProfileComponent implements OnInit {
     })
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
-      next: ({ me, orders }) => {
-        this.me.set(me);
+        next: ({ me, orders }) => {
+          this.me.set(me);
 
-        const doneOrders = orders.filter((o) => o.status === 'DONE');
-        const processingOrders = orders.filter((o) => o.status !== 'DONE' && o.status !== 'CANCELLED');
-        const totalSpent = doneOrders.reduce((sum, o) => sum + o.total, 0);
+          const doneOrders = orders.filter((o) => o.status === 'DONE');
+          const processingOrders = orders.filter((o) => o.status !== 'DONE' && o.status !== 'CANCELLED');
+          const totalSpent = doneOrders.reduce((sum, o) => sum + o.total, 0);
 
-        this.stats.set({
-          totalOrders: orders.length,
-          totalSpent,
-          processing: processingOrders.length,
-        });
+          this.stats.set({
+            totalOrders: orders.length,
+            totalSpent,
+            processing: processingOrders.length,
+          });
 
-        this.loading.set(false);
-      },
-      error: (e: Error) => {
-        this.loadError.set(e.message || 'Unable to load combined data');
-        this.loading.set(false);
-      },
-    });
+          this.loading.set(false);
+        },
+        error: (e: Error) => {
+          this.loadError.set(e.message || 'Unable to load combined data');
+          this.loading.set(false);
+        },
+      });
   }
 
   private setupCascade(): void {

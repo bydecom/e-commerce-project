@@ -177,21 +177,29 @@ export class AdminOrderListComponent implements OnInit, OnDestroy   {
 
   // ── Pending request ──────────────────────────────────────────────
   private pendingSub: Subscription | null = null;
+  private updateSub: Subscription | null = null;
 
   ngOnInit(): void {
     this.load();
+    // Lắng nghe tín hiệu update từ các Component khác để clear cache ngay lập tức
+    this.updateSub = this.api.orderUpdated$.subscribe(() => {
+      this.cache.clear();
+      this.load();
+    });
   }
 
   ngOnDestroy(): void {
     this.clearDebounce();
     this.clearThrottle();
     this.abortCurrent();
+    this.updateSub?.unsubscribe();
   }
 
   applyFilters(): void {
     this.appliedStatus = this.statusFilter || undefined;
     this.appliedSearch = this.searchQuery.trim() || undefined;
     this.page = 1;
+    this.cache.clear();
     this.throttledLoad();
   }
 

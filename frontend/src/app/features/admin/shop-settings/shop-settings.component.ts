@@ -182,7 +182,14 @@ function normalizeLogoUrlForSave(raw: string): string | null {
                         type="text"
                         formControlName="phone"
                         class="block w-full rounded-md border-0 px-3 py-1.5 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm sm:leading-6"
+                        [class.ring-red-300]="form.controls.phone.invalid && form.controls.phone.touched"
                       />
+                      @if (form.controls.phone.touched && form.controls.phone.errors?.['maxlength']) {
+                        <p class="mt-1 text-sm text-red-600">Phone max length is 30 characters</p>
+                      }
+                      @if (form.controls.phone.touched && form.controls.phone.errors?.['pattern']) {
+                        <p class="mt-1 text-sm text-red-600">Invalid phone number format</p>
+                      }
                     </div>
                   </div>
 
@@ -218,7 +225,7 @@ export class AdminShopSettingsComponent implements OnInit {
     description: [''],
     logoUrl: ['', [optionalLogoUrlValidator]],
     email: ['', [optionalEmailValidator]],
-    phone: [''],
+    phone: ['', [Validators.maxLength(30), Validators.pattern(/^\+?[0-9]{9,15}$/)]],
     address: [''],
   });
 

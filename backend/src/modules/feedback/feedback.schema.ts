@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { paginationQuerySchema } from '../../utils/pagination-query.schema';
 
 export const createFeedbackSchema = z.object({
   orderId:   z.number().min(1),
@@ -21,4 +22,11 @@ export const updateActionPlanSchema = z.object({
   status:     z.enum(['PENDING', 'IN_PROGRESS', 'DONE', 'REJECTED']).optional(),
   resolution: z.string().optional(),
   assigneeId: z.number().min(1).nullable().optional(),
+});
+
+export const adminFeedbackQuerySchema = paginationQuerySchema.extend({
+  search: z.string().optional(),
+  sentiment: z.string().optional(),
+  rating: z.string().optional(),
+  typeId: z.string().optional(),
 });

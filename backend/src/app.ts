@@ -33,6 +33,7 @@ import { locationRouter } from './modules/location/location.route';
 import { startReservationCleanupLoop } from './modules/inventory/stock-reservation.service';
 
 export const app = express();
+app.set('etag', false);
 
 // If running behind a reverse proxy (Nginx/Traefik/Cloudflare), set TRUST_PROXY=true
 // so `req.protocol` and secure cookies work correctly.

@@ -687,5 +687,36 @@ process.on('uncaughtException', ...);
 > > - **PM2 Ecosystem:** Cấu hình thêm app `ai-worker` chạy ở chế độ `fork` để tránh tranh chấp concurrency.
 > > - **Vá bẫy PM2 Restart:** Sửa đổi file deploy workflow để gọi `pm2 start ... --only ai-worker` riêng biệt, tránh việc `pm2 reload` bỏ sót ứng dụng mới chưa từng khởi chạy.
 > > - **Tự động đồng bộ Database:** Tích hợp bước tự động chạy `npm run db:push:prod` trên EC2 để đồng bộ cấu trúc mới (`PENDING` enum) lên DB Neon Production một cách an toàn mà không làm mất mát hay ảnh hưởng đến bất kỳ dữ liệu cũ nào của bạn.
+> > - **Vá bẫy PM2 Env Injection:** Khi các Worker chạy tách biệt khỏi API, lệnh `import 'dotenv/config'` sẽ chỉ đọc file `.env` mặc định, dẫn tới việc rớt các biến cấu hình quan trọng (như `APP_ENCRYPTION_KEY`) trên EC2. Đã khắc phục triệt để bằng cách cấu hình nạp động `dotenv.config({ path: '.env.production' })` trực tiếp trong `ai.worker.ts` và `email.worker.ts`.
 > >
 > > **Kết luận:** Round 8 đã khép lại thắng lợi rực rỡ trên cả 3 Hướng! Hệ thống e-commerce giờ đây không chỉ bảo mật, an toàn về dòng tiền giao dịch thật, bảo vệ tốt túi tiền API AI mà còn sở hữu một kiến trúc bất đồng bộ hiện đại, hiệu năng cực cao và sẵn sàng scale lớn!
+
+---
+
+## 🎯 ROUND 9: ĐIỂM CHẠM HOÀN HẢO (EDGE CASE & CACHE INVALIDATION)
+
+Round 9 đánh dấu sự chuyển mình từ một hệ thống "hoạt động được" sang một hệ thống "hoạt động hoàn hảo" với những phân tích kỹ thuật cực kỳ tinh tế từ đội ngũ.
+
+> **1. Bài toán In-memory Cache & Stale Data (Frontend):**
+> - **Triệu chứng:** Cập nhật trạng thái đơn hàng (Order) ở trang Chi tiết thành công, nhưng khi quay lại trang Danh sách (hoặc search lại từ khóa cũ) thì UI vẫn hiển thị trạng thái cũ, không có biểu hiện loading do hit cache 30 giây của Angular.
+> - **Phân tích:** 2 Component (Detail và List) hoàn toàn tách biệt về State. Nếu chỉ dựa vào Component, sẽ không thể báo hiệu Invalidation.
+> - **Giải pháp:** Xây dựng Event Bus (`Subject`) tên là `orderUpdated$` vào bên trong `OrderApiService`. Khi update thành công, service phát tín hiệu, `AdminOrderListComponent` lắng nghe và lập tức gọi `this.cache.clear()` rồi load lại data mới toanh. Áp dụng tương tự cho hàm `applyFilters()` để clear cache ngay lập tức khi Admin gõ search mới.
+
+> **2. Lỗi HTTP 304 Caching từ Express (Backend):**
+> - **Triệu chứng:** Dù frontend force gọi lại API nhưng browser tự chèn Header `If-None-Match`. Backend so sánh ETag thấy payload cũ trùng khớp nên trả về `304 Not Modified`, triệt tiêu khả năng hiển thị thay đổi.
+> - **Giải pháp:** Tắt hoàn toàn ETag ở cấp độ Application (`app.set('etag', false)`) để đảm bảo các Endpoint truy vấn dữ liệu động (như Order, Product, Feedback) luôn trả về nguyên bản mã `200 OK`.
+
+> **3. Cạm bẫy Prisma Required Relation (Database):**
+> - **Triệu chứng:** Search `email` hoặc `name` của `user` trong `Feedback` và `Order` trả về toàn bộ dữ liệu thay vì filter đúng, dù query có vẻ hợp lý.
+> - **Phân tích:** Cú pháp `{ user: { is: { email: ... } } }` của Prisma chỉ có hiệu lực với **Optional Relations** (Quan hệ có thể null). Đối với **Required Relations** (`userId` không được phép null), cú pháp này bị Prisma loại bỏ ngầm khi build câu lệnh SQL, khiến lệnh `WHERE` bị bỏ trống và trả toàn bộ kết quả.
+> - **Giải pháp:** Gỡ bỏ `{ is: }` ra khỏi toàn bộ các câu truy vấn thuộc về bảng Order, Feedback. Sử dụng trực tiếp `{ user: { email: ... } }`. 
+
+> **4. Lỗ hổng Zod Validation "Ăn bớt" Tham Số (Middleware):**
+> - **Triệu chứng:** Backend nhận log `search param: undefined` dù trên URL chắc chắn có `search=2401`.
+> - **Phân tích:** Việc lạm dụng `paginationQuerySchema` chung cho toàn bộ các GET endpoint đã gây hại. Hàm `validateQuery()` của Zod theo chuẩn mặc định sẽ "strip" (gạt bỏ) tất cả những thuộc tính không được định nghĩa rõ ràng trong schema.
+> - **Giải pháp:** Định nghĩa rành mạch `adminOrderQuerySchema`, `productQuerySchema`, `adminFeedbackQuerySchema` v.v... Kế thừa từ `paginationQuerySchema` (`.extend`) và khai báo toàn bộ các param như `search`, `status`, `categoryId`, `q` để dữ liệu vượt qua an toàn. Mọi API list giờ đây đều mạnh mẽ, chính xác.
+
+> **5. Hố đen Cấu hình Hotline Cửa hàng (Shop Settings Validation Mismatch):**
+> - **Triệu chứng:** Cả Backend schema `updateStoreSettingSchema` lẫn Frontend reactive form của `shop-settings.component.ts` đều chấp nhận dữ liệu Hotline tuỳ ý không thông qua kiểm định định dạng.
+> - **Phân tích:** Kẻ xấu hoặc Admin thao tác lỗi có thể lưu trữ ký tự rác vào trường Hotline của cửa hàng, làm phá vỡ giao diện Header/Footer của Storefront và các email giao dịch gửi đi.
+> - **Giải pháp:** Áp dụng Regex E.164 (`^\+?[0-9]{9,15}$`) trên cả Zod Schema lẫn Angular Reactive Form, đồng thời chèn trực quan cảnh báo lỗi bằng tiếng Anh rực sắc đỏ dưới ô Hotline để hoàn thiện 100% UX/UI của Admin.

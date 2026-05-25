@@ -90,9 +90,9 @@ export async function listAdminFeedbacks(query: {
     ...(search
       ? {
         OR: [
-          { user: { is: { email: { contains: search, mode: 'insensitive' } } } },
-          { user: { is: { name: { contains: search, mode: 'insensitive' } } } },
-          { product: { is: { name: { contains: search, mode: 'insensitive' } } } },
+          { user: { email: { contains: search, mode: 'insensitive' } } },
+          { user: { name: { contains: search, mode: 'insensitive' } } },
+          { product: { name: { contains: search, mode: 'insensitive' } } },
           { comment: { contains: search, mode: 'insensitive' } },
         ],
       }

@@ -1,6 +1,6 @@
 import { HttpClient, HttpErrorResponse, HttpParams } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
-import { catchError, map, throwError, type Observable } from 'rxjs';
+import { catchError, map, throwError, Subject, type Observable } from 'rxjs';
 import { environment } from '../../../environments/environment';
 import type { ApiSuccess, PaginationMeta } from '../../shared/models/api-response.model';
 import type { OrderDetail, OrderEvent, OrderStatus } from '../../shared/models/order.model';
@@ -27,6 +27,10 @@ export interface AdminOrderListParams {
 export class OrderApiService {
   private readonly http = inject(HttpClient);
   private readonly baseUrl = `${environment.apiUrl}/api/orders`;
+
+  // Signal to notify components that an order has been updated (e.g. to invalidate cache)
+  private readonly orderUpdatedSource = new Subject<number>();
+  readonly orderUpdated$ = this.orderUpdatedSource.asObservable();
 
   /** POST /orders — JWT required; `userId` extracted from token. */
   create(body: CreateOrderBody): Observable<OrderDetail> {
@@ -123,6 +127,7 @@ export class OrderApiService {
       .pipe(
         map((r) => {
           if (!r.success) throw new Error(r.message);
+          this.orderUpdatedSource.next(orderId);
           return r.data;
         }),
         catchError(mapHttpError)
