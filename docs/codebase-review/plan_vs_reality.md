@@ -279,3 +279,19 @@ Mỗi request AI = 1 Gemini API call = chi phí thực. Global limiter 150/15m l
 | 10 | ~~CDN cho S3 images~~ | ~~1 ngày~~ | ✅ Done (Round 8) |
 | 11 | ~~**Qdrant/Feedback → MQ worker**~~ | ~~2 ngày~~ | ✅ Done (Round 8) - Di chuyển hoàn toàn sang ai.worker.ts |
 | 12 | ~~DB Logger refactor~~ | ~~1 ngày~~ | ✅ Done (Round 8) - Đã chuyển sang stdout |
+
+---
+
+## 🌟 NHẬT KÝ TIẾN ĐỘ ROUND 9 (ĐANG THỰC HIỆN)
+
+- **2026-05-25:** Hoàn thành xuất sắc "Điểm chạm hoàn hảo". Khắc phục triệt để các Edge Cases phức tạp:
+  - **Prisma Required Relation:** Sửa lỗi cú pháp (`{ is: ... }`) khiến query tìm kiếm bị bypass, gây leak toàn bộ dữ liệu.
+  - **Zod Schema Data Stripping:** Khắc phục lỗi `paginationQuerySchema` âm thầm loại bỏ các parameter (`search`, `status`). Đã tạo Schema riêng lẻ, chính xác cho Order, Product, Feedback.
+  - **Express ETag 304 Caching:** Tắt cấu hình ETags (`app.set('etag', false)`) để chặn lỗi HTTP 304, đảm bảo mọi request truy vấn dữ liệu động luôn trả kết quả tươi 200 OK.
+  - **Frontend Stale Data:** Thiết lập Event Bus (`orderUpdated$`) tại Frontend giúp Invalidate In-memory Cache thông minh mà không làm ảnh hưởng trải nghiệm UX.
+  - **Shop Settings Validation:** Sửa lỗi thiếu Regex kiểm định định dạng Hotline Cửa hàng ở cả Backend Zod Schema và Frontend Reactive Form, hiển thị lỗi báo đỏ trên HTML để nâng cao độ toàn vẹn dữ liệu.
+
+**Các Task Cần Xử Lý Tiếp Theo:**
+- [ ] **Task 5.1:** Tự động Rollback CI/CD nếu Deploy API Health fail.
+- [ ] **Task 4.2:** Thiết lập S3 Bucket Policy chặn Public Access trực tiếp.
+- [ ] **Task 7.2:** Viết Unit Test chống Race Condition cho Lua Script trên Redis.

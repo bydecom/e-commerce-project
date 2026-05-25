@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { paginationQuerySchema } from '../../utils/pagination-query.schema';
 
 export const createProductSchema = z.object({
   name:        z.string().trim().min(1, 'Name is required').max(300),
@@ -11,3 +12,14 @@ export const createProductSchema = z.object({
 });
 
 export const updateProductSchema = createProductSchema.partial();
+
+export const productQuerySchema = paginationQuerySchema.extend({
+  search: z.string().optional(),
+  categoryId: z.string().optional(),
+  categoryIds: z.union([z.string(), z.array(z.string())]).optional(),
+  minPrice: z.string().optional(),
+  maxPrice: z.string().optional(),
+  status: z.string().optional(),
+  sort: z.string().optional(),
+  q: z.string().optional(),
+});

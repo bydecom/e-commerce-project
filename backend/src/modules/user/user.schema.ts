@@ -5,7 +5,7 @@ const optionalTrimmedMax = (max: number) => z.string().trim().max(max).nullable(
 
 export const updateMeSchema = z.object({
   name:          optionalTrimmedMax(100),
-  phone:         optionalTrimmedMax(30),
+  phone:         z.string().trim().max(30).refine(val => !val || /^\+?[0-9]{9,15}$/.test(val), 'Invalid phone number format').nullable().optional(),
   provinceId:    optionalTrimmed,
   districtId:    optionalTrimmed,
   wardId:        optionalTrimmed,
