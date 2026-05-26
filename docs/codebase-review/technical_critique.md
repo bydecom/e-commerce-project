@@ -757,6 +757,7 @@ Round 10 đưa hệ thống lên tầm cao mới về tính tự phục hồi (S
 > **6. Gia cố Graceful Shutdown & Tối ưu CI/CD tự phục hồi (Task 5.1 & PM2 - ĐÃ HOÀN THÀNH VƯỢT TIẾN ĐỘ):**
 > - **Graceful Shutdown cho AI Worker:** Bổ sung cấu hình `kill_timeout: 10000` vào `ecosystem.config.js` cho `ai-worker` để PM2 đợi tối đa 10 giây cho cuộc gọi Gemini API hoàn thành trước khi tắt hẳn process, đảm bảo tính nhất quán dữ liệu 100%.
 > - **Tách biệt DB Push Step:** Tách riêng step chạy `npm run db:push:prod` trong GitHub Actions. Nếu việc đẩy cấu trúc DB fail, luồng deploy sẽ dừng ngay lập tức và kích hoạt rollback mà không chạm vào PM2 process cũ.
+> - **Vá lỗi db:push:prod Script:** Khắc phục lỗi `dotenv: not found` do EC2 không cài global dependencies bằng cách chuyển đổi script trong `package.json` thành `npx dotenv-cli -e .env.production -- npx prisma db push`, giúp tự động hóa khâu cập nhật DB schema an toàn tuyệt đối.
 > - **PM2 Reload Bulletproof:** Sử dụng cặp lệnh tuần tự `pm2 start ...` rồi `pm2 reload ...` để đảm bảo khởi động và cập nhật zero-downtime tất cả các service (fork lẫn cluster) cực kỳ ổn định.
 > - **Cách ly Rollback thông minh:** Sử dụng điều kiện `if: always() && steps.smoke_test.outcome == 'failure'` kết hợp gán `id: smoke_test` để chỉ kích hoạt rollback cứu nguy khi và chỉ khi Smoke Test API Health check bị lỗi, trả về `exit 1` để hiển thị cảnh báo đỏ trên GitHub. Hoàn hảo!
 
