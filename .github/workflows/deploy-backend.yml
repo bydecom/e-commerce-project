@@ -29,6 +29,20 @@ jobs:
           npx prisma generate
           npm run build
 
+      - name: 🔄 Backup dist cũ trước khi deploy
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ubuntu
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            cd ~/app/e-commerce-project/backend
+            if [ -d "dist" ]; then
+              rm -rf dist.backup
+              cp -r dist dist.backup
+              echo "✅ Đã tạo backup cho thư mục dist cũ"
+            fi
+
       - name: 🚚 Chuyển thư mục DIST sang EC2
         uses: appleboy/scp-action@v0.1.7
         with:
@@ -38,6 +52,16 @@ jobs:
           source: "backend/dist,backend/package.json,backend/ecosystem.config.js,backend/.env.production,backend/prisma"
           target: "~/app/e-commerce-project/"
           strip_components: 0
+
+      - name: 🗄️ Cập nhật DB Schema (Neon Production)
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ubuntu
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            cd ~/app/e-commerce-project/backend
+            npm run db:push:prod
 
       - name: 🚀 SSH vào EC2 để khởi động lại
         uses: appleboy/ssh-action@v1.0.3
@@ -49,21 +73,42 @@ jobs:
             cd ~/app/e-commerce-project/backend
             npm install --production
             
-            # 1. Cập nhật schema database Neon Production an toàn (Thêm PENDING enum)
-            npm run db:push:prod
-            
-            # 2. Tạo lại Prisma Client trên EC2
+            # 1. Tạo lại Prisma Client trên EC2
             npx prisma generate
             
-            # 3. Reload các app cũ (zero-downtime) & Đảm bảo khởi động ai-worker mới
+            # 2. Reload hoặc khởi chạy mới (zero-downtime) tất cả dịch vụ trong ecosystem
+            pm2 start ecosystem.config.js --env production
             pm2 reload ecosystem.config.js --env production
-            pm2 start ecosystem.config.js --env production --only ai-worker
             pm2 save
 
       - name: 🏥 Smoke Test (Check BE Health)
+        id: smoke_test
         run: |
           echo "Đợi 15 giây cho PM2 khởi động server..."
           sleep 15
-          curl -f --retry 3 http://${{ secrets.EC2_HOST }}:3000/api/health || exit 1
+          # Thêm -k (skip cert check) và -L (follow redirect sang HTTPS)
+          curl -f -k -L --retry 3 http://${{ secrets.EC2_HOST }}:3000/api/health || exit 1
           echo "✅ Deploy thành công! Backend đang chạy ngon lành!"
+
+      - name: 🚨 Rollback nếu Smoke Test fail
+        if: always() && steps.smoke_test.outcome == 'failure'
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ubuntu
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            cd ~/app/e-commerce-project/backend
+            if [ -d "dist.backup" ]; then
+              echo "🚨 Smoke Test thất bại! Tiến hành Rollback về phiên bản ổn định trước..."
+              rm -rf dist
+              mv dist.backup dist
+              pm2 reload ecosystem.config.js --env production
+              pm2 save
+              echo "⚠️ ROLLBACK THÀNH CÔNG!"
+              exit 1
+            else
+              echo "❌ Không tìm thấy thư mục dist.backup để khôi phục!"
+              exit 1
+            fi
 

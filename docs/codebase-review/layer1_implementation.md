@@ -61,12 +61,12 @@ Thay vì để Node.js kill process ngay lập tức → log lỗi + chạy grac
 +instances: 'max',
 +exec_mode: 'cluster',
 +kill_timeout: 10000,    // Match forceKillTimer in index.ts
-+listen_timeout: 3000,   // Zero-downtime: wait for new instance ready
++listen_timeout: 8000,   // Zero-downtime: wait for new instance ready (Nâng lên 8000ms ở Round 7)
 ```
 
 - `'max'` = tận dụng hết CPU cores trên EC2
 - `kill_timeout: 10000` = PM2 chờ 10s cho graceful shutdown trước khi SIGKILL
-- `listen_timeout: 3000` = đợi instance mới sẵn sàng 3s trước khi kill instance cũ
+- `listen_timeout: 8000` = đợi instance mới sẵn sàng 8s trước khi kill instance cũ (Nâng lên từ 3000 ở Round 7 để phù hợp cold start Neon)
 - Email worker giữ nguyên `fork` mode (1 instance) — RabbitMQ tự handle concurrency
 
 ### 1.4 Rate Limit Redis Store — `app.ts`

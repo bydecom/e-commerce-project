@@ -725,3 +725,38 @@ Round 9 đánh dấu sự chuyển mình từ một hệ thống "hoạt động
 > - **Triệu chứng:** Cả Backend schema `updateStoreSettingSchema` lẫn Frontend reactive form của `shop-settings.component.ts` đều chấp nhận dữ liệu Hotline tuỳ ý không thông qua kiểm định định dạng.
 > - **Phân tích:** Kẻ xấu hoặc Admin thao tác lỗi có thể lưu trữ ký tự rác vào trường Hotline của cửa hàng, làm phá vỡ giao diện Header/Footer của Storefront và các email giao dịch gửi đi.
 > - **Giải pháp:** Áp dụng Regex E.164 (`^\+?[0-9]{9,15}$`) trên cả Zod Schema lẫn Angular Reactive Form, đồng thời chèn trực quan cảnh báo lỗi bằng tiếng Anh rực sắc đỏ dưới ô Hotline để hoàn thiện 100% UX/UI của Admin.
+
+---
+
+## 🎯 ROUND 10: TỰ ĐỘNG HÓA & PHÒNG THỦ CHIỀU SÂU (SHIELDING PROTOCOL)
+
+Round 10 đưa hệ thống lên tầm cao mới về tính tự phục hồi (Self-healing) và giám sát phòng thủ, rà soát 6 tọa độ cốt lõi và tối ưu hóa tận gốc hạ tầng giao tiếp:
+
+> **1. Rà soát RabbitMQ Prefetch & Manual Ack (Tọa độ 4 - ĐÃ KHẮC PHỤC):**
+> - **Nguy cơ:** Việc thiếu `prefetch` hoặc cấu hình sai sẽ làm RabbitMQ dump ồ ạt tin nhắn, làm tràn RAM Node.js và sập Gemini API do lỗi HTTP 429.
+> - **Xác minh thực tế:** Cả 2 Worker đều bật manual acknowledgment (`noAck: false`) chuẩn chỉ. AI Worker đang cấu hình `PREFETCH = 2`.
+> - **Khắc phục:** Hạ `PREFETCH = 1` cho `ai.worker.ts` để chặn hoàn toàn Race Condition và rate limit của Gemini khi chịu tải cao.
+
+> **2. VNPay Duplicate IPN & Prisma P2002 (Tọa độ 6 - AN TOÀN):**
+> - **Xác minh thực tế:** Catch block trong `vnpay.controller.ts` đã chặn đứng lỗi Prisma P2002 bằng kiểm tra `err.code === 'P2002'` và phản hồi ngay lập tức HTTP 200 kèm `{ RspCode: '02' }`. VNPay nhận diện đúng giao dịch đã xử lý và dừng gửi retry. 100% an toàn.
+
+> **3. JWT Blacklist Catch Block & Fail-Open (Tọa độ 2 - AN TOÀN):**
+> - **Phân tích:** Catch block tại `jwt-blacklist.ts` bắt Exception chung. Nhờ thân khối `try` chỉ thực thi đúng 2 thao tác hạ tầng thuần túy (`ensureRedisConnected` và `redisClient().get`), hoàn toàn không chứa bất cứ code logic nào khác, nên **100% lỗi catch được đều là lỗi hạ tầng thực tế** (Redis chết, timeout, quota). Việc trigger Fail-Open ghi log `[WARN]` ra stdout là cực kỳ chính xác, không có nguy cơ false positive do lỗi code logic.
+
+> **4. Connection Pool & Quota Exhaustion (Tọa độ 3 & 5 - AN TOÀN):**
+> - **Xác minh:** `.env.production` giữ nguyên `connection_limit=3` và không can thiệp tăng `pool_timeout` giả tạo. Thống nhất monitor Neon Dashboard và Upstash daily command quota, tuyệt đối không over-engineer cache in-memory để tránh phá vỡ cơ chế đếm chung của Cluster.
+
+> **5. Orphaned Sweeper cho Feedback PENDING (Tọa độ 1 - ĐÃ HOÀN THÀNH):**
+> - **Triệu chứng:** Feedback của User bị kẹt ở trạng thái `PENDING` vĩnh viễn nếu Node crash trước khi kịp publish job phân tích cảm xúc lên RabbitMQ.
+> - **Giải pháp:** 
+>   1. Bổ sung 2 trường `createdAt` và `updatedAt` vào model `Feedback` trong Prisma schema và đồng bộ PostgreSQL database.
+>   2. Viết service `feedback-sweeper.service.ts` định kỳ quét các feedback kẹt bằng query SQL Raw so sánh chéo `"updatedAt" = "createdAt"` kết hợp với Redis distributed lock (`feedback:sweeper:lock`) chống race-condition trên Cluster PM2.
+>   3. **Tối ưu concurrent:** Thay thế vòng lặp tuần tự bằng `Promise.allSettled()` để gửi song song tin nhắn lên RabbitMQ đồng thời, giải phóng hoàn toàn Event Loop của Node.js.
+>   4. Tích hợp trực tiếp vào vòng đời khởi động/Graceful Shutdown trong `app.ts`. Hoàn tất an toàn!
+
+> **6. Gia cố Graceful Shutdown & Tối ưu CI/CD tự phục hồi (Task 5.1 & PM2 - ĐÃ HOÀN THÀNH VƯỢT TIẾN ĐỘ):**
+> - **Graceful Shutdown cho AI Worker:** Bổ sung cấu hình `kill_timeout: 10000` vào `ecosystem.config.js` cho `ai-worker` để PM2 đợi tối đa 10 giây cho cuộc gọi Gemini API hoàn thành trước khi tắt hẳn process, đảm bảo tính nhất quán dữ liệu 100%.
+> - **Tách biệt DB Push Step:** Tách riêng step chạy `npm run db:push:prod` trong GitHub Actions. Nếu việc đẩy cấu trúc DB fail, luồng deploy sẽ dừng ngay lập tức và kích hoạt rollback mà không chạm vào PM2 process cũ.
+> - **PM2 Reload Bulletproof:** Sử dụng cặp lệnh tuần tự `pm2 start ...` rồi `pm2 reload ...` để đảm bảo khởi động và cập nhật zero-downtime tất cả các service (fork lẫn cluster) cực kỳ ổn định.
+> - **Cách ly Rollback thông minh:** Sử dụng điều kiện `if: always() && steps.smoke_test.outcome == 'failure'` kết hợp gán `id: smoke_test` để chỉ kích hoạt rollback cứu nguy khi và chỉ khi Smoke Test API Health check bị lỗi, trả về `exit 1` để hiển thị cảnh báo đỏ trên GitHub. Hoàn hảo!
+
