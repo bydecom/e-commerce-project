@@ -227,9 +227,9 @@ async function gracefulShutdown(signal: string): Promise<void> {
   console.log(`\n[AiWorker] Received ${signal} — closing connection gracefully...`);
 
   const forceKillTimer = setTimeout(() => {
-    console.error('[AiWorker] Force kill — timeout exceeded (5s)');
+    console.error('[AiWorker] Force kill — timeout exceeded (8s)');
     process.exit(1);
-  }, 5_000);
+  }, 8_000); // Phải < kill_timeout (10s) trong ecosystem.config.js, chừa 2s buffer
   forceKillTimer.unref();
 
   try {

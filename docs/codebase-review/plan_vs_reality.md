@@ -305,8 +305,23 @@ Mỗi request AI = 1 Gemini API call = chi phí thực. Global limiter 150/15m l
   - **CI/CD Auto-Rollback & PM2 (Task 5.1):** Hoàn thành sớm vượt tiến độ! Thiết lập backup tự động, tách biệt step DB push, sử dụng chuỗi lệnh `pm2 start` + `pm2 reload` zero-downtime, và tinh chỉnh cách ly rollback thông minh chỉ kích hoạt khi Smoke Test API Health check fail (`steps.smoke_test.outcome == 'failure'`).
   - **Fix db:push:prod Script:** Vá lỗi `dotenv: not found` trên EC2 do thiếu global package bằng cách đổi thành `npx dotenv-cli` trong `package.json`, bảo đảm pipeline deploy 100% trơn tru không bị gián đoạn.
   - **Graceful Shutdown AI Worker:** Cấu hình `kill_timeout: 10000` trong `ecosystem.config.js` cho `ai-worker` bảo vệ toàn vẹn dữ liệu cuộc gọi Gemini API khi reload.
+- **2026-05-26:** Phản biện sâu, tinh chỉnh hạ tầng và chuẩn bị Round 11:
+  - **Fix package.json Prod Scripts:** Sửa `start:prod` và `worker:email:prod` chuyển từ `ts-node` sang `node dist/` (EC2 không có file `.ts`). Thêm flag `npx -y` tránh CI/CD bị freeze do prompt hỏi confirm. Dời `prisma` và `dotenv-cli` sang `dependencies` để `npm install --production` trên EC2 cài đúng.
+  - **PM2 Logrotate:** Cài đặt `pm2-logrotate` trên EC2 production (`max_size: 10M`, `retain: 7`, `compress: true`) tháo ngòi bom nổ chậm log đầy ổ đĩa.
+  - **Fix forceKillTimer AI Worker:** Nâng `forceKillTimer` trong `ai.worker.ts` từ 5s lên 8s để đồng bộ với `kill_timeout: 10000` trong `ecosystem.config.js`, cho phép Gemini API call hoàn tất trước khi Worker tự tắt.
+  - **Vá lỗ hổng Upload ảnh ở API Presigned URL (Task 4.3 - Đã xong sớm):** Ép buộc truyền tham số `size` từ client để chặn file rác nặng hàng chục GBs, thêm kiểm định đuôi mở rộng qua Allowlist cứng bảo vệ S3 Origin khỏi virus/mã độc.
+    * *Độ an toàn deploy:* Zero-downtime (`pm2 reload` mượt mà, không đổi DB/Env).
+    * *Kiến trúc tối ưu:* Đã triển khai thành công `browser-image-compression` nén ảnh từ 5MB -> 250KB WebP trực tiếp tại Client, tối ưu toàn diện chi phí AWS mà không cần AWS Lambda phức tạp ở Phase 1.
+  - **Kiểm chứng tính Lũy Đẳng AI Worker:** Rà soát và xác minh cơ chế phòng thủ tối ưu chi phí Gemini API đã chạy chuẩn (skip phân tích khi status không còn `PENDING`).
 
-**Các Task Cần Xử Lý Tiếp Theo (Round 11):**
-- [ ] **Task 4.2:** Thiết lập S3 Bucket Policy chặn Public Access trực tiếp.
-- [ ] **Task 7.2:** Viết Unit Test chống Race Condition cho Lua Script trên Redis.
+---
+
+## 🌟 NHẬT KÝ TIẾN ĐỘ ROUND 11 (ĐANG THỰC HIỆN)
+
+**Các Task Cần Xử Lý:**
+- [ ] **Task 4.2:** Thiết lập S3 Bucket Policy chặn Public Access trực tiếp + cấu hình CORS cho Presigned URL Upload.
+- [x] **Task 4.3:** Khóa lỗ hổng bảo mật Upload (Mandatory size & Extension Allowlist) -> **✅ ĐÃ XONG SỚM**.
+- [ ] **Task 7.2:** Viết Unit Test chống Race Condition cho Lua Script `reserveStockOrThrow` trên Redis.
+- [ ] **Layer 8 (8.1 - 8.3):** Quy hoạch khả năng quan sát hệ thống (ELK/Loki, Prometheus, Grafana, APM) -> **🔲 Chờ thực hiện ở Phase sau**.
+
 
