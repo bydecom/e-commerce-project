@@ -33,7 +33,7 @@
 **Thực tế:** [ecosystem.config.js:15-16](file:///d:/Workspace/Project/e-commerce-project/backend/ecosystem.config.js#L15-L16) — `instances: 'max'`, `exec_mode: 'cluster'`.
 
 **Bonus so với plan:**
-- `wait_ready: true` + `listen_timeout: 5000` + `process.send?.('ready')` cho zero-downtime reload — plan không đề cập cơ chế này.
+- `wait_ready: true` + `listen_timeout: 8000` (Ban đầu là 5000, đã nâng lên 8000ms ở Round 7 để phù hợp với cold start Neon) + `process.send?.('ready')` cho zero-downtime reload — plan không đề cập cơ chế này.
 - Race condition HTTPS + redirect server đã được fix bằng `Promise.all` — plan không cover.
 
 ### 1.4 Rate Limit Redis Store — ✅ Đã xong (nhưng plan thiếu 1 điểm)
@@ -282,7 +282,7 @@ Mỗi request AI = 1 Gemini API call = chi phí thực. Global limiter 150/15m l
 
 ---
 
-## 🌟 NHẬT KÝ TIẾN ĐỘ ROUND 9 (ĐANG THỰC HIỆN)
+## 🌟 NHẬT KÝ TIẾN ĐỘ ROUND 9 (ĐÃ HOÀN THÀNH)
 
 - **2026-05-25:** Hoàn thành xuất sắc "Điểm chạm hoàn hảo". Khắc phục triệt để các Edge Cases phức tạp:
   - **Prisma Required Relation:** Sửa lỗi cú pháp (`{ is: ... }`) khiến query tìm kiếm bị bypass, gây leak toàn bộ dữ liệu.
@@ -291,7 +291,21 @@ Mỗi request AI = 1 Gemini API call = chi phí thực. Global limiter 150/15m l
   - **Frontend Stale Data:** Thiết lập Event Bus (`orderUpdated$`) tại Frontend giúp Invalidate In-memory Cache thông minh mà không làm ảnh hưởng trải nghiệm UX.
   - **Shop Settings Validation:** Sửa lỗi thiếu Regex kiểm định định dạng Hotline Cửa hàng ở cả Backend Zod Schema và Frontend Reactive Form, hiển thị lỗi báo đỏ trên HTML để nâng cao độ toàn vẹn dữ liệu.
 
-**Các Task Cần Xử Lý Tiếp Theo:**
-- [ ] **Task 5.1:** Tự động Rollback CI/CD nếu Deploy API Health fail.
+---
+
+## 🌟 NHẬT KÝ TIẾN ĐỘ ROUND 10 (ĐÃ HOÀN THÀNH)
+
+- **2026-05-25:** Rà soát và gia cố hệ thống qua 6 Tọa độ Phản biện Thực chiến:
+  - **RabbitMQ Prefetch:** Xác minh manual acknowledgment hoạt động 100%. Hạ prefetch từ 2 xuống 1 cho `ai.worker.ts` để chặn hoàn toàn Race Condition và rate limit của Gemini API.
+  - **VNPay P2002:** Xác minh catch block xử lý hoàn hảo lỗi prisma trùng lặp, phản hồi `{ RspCode: '02' }` ngắt retry VNPay vĩnh viễn.
+  - **Orphaned Sweeper (Tọa độ 1):** Bổ sung timestamps `createdAt`/`updatedAt` cho model `Feedback`, viết thành công `feedback-sweeper.service.ts` quét feedback kẹt quá 30 phút bằng SQL Raw + Redis distributed lock, tối ưu hóa gửi concurrent bằng `Promise.allSettled`, tích hợp mượt mà vào vòng đời khởi tạo/Graceful Shutdown trong `app.ts`.
+  - **JWT Blacklist Catch Block:** Xác minh an toàn tuyệt đối trước các lỗi logic (false positives). Toàn bộ lỗi bị bắt đều là lỗi kết nối hạ tầng thực tế.
+  - **Neon Pool & Upstash Quota:** Giữ nguyên các cấu hình an toàn, thống nhất theo dõi qua dashboard thay vì over-engineer.
+  - **Tài liệu:** Xuất bản Strategy Blueprint hoàn thiện cho DevOps & Security.
+  - **CI/CD Auto-Rollback & PM2 (Task 5.1):** Hoàn thành sớm vượt tiến độ! Thiết lập backup tự động, tách biệt step DB push, sử dụng chuỗi lệnh `pm2 start` + `pm2 reload` zero-downtime, và tinh chỉnh cách ly rollback thông minh chỉ kích hoạt khi Smoke Test API Health check fail (`steps.smoke_test.outcome == 'failure'`).
+  - **Graceful Shutdown AI Worker:** Cấu hình `kill_timeout: 10000` trong `ecosystem.config.js` cho `ai-worker` bảo vệ toàn vẹn dữ liệu cuộc gọi Gemini API khi reload.
+
+**Các Task Cần Xử Lý Tiếp Theo (Round 11):**
 - [ ] **Task 4.2:** Thiết lập S3 Bucket Policy chặn Public Access trực tiếp.
 - [ ] **Task 7.2:** Viết Unit Test chống Race Condition cho Lua Script trên Redis.
+

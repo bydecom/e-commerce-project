@@ -23,7 +23,7 @@ import type {
   FeedbackAnalyzePayload,
 } from '../rabbitmq/publisher';
 
-const PREFETCH = 2; // AI tasks nặng, không nên xử lý nhiều song song
+const PREFETCH = 1; // AI tasks nặng, không nên xử lý nhiều song song
 const RECONNECT_DELAY_MS = 5_000;
 
 async function setupChannel(conn: ChannelModel): Promise<Channel> {

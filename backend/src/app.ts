@@ -31,6 +31,7 @@ import { cartRouter } from './modules/cart/cart.route';
 import { paymentRouter } from './modules/payment/payment.route';
 import { locationRouter } from './modules/location/location.route';
 import { startReservationCleanupLoop } from './modules/inventory/stock-reservation.service';
+import { startFeedbackSweeperLoop } from './modules/feedback/feedback-sweeper.service';
 
 export const app = express();
 app.set('etag', false);
@@ -176,10 +177,16 @@ ensureRedisConnected().catch((err) => {
 // Only the instance that wins the lock executes the cleanup; others skip that tick.
 // ─────────────────────────────────────────────────────────────────────────────
 let _cleanupHandle: { stop: () => void } | null = null;
+let _feedbackSweeperHandle: { stop: () => void } | null = null;
 
 _cleanupHandle = startReservationCleanupLoop({
   intervalMs: 5_000,
   batchSize: 100,
+});
+
+_feedbackSweeperHandle = startFeedbackSweeperLoop({
+  intervalMs: 30_000, // Quét mỗi 30 giây
+  batchSize: 50,
 });
 
 /** Called by index.ts during graceful shutdown to stop the cleanup interval. */
@@ -187,6 +194,10 @@ export function stopCleanupLoop(): void {
   if (_cleanupHandle) {
     _cleanupHandle.stop();
     _cleanupHandle = null;
+  }
+  if (_feedbackSweeperHandle) {
+    _feedbackSweeperHandle.stop();
+    _feedbackSweeperHandle = null;
   }
 }
 
