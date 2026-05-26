@@ -761,3 +761,34 @@ Round 10 đưa hệ thống lên tầm cao mới về tính tự phục hồi (S
 > - **PM2 Reload Bulletproof:** Sử dụng cặp lệnh tuần tự `pm2 start ...` rồi `pm2 reload ...` để đảm bảo khởi động và cập nhật zero-downtime tất cả các service (fork lẫn cluster) cực kỳ ổn định.
 > - **Cách ly Rollback thông minh:** Sử dụng điều kiện `if: always() && steps.smoke_test.outcome == 'failure'` kết hợp gán `id: smoke_test` để chỉ kích hoạt rollback cứu nguy khi và chỉ khi Smoke Test API Health check bị lỗi, trả về `exit 1` để hiển thị cảnh báo đỏ trên GitHub. Hoàn hảo!
 
+---
+
+> [!TIP]
+> ### 💬 Round 11 — Khóa Bảo Mật Upload, Kiểm Chứng Idempotency & Tương Lai Layer 8
+> **Bối cảnh:** Rà soát sâu lộ trình kiến trúc nhằm nâng cấp hệ thống đạt 100% chuẩn Production trước khi bàn giao:
+> 
+> **1. Vá lỗ hổng Upload ảnh ở API Presigned URL (Task 4.3 - ĐÃ FIX):**
+> - **Nguy cơ:** API sinh Presigned URL trước đây có tham số `size` tùy chọn. Kẻ xấu có thể bỏ qua tham số này để upload các file rác nặng hàng chục GBs trực tiếp lên AWS S3, gây phát sinh chi phí khổng lồ. Đồng thời, thiếu kiểm định chặt chẽ đuôi file có thể tạo kẽ hở cho virus/mã độc.
+> - **Khắc phục:** 
+>   * Sửa đổi [upload.controller.ts](file:///d:/Workspace/Project/e-commerce-project/backend/src/modules/upload/upload.controller.ts) để ép buộc truyền tham số `size` (bắt buộc).
+>   * Kiểm định chặt chẽ `size` hợp lệ (`isNaN`, `<= 0`) và không vượt quá `MAX_FILE_SIZE = 5MB`.
+>   * Củng cố kiểm tra phần mở rộng `ext` qua Allowlist cứng (`['jpg', 'jpeg', 'png', 'webp', 'gif']`) để triệt tiêu 100% rủi ro bypass.
+> - **💬 Tranh luận Kiến trúc & AWS Lambda:**
+>   * * Deploy Impact:* Zero-downtime, không cài package mới, không đổi database. Lệnh `pm2 reload` chạy hoàn hảo.
+>   * * Resize / Nén ảnh:* 5MB quá nặng cho UI/UX người dùng mạng 4G. Nhưng Backend không trực tiếp chạm vào buffer ảnh do dùng Presigned URL (client upload thẳng lên S3).
+>   * * AWS Lambda Event-Driven Resize (Phase 2):* Client upload ảnh gốc lên `s3://bucket/raw/` -> S3 Trigger Lambda Node/Python (Sharp) chạy ngầm -> Resize & nén thành WebP (100KB-300KB) -> Save sang `s3://bucket/processed/` -> CloudFront CDN phục vụ. Quá chuẩn công nghiệp nhưng tốn thêm 1-2 ngày setup IAM Role/Trigger.
+>   * * Frontend-Side Compression (Pragmatic Phase 1 - ĐÃ TRIỂN KHAI THÀNH CÔNG):* Đã cài đặt `browser-image-compression` và refactor thành công [upload.service.ts](file:///d:/Workspace/Project/e-commerce-project/frontend/src/app/core/services/upload.service.ts). Mọi ảnh upload giờ đây sẽ tự động được Web Worker nén ngầm xuống WebP < 300KB, max width/height 1200px trực tiếp ở client. Bảo vệ tuyệt đối ví AWS S3 và CloudFront CDN Egress!
+> 
+> **2. Xác minh tính Lũy Đẳng (Idempotency) của AI Worker (ĐÃ KIỂM CHỨNG - AN TOÀN):**
+> - **Xác minh thực tế:** Rà soát file [ai.worker.ts](file:///d:/Workspace/Project/e-commerce-project/backend/src/workers/ai.worker.ts) cho thấy cơ chế phòng thủ tối ưu chi phí Gemini API **đã được triển khai hoàn chỉnh** từ trước. 
+> - **Cơ chế:** Ngay khi nhận được payload từ hàng đợi RabbitMQ, worker truy vấn database kiểm tra `feedback.sentiment !== 'PENDING'`. Nếu tác vụ này đã được phân tích trước đó (do retry hoặc duplicate message), nó lập tức `return` sớm mà không gọi API Gemini nữa, giúp tiết kiệm 100% chi phí API thừa.
+> 
+> **3. Quy hoạch Layer 8 - Observability (Khả năng quan sát - Backlog tương lai):**
+> - **Quyết định:** Tạm gác lại Layer 8 (8.1 - 8.3) để Go-Live trước (vì đây là phase rất lớn, có thể triển khai sau). Tuy nhiên, đã quy hoạch rõ ràng lộ trình tích hợp:
+>   * **Centralized Logging (8.1):** Đẩy log stdout từ PM2 về Loki hoặc ELK Stack để tra cứu nhanh theo ID giao dịch VNPay.
+>   * **Metrics & Grafana Dashboards (8.2):** Giám sát thời gian thực RAM/CPU máy chủ, database connection pool của Neon, và số lượng message kẹt trong RabbitMQ.
+>   * **Application Performance Monitoring - APM (8.3):** Gắn trace ID cho mỗi request để phân tích cụ thể latency qua từng phân lớp mạng và worker.
+> 
+> **Kết luận:** Round 11 mở màn cực kỳ hoành tráng bằng việc bọc thép kiên cố cho luồng Upload ảnh, xác nhận tính lũy đẳng vững chắc của AI Worker và lên lộ trình chuẩn chỉ cho khả năng quan sát hệ thống.
+
+
