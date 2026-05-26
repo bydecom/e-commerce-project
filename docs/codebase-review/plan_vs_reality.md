@@ -181,7 +181,7 @@ Không thể kiểm tra từ code. Cần SSH vào EC2 hoặc check AWS Console.
 
 ### 6.2 Không dùng `$queryRawUnsafe` — ✅ An toàn
 
-**Plan nói:** Review tất cả chỗ dùng raw query.
+**Plan nói:** Review tất cả chỗ dùng raw query.   
 
 **Thực tế:** Grep `$queryRawUnsafe` → **0 kết quả**. Tất cả raw query đều dùng `$queryRaw` tagged template (Prisma tự escape). [product.service.ts:248](file:///d:/Workspace/Project/e-commerce-project/backend/src/modules/product/product.service.ts#L248) — user input (`search`, `qUnaccent`) được truyền qua template literal interpolation `${search}`, Prisma tự parameterize.
 
