@@ -94,6 +94,13 @@ graph TD
         *   `compress: true`: Tự động nén gzip file log cũ để tiết kiệm dung lượng đĩa.
     *   **Kết quả:** Ngăn chặn hoàn toàn quả bom nổ chậm đầy ổ đĩa EC2 gây sập dây chén toàn bộ Node.js và RabbitMQ.
 
+### 🔄 2.4 Smart Auto-Rollback Pipeline (CI/CD Tự Phục Hồi)
+*   **Hiện trạng Code:**
+    *   **Tự động tạo Backup:** Trong [deploy-backend.yml dòng 32-45](file:///d:/Workspace/Project/e-commerce-project/.github/workflows/deploy-backend.yml#L32-L45), hệ thống tự động backup thư mục `dist` cũ thành `dist.backup` trên máy chủ EC2 trước khi chuyển code mới lên.
+    *   **Smart Rollback Trigger:** Khi step Smoke Test (`id: smoke_test`) bị lỗi (API `/api/health` trả về lỗi hoặc không phản hồi sau 3 lần retry), GitHub Actions sẽ tự động kích hoạt step `🚨 Rollback nếu Smoke Test fail` dựa trên điều kiện `if: always() && steps.smoke_test.outcome == 'failure'`.
+    *   **Tự phục hồi nhanh:** Lệnh rollback sẽ tự động xóa thư mục `dist` lỗi, khôi phục lại `dist.backup` ổn định, và thực hiện `pm2 reload` để đưa hệ thống về trạng thái bình thường ngay lập tức.
+*   **Kết quả:** Triệt tiêu hoàn toàn rủi ro downtime hoặc kẹt code lỗi trên máy chủ Production khi deploy bị fail. Đạt điểm 10/10 về tính an toàn vận hành!
+
 ---
 
 ## 3. TẦNG LOGIC & DỮ LIỆU (BUSINESS LOGIC LAYER)

@@ -138,21 +138,16 @@ Không thể kiểm tra từ code. Cần SSH vào EC2 hoặc check AWS Console.
 
 ## LAYER 5 — CI/CD & DEPLOY
 
-### 5.1 Smoke Test + Auto Rollback — ⚠️ Smoke test có, rollback chưa có
+### 5.1 Smoke Test + Auto Rollback — ✅ Đã xong (Round 10)
 
 **Plan nói:** Backup dist cũ → deploy mới → health check → rollback nếu fail.
 
-**Thực tế:** [deploy-backend.yml:55-60](file:///d:/Workspace/Project/e-commerce-project/.github/workflows/deploy-backend.yml#L55-L60):
-```yaml
-- name: 🏥 Smoke Test (Check BE Health)
-  run: |
-    sleep 15
-    curl -f --retry 3 http://${{ secrets.EC2_HOST }}:3000/api/health || exit 1
-```
+**Thực tế:** [deploy-backend.yml:32-113](file:///d:/Workspace/Project/e-commerce-project/.github/workflows/deploy-backend.yml#L32-L113) — Đã triển khai hoàn chỉnh cơ chế bọc thép an toàn tự phục hồi:
+- **Tự động Backup:** Thêm step `🔄 Backup dist cũ trước khi deploy` copy thư mục `dist` sang `dist.backup` trên EC2.
+- **Health Check / Smoke Test:** Thực hiện `🏥 Smoke Test` ping `/api/health` với 3 lần retry.
+- **Auto Rollback:** Nếu smoke test fail (step outcome == 'failure'), trigger ngay step `🚨 Rollback nếu Smoke Test fail` tự động xóa `dist` lỗi, khôi phục `dist.backup` cũ, chạy `pm2 reload` khôi phục lại trạng thái chạy ổn định của hệ thống trước đó!
 
-**Có smoke test nhưng không có rollback.** Nếu health check fail → GitHub Actions step fail → **nhưng server production đã chạy code lỗi**. Không có bước backup dist cũ hay restore.
-
-**⚠️ Thêm 1 vấn đề plan chưa đề cập:** CI ban đầu dùng `pm2 restart` thay vì `pm2 reload`. Chúng ta đã refactor thành công sang `pm2 reload` để thực hiện rolling restart = zero-downtime chuẩn chỉ.
+**Verdict:** Đã hoàn thành xuất sắc 100%. Ngoài ra, CI ban đầu dùng `pm2 restart` đã được refactor thành công sang `pm2 reload` để thực hiện rolling restart zero-downtime chuẩn chỉ.
 
 ### 5.2 Hardcoded values → env var — ✅ Đã xong (Round 8)
 
@@ -232,7 +227,7 @@ Không thể kiểm tra từ code. Cần SSH vào EC2 hoặc check AWS Console.
 | 3.4 | Queue tách biệt | ✅ Done | ✅ Đúng | Đã tách riêng biệt `q.auth.tasks`, `q.order.tasks` và `q.ai.tasks` |
 | 4.1 | CDN cho S3 | ✅ Done | ✅ Đúng | Đã tích hợp biến CLOUDFRONT_URL |
 | 4.2 | S3 Bucket Policy | 🔲 | ✅ Đúng | Cần check AWS Console |
-| 5.1 | Auto Rollback | ⚠️ Partial | ⚠️ Thiếu | Đã fix PM2 reload trap và thêm tự động push DB Neon khi deploy |
+| 5.1 | Auto Rollback | ✅ Done | ✅ Đúng | Đã thiết lập backup tự động, smoke test và auto rollback khi deploy lỗi |
 | 5.2 | Env vars | ✅ Done | ✅ Đúng | Đã chuyển CORS + VNP_RETURN_URL sang động và làm sạch đuôi URL |
 | 6.1 | RabbitMQ security | ✅ Done | ✅ Đúng | Đã đóng cổng 5672 public, chuyển sang kết nối local an toàn và đổi credentials siêu mạnh |
 | 6.2 | SQL injection | ✅ Safe | ✅ Đúng | Không có `$queryRawUnsafe` |
@@ -274,7 +269,7 @@ Mỗi request AI = 1 Gemini API call = chi phí thực. Global limiter 150/15m l
 | 5 | ~~**CI: `restart` → `reload`**~~ | ~~5 phút~~ | ✅ Done (Đã nâng cấp sang reload zero-downtime) |
 | 6 | ~~**VNPay unit test**~~ | ~~1.5-2 ngày~~ | ✅ Done (Hướng 2) - 25/25 tests passed |
 | 7 | ~~**AI endpoint rate limiter**~~ | ~~2 giờ~~ | ✅ Done (Hướng 2) - Đã cắm Rate Limiter riêng cho AI/Auth |
-| 8 | CI auto rollback | 0.5 ngày | 🟡 |
+| 8 | ~~**CI auto rollback**~~ | ~~0.5 ngày~~ | ✅ Done (Round 10) |
 | 9 | ~~**CORS + env vars**~~ | ~~30 phút~~ | ✅ Done (Round 8) |
 | 10 | ~~CDN cho S3 images~~ | ~~1 ngày~~ | ✅ Done (Round 8) |
 | 11 | ~~**Qdrant/Feedback → MQ worker**~~ | ~~2 ngày~~ | ✅ Done (Round 8) - Di chuyển hoàn toàn sang ai.worker.ts |
