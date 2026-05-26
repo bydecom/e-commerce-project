@@ -236,19 +236,19 @@ export async function reserveStockOrThrow(input: ReserveInput): Promise<void> {
 }
 
 export async function attachReservationOrderIdBestEffort(txnRef: string, orderId: number): Promise<void> {
-  const ref = String(txnRef || '').trim();
-  const oid = Math.floor(Number(orderId));
-  if (!ref || !Number.isFinite(oid) || oid < 1) return;
-  await ensureRedisConnected();
-  const redis = redisClient();
-  const raw = await redis.get(holdKey(ref));
-  if (!raw) return;
   try {
+    const ref = String(txnRef || '').trim();
+    const oid = Math.floor(Number(orderId));
+    if (!ref || !Number.isFinite(oid) || oid < 1) return;
+    await ensureRedisConnected();
+    const redis = redisClient();
+    const raw = await redis.get(holdKey(ref));
+    if (!raw) return;
     const parsed = JSON.parse(raw) as ReservationPayload;
     const next = { ...parsed, orderId: oid };
     await redis.set(holdKey(ref), JSON.stringify(next));
   } catch {
-    // ignore
+    // swallow silently — best effort function
   }
 }
 
