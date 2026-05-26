@@ -88,6 +88,7 @@ Trong chặng đường này, chúng ta sẽ chuyển trọng tâm sang **DevOps
 Nhằm đạt được độ tin cậy tuyệt đối (100% Reliability), quy trình triển khai Backend trên GitHub Actions đã được gia cố toàn diện:
 - **Tự động sao lưu (Backup):** Tự động đóng gói và tạo thư mục `dist.backup` từ mã nguồn dist cũ đang chạy ổn định trên EC2 trước khi SCP nạp bản build mới.
 - **Tách biệt kiểm thử cơ sở dữ liệu:** Step `db:push:prod` chạy riêng biệt, nếu gặp bất kỳ lỗi kết nối hay xung đột cấu trúc nào, job deploy lập tức dừng sớm và thực thi rollback tự phục hồi mà không làm ảnh hưởng tiến trình node cũ.
+- **Vá lỗi db:push:prod Script:** Khắc phục lỗi `dotenv: not found` do thiếu global package trên EC2 bằng cách chuyển đổi script trong `package.json` thành `npx dotenv-cli -e .env.production -- npx prisma db push`, đảm bảo tự động hóa hoàn toàn khâu cập nhật cơ sở dữ liệu.
 - **pm2 start + pm2 reload:** Chuỗi lệnh chuẩn hóa giúp khởi chạy zero-downtime tất cả các service (fork lẫn cluster) bulletproof.
 - **Cách ly Rollback thông minh:** Sử dụng điều kiện `if: always() && steps.smoke_test.outcome == 'failure'` kết hợp gán `id: smoke_test` để chỉ kích hoạt rollback khi và chỉ khi Smoke Test API Health check bị lỗi thực tế. Khi rollback thành công, hệ thống chủ động gọi `exit 1` để thông báo cảnh báo đỏ trên GitHub cho đội ngũ kỹ sư.
 

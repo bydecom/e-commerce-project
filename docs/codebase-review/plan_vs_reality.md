@@ -303,6 +303,7 @@ Mỗi request AI = 1 Gemini API call = chi phí thực. Global limiter 150/15m l
   - **Neon Pool & Upstash Quota:** Giữ nguyên các cấu hình an toàn, thống nhất theo dõi qua dashboard thay vì over-engineer.
   - **Tài liệu:** Xuất bản Strategy Blueprint hoàn thiện cho DevOps & Security.
   - **CI/CD Auto-Rollback & PM2 (Task 5.1):** Hoàn thành sớm vượt tiến độ! Thiết lập backup tự động, tách biệt step DB push, sử dụng chuỗi lệnh `pm2 start` + `pm2 reload` zero-downtime, và tinh chỉnh cách ly rollback thông minh chỉ kích hoạt khi Smoke Test API Health check fail (`steps.smoke_test.outcome == 'failure'`).
+  - **Fix db:push:prod Script:** Vá lỗi `dotenv: not found` trên EC2 do thiếu global package bằng cách đổi thành `npx dotenv-cli` trong `package.json`, bảo đảm pipeline deploy 100% trơn tru không bị gián đoạn.
   - **Graceful Shutdown AI Worker:** Cấu hình `kill_timeout: 10000` trong `ecosystem.config.js` cho `ai-worker` bảo vệ toàn vẹn dữ liệu cuộc gọi Gemini API khi reload.
 
 **Các Task Cần Xử Lý Tiếp Theo (Round 11):**
