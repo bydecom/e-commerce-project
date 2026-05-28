@@ -346,15 +346,16 @@ export async function cancelUserOrder(userId: number, orderId: number, role: Rol
 
 /**
  * System cancellation used by payment/TTL flows.
- * - Only cancels when status is PENDING
+ * - Only cancels when status is PENDING and payment is NOT already PAID
  * - Restores stock and marks CANCELLED in the same transaction
- * - Idempotent-ish: if not pending, returns the current order
+ * - Idempotent-ish: if not pending or already paid, returns the current order
  */
 export async function cancelOrderSystem(orderId: number) {
   return prisma.$transaction(async (tx) => {
     const order = await tx.order.findUnique({ where: { id: orderId } });
     if (!order) throw httpError(404, 'Order not found');
-    if (order.status !== 'PENDING') {
+    // Defense-in-depth: never cancel if already paid or not pending
+    if (order.status !== 'PENDING' || order.paymentStatus === 'PAID') {
       const existing = await tx.order.findUnique({ where: { id: orderId }, include: orderListInclude });
       if (!existing) throw httpError(404, 'Order not found');
       return mapOrderFull(existing, new Set());

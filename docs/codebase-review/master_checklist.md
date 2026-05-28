@@ -183,5 +183,19 @@ Tài liệu này tổng hợp toàn bộ các nhiệm vụ, cải tiến kiến 
 
 ---
 
+### 🔮 10. EDA RELIABILITY & PRODUCTION HARDENING (Round 12 — Backlog)
+*Mục tiêu: Nâng cấp hệ thống messaging từ "hợp lý cho mock project" lên production-grade reliability. Được ghi nhận từ bài phản biện độc lập Senior Mentor.*
+
+> Chi tiết đầy đủ xem tại: [Round 12 Strategy Blueprint](file:///d:/Workspace/Project/e-commerce-project/docs/codebase-review/round_12_strategy_blueprint.md)
+
+- [ ] **12A.1 Publisher Confirms:** Chuyển sang `createConfirmChannel()` + `waitForConfirms()` để biết chắc broker đã nhận message.
+- [ ] **12A.3 DLQ Alert:** Thêm cơ chế giám sát số lượng message trong DLQ, cảnh báo qua Telegram/Slack khi vượt ngưỡng.
+- [ ] **12A.4 Pagination MAX_PAGE:** Thêm `Math.min(MAX_PAGE, ...)` vào `parsePagination` chống deep offset scan.
+- [ ] **12B.1 Transactional Outbox:** Lưu event vào bảng `outbox_events` cùng DB transaction, worker riêng publish ra broker — chống mất event khi app crash.
+- [ ] **12C.1 Order TTL bằng DLX:** Thay Redis cleanup loop bằng RabbitMQ message TTL + Dead Letter Exchange.
+- [ ] **12C.3 Managed RabbitMQ/HA:** Tách broker ra khỏi EC2, dùng CloudAMQP hoặc cluster riêng.
+
+---
+
 > [!NOTE]
 > Checklist này được lưu trữ tại [master_checklist.md](file:///d:/Workspace/Project/e-commerce-project/docs/codebase-review/master_checklist.md) trong repository dự án để bạn có thể cập nhật trạng thái bất kỳ lúc nào, phục vụ cho đợt bàn giao cuối cùng.

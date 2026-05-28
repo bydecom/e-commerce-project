@@ -24,9 +24,12 @@ Tài liệu này **phản biện từng mục** trong plan trước, dựa trên
 >   * Rà soát 6 Tọa độ Phản biện: RabbitMQ Prefetch, VNPay P2002 Idempotency, Orphaned Feedback Sweeper, JWT Blacklist Fail-Open/Closed, Neon Pool & Upstash Quota.
 >   * Hoàn thành CI/CD Auto-Rollback (Task 5.1): Backup tự động, Smoke Test `/api/health`, Smart Rollback khi fail.
 >   * Gia cố DevOps: Fix `db:push:prod` script, `kill_timeout: 10000` cho AI Worker, dời `prisma`/`dotenv-cli` sang `dependencies`, PM2 Logrotate trên EC2.
-> - **Round 11** — Hoàn thành Task 4.3 (Upload Security) và Task 7.2 (Unit Test Lua Script). Task 4.2 (S3 Bucket Policy) còn chờ AWS Console.
->   * Khóa lỗ hổng Upload ảnh (Task 4.3): Bắt buộc `size`, Extension Allowlist, Frontend nén ảnh bằng `browser-image-compression`.
+> - **Round 11** — Storage Security & Battle-Tested Hardening:
+>   * Hoàn thành Task 4.2 (S3 OAC + Block Public Access), Task 4.3 (Upload Security), Task 4.4 (Key-Based Storage), Task 7.2 (Unit Test Lua Script).
 >   * Kiểm chứng Idempotency AI Worker (skip khi status không còn `PENDING`).
+>   * Vá lỗ hổng "DLQ Silent Mute" (TTL 7 ngày + Max 500 cho DLQ), fix AWS Region inconsistency, fix Floating Point defense (`Math.round`), fix CI/CD hardcoded CloudFront domain.
+>   * Bổ sung `paymentStatus === 'PAID'` guard cho `cancelOrderSystem` chống race condition TTL vs IPN.
+>   * Đánh giá trung thực từ bài phản biện độc lập Senior Mentor → Lập Round 12 roadmap cho EDA Reliability.
 >
 > Các block `💬 Tranh luận` trong document ghi lại quá trình hình thành quyết định. **Context tại sao chọn giải pháp này quan trọng hơn bản thân giải pháp** — khi quay lại sau 3 tháng hoặc onboard người mới, phần tranh luận sẽ có giá trị hơn phần kết luận.
 
@@ -36,6 +39,7 @@ Tài liệu này **phản biện từng mục** trong plan trước, dựa trên
 > - 🗺️ [Round 9 Blueprint](file:///d:/Workspace/Project/e-commerce-project/docs/codebase-review/round_9_strategy_blueprint.md) — Điểm chạm hoàn hảo & Edge Cases
 > - 🗺️ [Round 10 Blueprint](file:///d:/Workspace/Project/e-commerce-project/docs/codebase-review/round_10_strategy_blueprint.md) — Phản biện thực chiến & DevOps
 > - 🗺️ [Round 11 Blueprint](file:///d:/Workspace/Project/e-commerce-project/docs/codebase-review/round_11_strategy_blueprint.md) — Cloud Security & Resilience Testing
+> - 🗺️ [Round 12 Blueprint](file:///d:/Workspace/Project/e-commerce-project/docs/codebase-review/round_12_strategy_blueprint.md) — EDA Reliability & Production Hardening (Backlog)
 > - 🔱 [Plan vs Reality](file:///d:/Workspace/Project/e-commerce-project/docs/codebase-review/plan_vs_reality.md) — Đối chiếu tổng hợp Plan ↔ Code thực tế (có ghi rõ nguồn plan từng Round)
 
 ### 🏗️ Production Infrastructure Map
