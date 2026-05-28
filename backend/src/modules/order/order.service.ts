@@ -8,7 +8,8 @@ import { prisma } from '../../db';
 import { parsePagination } from '../../utils/pagination';
 import { httpError } from '../../utils/http-error';
 import { StoreSettingService } from '../store-setting/store-setting.service';
-import { publishOrderPlacedEmail,
+import {
+  publishOrderPlacedEmail,
   publishOrderCompletedEmail,
   publishOrderStatusEmail,
 } from '../../rabbitmq/publisher';
@@ -167,7 +168,7 @@ export async function createOrder(body: {
         throw httpError(422, `Product "${product.name}" is not available for sale`);
       }
       const unitPrice = product.price;
-      total += unitPrice * line.quantity;
+      total = Math.round(total + unitPrice * line.quantity);
       lines.push({ productId: line.productId, quantity: line.quantity, unitPrice });
     }
 

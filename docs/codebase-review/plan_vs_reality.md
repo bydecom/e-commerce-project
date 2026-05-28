@@ -142,12 +142,11 @@ Các hàng đợi và exchange (`ex.ai`, `ex.dlq`) được phân tách vô cùn
 
 **Thực tế:** [upload.service.ts:17-21](file:///d:/Workspace/Project/e-commerce-project/backend/src/modules/upload/upload.service.ts#L17-L21) — Đã thêm env var `CLOUDFRONT_URL`. Nếu có biến này, hệ thống sẽ ưu tiên trả về URL qua CloudFront Edge Location thay vì truy cập thẳng vào Bucket S3. Điều này giúp tăng tốc độ tải ảnh đáng kể cho người dùng cuối và giảm băng thông S3 gốc. Biến môi trường cũng đã được cung cấp đủ trong `.env.production`.
 
-### 4.2 S3 Bucket Policy — 🔲 Chờ triển khai trên AWS Console
+### 4.2 S3 Bucket Policy & CloudFront OAC — ✅ Đã xong (Round 11)
 
-Không thể kiểm tra từ code. Cần thực hiện trên AWS Console.
-
-> [!WARNING]
-> **Thứ tự triển khai sống còn:** Bắt buộc phải cấu hình CloudFront OAC hoạt động ổn định **TRƯỚC** khi chặn S3 public access. Nếu làm ngược, toàn bộ hình ảnh sản phẩm trên production sẽ lập tức bị vỡ (HTTP 403 Forbidden).
+**Triển khai thực tế trên AWS Console:** Toàn bộ bucket S3 đã được khóa an toàn (Block Public Access: ON). 
+- **Read Flow (GET):** Sử dụng chuẩn **Origin Access Control (OAC)** hiện đại nhất (thay vì OAI cũ) để xác thực các request đọc ảnh đi qua CloudFront.
+- **Upload Flow (PUT):** Sử dụng Presigned URL. *Lưu ý kiến trúc đặc thù:* OAC hoàn toàn không ảnh hưởng đến Presigned URL vì upload flow đi trực tiếp từ Browser lên S3 (bypassing CloudFront), xác thực thông qua chữ ký IAM đính kèm trên URL. Cấu hình CORS của S3 đã được thiết lập đúng chuẩn để allow PUT từ origin frontend.
 
 ### 4.4 Refactor Lưu Trữ Ảnh: Full URL → S3 Key — ✅ Đã xong (Round 11)
 
@@ -286,7 +285,7 @@ Không thể kiểm tra từ code. Cần thực hiện trên AWS Console.
 | 3.3 | VNPay IPN sync | 📋 Gốc | ✅ Đúng | ✅ Đúng | Code match plan 100% |
 | 3.4 | Queue tách biệt | 📋 Gốc | ✅ Done | ✅ Đúng | Tách `q.auth.tasks`, `q.order.tasks`, `q.ai.tasks` |
 | 4.1 | CDN cho S3 | 📋 Gốc | ✅ Done | ✅ Đúng | Đã tích hợp biến CLOUDFRONT_URL |
-| 4.2 | S3 Bucket Policy | 🗺️ R11 | 🔲 Chờ Console | ✅ Đúng | **Cần tạo CloudFront OAC trước khi block S3 public để tránh vỡ ảnh** |
+| 4.2 | S3 Bucket Policy | 🗺️ R11 | ✅ Done | ✅ Đúng | S3 Block Public Access + CloudFront OAC + CORS cấu hình tay hoàn tất |
 | 4.3 | Upload Security | 🗺️ R11 | ✅ Done | ✅ Đúng | Bắt buộc truyền size & allowlist; kèm Angular browser-image-compression |
 | 4.4 | Image Key Storage Refactor | ⚡ Ngoài plan | ✅ Done | — | DB lưu key, backend resolve URL qua `resolveImageUrl()`. Backward compatible. |
 | 5.1 | Auto Rollback | 🗺️ R9→R10 | ✅ Done | ✅ Đúng | Backup + smoke test + auto rollback |
@@ -396,8 +395,9 @@ Khi các Worker chạy tách biệt khỏi API chính bằng lệnh `pm2 start e
 ## 🌟 NHẬT KÝ TIẾN ĐỘ ROUND 11
 
 **Các Task:**
-- [ ] **Task 4.2:** Thiết lập S3 Bucket Policy chặn Public Access trực tiếp + cấu hình CORS cho Presigned URL Upload. **⚠️ Bắt buộc cấu hình CloudFront OAC trước khi block S3.**
+- [x] **Task 4.2:** Thiết lập S3 Bucket Policy chặn Public Access trực tiếp + cấu hình CORS cho Presigned URL Upload. -> **✅ ĐÃ XONG**. Áp dụng CloudFront OAC hiện đại, ảnh đọc mượt, upload presigned thành công.
 - [x] **Task 4.3:** Khóa lỗ hổng bảo mật Upload (Mandatory size & Extension Allowlist) -> **✅ ĐÃ XONG SỚM**.
 - [x] **Task 4.4:** Refactor lưu trữ ảnh (Full URL → S3 Key) -> **✅ ĐÃ XONG**. DB lưu key an toàn, Backend tự ánh xạ qua CloudFront.
 - [x] **Task 7.2:** Unit Test Lua Script Redis (Logic Correctness & Error Handling) -> **✅ ĐÃ XONG**. 19/19 tests passed. Vá `attachReservationOrderIdBestEffort` bọc toàn bộ try-catch.
+- [x] **Bonus (Battle-Tested Audit):** Khắc phục lỗ hổng "DLQ Silent Mute" -> **✅ ĐÃ XONG**. Đã thêm cấu hình tự động dọn rác DLQ (TTL 7 ngày, max 500 messages) cho các workers.
 - [ ] **Layer 8 (8.1 - 8.3):** Quy hoạch khả năng quan sát hệ thống (ELK/Loki, Prometheus, Grafana, APM) -> **🔲 Chờ thực hiện ở Phase sau**.

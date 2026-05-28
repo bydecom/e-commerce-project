@@ -51,7 +51,7 @@ Round 11 là chặng đường cuối cùng để đưa toàn bộ hệ thống 
 | 12 | PM2 Logrotate cài trên EC2 | Thao tác SSH trực tiếp | ✅ `pm2-logrotate` online, `max_size: 10M`, `retain: 7`, `compress: true` |
 | 13 | Fix `forceKillTimer` 5s → 8s | `ai.worker.ts` dòng 229-232 | ✅ `8_000` ms, comment ghi rõ phải < `kill_timeout` |
 
-### Round 11 — 4/4 Tasks ĐÃ XÁC MINH & HOÀN THÀNH ✅
+### Round 11 — 5/5 Tasks ĐÃ XÁC MINH & HOÀN THÀNH ✅
 
 | # | Task | File kiểm chứng | Kết quả |
 |---|------|-----------------|---------|
@@ -59,6 +59,8 @@ Round 11 là chặng đường cuối cùng để đưa toàn bộ hệ thống 
 | 2 | Bắt buộc truyền `size` và kiểm soát Upload cực kỳ chặt chẽ (Task 4.3) | `upload.controller.ts` dòng 11-19 | ✅ Đã hoàn thành: Tránh hacker bypass query size, chặn file rác khổng lồ (>5MB) gây tốn phí AWS S3. |
 | 3 | Unit Test Lua Script Redis (Task 7.2) | `stock-reservation.service.test.ts` | ✅ Đã hoàn thành: 19/19 tests passed, chứng minh logic correctness và error handling của Lua script integration. |
 | 4 | Refactor lưu trữ ảnh: Full URL → S3 Key (Task 4.4) | `storage.ts`, `product.service.ts`, `order.service.ts`, `upload.service.ts` (FE) | ✅ Đã hoàn thành: DB lưu key (`products/uuid.webp`), backend resolve URL khi trả API. Backward compatible với data cũ. |
+| 5 | Khóa kín S3, cấu hình CloudFront OAC (Task 4.2) | Cấu hình AWS Console | ✅ Đã hoàn thành: S3 Block Public Access + OAC cho phép đọc mượt mà, CORS cho phép Presigned URL PUT trực tiếp (bypassing OAC). |
+| 6 | Vá lỗ hổng "DLQ Silent Mute" (Thùng Rác Không Đổ) | `ai.worker.ts`, `email.worker.ts` | ✅ Đã hoàn thành: Thêm `x-message-ttl` 7 ngày và `x-max-length` 500 cho 2 hàng đợi DLQ chống tràn bộ nhớ. |
 
 ---
 
@@ -79,10 +81,10 @@ Round 11 là chặng đường cuối cùng để đưa toàn bộ hệ thống 
 > 2. Nếu chặn public access của S3 trước khi CloudFront OAC hoạt động ổn định, toàn bộ hình ảnh sản phẩm trên production sẽ lập tức bị vỡ (HTTP 403 Forbidden).
 
 **Checklist thực hiện:**
-1. [ ] **CloudFront OAC Setup:** Tạo Origin Access Control trên AWS Console, gắn vào CloudFront Distribution.
-2. [ ] **Verify CloudFront Access:** Xác minh hình ảnh hiển thị mượt mà qua CloudFront URL.
-3. [ ] **S3 Bucket Policy:** Chỉ sau khi verify xong, mới áp dụng JSON policy chặn public access trực tiếp vào S3, chỉ cho phép CloudFront OAC đọc.
-4. [ ] **S3 CORS Configuration:** Bổ sung CORS JSON cho bucket, cho phép `PUT` từ Frontend origin (CloudFront URL) — **bắt buộc** để trình duyệt không chặn preflight `OPTIONS` khi upload qua Presigned URL.
+1. [x] **CloudFront OAC Setup:** Tạo Origin Access Control trên AWS Console, gắn vào CloudFront Distribution.
+2. [x] **Verify CloudFront Access:** Xác minh hình ảnh hiển thị mượt mà qua CloudFront URL.
+3. [x] **S3 Bucket Policy:** Chỉ sau khi verify xong, mới áp dụng JSON policy chặn public access trực tiếp vào S3, chỉ cho phép CloudFront OAC đọc.
+4. [x] **S3 CORS Configuration:** Bổ sung CORS JSON cho bucket, cho phép `PUT` từ Frontend origin (CloudFront URL) — **bắt buộc** để trình duyệt không chặn preflight `OPTIONS` khi upload qua Presigned URL.
 
 ---
 
@@ -149,7 +151,7 @@ Một hệ thống tự chữa lành chuẩn Enterprise cần có "đôi mắt" 
 
 | Task | Mục tiêu | Độ ưu tiên | Loại | Trạng thái |
 |------|----------|------------|------|------------|
-| **4.2** | Khóa kín S3, ép traffic qua CloudFront | 🔴 **Cao** | Cloud Infra | ⬜ Chờ triển khai trên AWS Console |
+| **4.2** | Khóa kín S3, ép traffic qua CloudFront (OAC) | 🔴 **Cao** | Cloud Infra | ✅ Hoàn thành trên Console |
 | **4.3** | Khóa bảo mật Upload (Mandatory Size & Allowlist) | 🟢 **Thấp** | Application | ✅ Hoàn thành |
 | **4.4** | Refactor lưu trữ ảnh: Full URL → S3 Key | 🟡 **Trung bình** | Application | ✅ Hoàn thành |
 | **7.2** | Unit Test Lua Script Redis (Logic Correctness) | 🟡 **Trung bình** | Testing | ✅ Hoàn thành |

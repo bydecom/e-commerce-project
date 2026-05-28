@@ -59,8 +59,14 @@ async function setupChannel(conn: ChannelModel): Promise<Channel> {
   });
   await ch.bindQueue(QUEUE_ORDER, EXCHANGE, 'email.order.#');
 
-  // Dead-letter queue for failed order emails
-  await ch.assertQueue(QUEUE_ORDER_DLQ, { durable: true });
+  // Dead-letter queue for failed order emails — TTL 7 ngày, tối đa 500 message
+  await ch.assertQueue(QUEUE_ORDER_DLQ, {
+    durable: true,
+    arguments: {
+      'x-message-ttl': 7 * 24 * 60 * 60 * 1000, // 7 ngày (ms) → tự xóa
+      'x-max-length': 500,                        // Tối đa 500 message, drop cũ nhất
+    },
+  });
   await ch.bindQueue(QUEUE_ORDER_DLQ, EXCHANGE_DLQ, 'email.order.dead');
 
   return ch;
