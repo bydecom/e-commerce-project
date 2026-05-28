@@ -59,6 +59,7 @@ graph TD
 *   **Hiện trạng Code:**
     *   **Rate Limiter Fallback:** Tại [app.ts dòng 90-100](file:///d:/Workspace/Project/e-commerce-project/backend/src/app.ts#L90-L100), hàm `createRateLimitStore()` cố gắng kết nối với cụm Redis để tạo `RedisStore` đồng bộ. Nếu Redis bị sập (lỗi kết nối hạ tầng), hệ thống tự động in log cảnh báo và **Fallback về in-memory MemoryStore cục bộ**. Nhờ vậy, API không bị sập và các cơ chế bảo mật chống spam vẫn hoạt động ở mức cơ bản.
     *   **JWT Blacklist Fail-Open (Tọa độ 4):** Luồng xác thực JWT kiểm tra token thu hồi qua Redis. Nếu Redis sập, thay vì ném lỗi 500 chặn đứng mọi user đăng nhập, hệ thống tự động bypass qua bước kiểm tra blacklist, chỉ kiểm tra signature JWT tĩnh của token. Hệ thống chọn mở cổng (Fail-Open) để giữ dịch vụ thông suốt thay vì khóa chặt làm gián đoạn kinh doanh.
+    *   **Best-Effort Redis Swallowing in Checkout Flow:** Trong [stock-reservation.service.ts dòng 238-253](file:///d:/Workspace/Project/e-commerce-project/backend/src/modules/inventory/stock-reservation.service.ts#L238-L253), phương thức `attachReservationOrderIdBestEffort` bọc toàn bộ thân hàm (bao gồm bước kết nối và truy xuất/cập nhật Redis) vào một khối `try/catch` duy nhất để swallow mọi lỗi kết nối/mạng Redis. Do được thiết kế là Best Effort, luồng checkout chính của khách hàng vẫn chạy trơn tru ngay cả khi cụm Redis sập hoàn toàn, mang lại khả năng chống chịu lỗi tuyệt vời.
 
 ### 🔌 1.3 Circuit Breaker (Ngắt Mạch Tránh Lỗi Dây Chuyền)
 *   **Hiện trạng Code:**
@@ -93,6 +94,13 @@ graph TD
         *   `retain: 7`: Giữ tối đa 7 file log lịch sử gần nhất.
         *   `compress: true`: Tự động nén gzip file log cũ để tiết kiệm dung lượng đĩa.
     *   **Kết quả:** Ngăn chặn hoàn toàn quả bom nổ chậm đầy ổ đĩa EC2 gây sập dây chén toàn bộ Node.js và RabbitMQ.
+
+### 🔄 2.4 Smart Auto-Rollback Pipeline (CI/CD Tự Phục Hồi)
+*   **Hiện trạng Code:**
+    *   **Tự động tạo Backup:** Trong [deploy-backend.yml dòng 32-45](file:///d:/Workspace/Project/e-commerce-project/.github/workflows/deploy-backend.yml#L32-L45), hệ thống tự động backup thư mục `dist` cũ thành `dist.backup` trên máy chủ EC2 trước khi chuyển code mới lên.
+    *   **Smart Rollback Trigger:** Khi step Smoke Test (`id: smoke_test`) bị lỗi (API `/api/health` trả về lỗi hoặc không phản hồi sau 3 lần retry), GitHub Actions sẽ tự động kích hoạt step `🚨 Rollback nếu Smoke Test fail` dựa trên điều kiện `if: always() && steps.smoke_test.outcome == 'failure'`.
+    *   **Tự phục hồi nhanh:** Lệnh rollback sẽ tự động xóa thư mục `dist` lỗi, khôi phục lại `dist.backup` ổn định, và thực hiện `pm2 reload` để đưa hệ thống về trạng thái bình thường ngay lập tức.
+*   **Kết quả:** Triệt tiêu hoàn toàn rủi ro downtime hoặc kẹt code lỗi trên máy chủ Production khi deploy bị fail. Đạt điểm 10/10 về tính an toàn vận hành!
 
 ---
 

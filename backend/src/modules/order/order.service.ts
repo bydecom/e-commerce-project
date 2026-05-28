@@ -8,11 +8,11 @@ import { prisma } from '../../db';
 import { parsePagination } from '../../utils/pagination';
 import { httpError } from '../../utils/http-error';
 import { StoreSettingService } from '../store-setting/store-setting.service';
-import {
-  publishOrderPlacedEmail,
+import { publishOrderPlacedEmail,
   publishOrderCompletedEmail,
   publishOrderStatusEmail,
 } from '../../rabbitmq/publisher';
+import { resolveImageUrl } from '../../config/storage';
 
 const orderItemInclude = {
   product: { select: { id: true, name: true, imageUrl: true } },
@@ -40,7 +40,7 @@ function mapItem(
     name: row.product.name,
     quantity: row.quantity,
     unitPrice: row.unitPrice,
-    imageUrl: row.product.imageUrl,
+    imageUrl: resolveImageUrl(row.product.imageUrl),
     isReviewed: reviewedSet.has(key),
   };
 }

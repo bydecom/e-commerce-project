@@ -6,6 +6,7 @@ import { httpError } from '../../utils/http-error';
 import * as aiService from '../ai/ai.service';
 import { publishProductVectorSync } from '../../rabbitmq/publisher';
 import { getConfigInt } from '../system-config/system-config.service';
+import { resolveImageUrl } from '../../config/storage';
 
 function toTitleUnaccent(input: string): string {
   const n = input.normalize('NFD').replace(/\p{M}/gu, '');
@@ -23,7 +24,7 @@ function mapProduct(p: Product & { category?: { id: number; name: string } }) {
     // Frontend product detail needs a stable `quantity` field.
     // We keep `stock` for backward compatibility and expose `quantity` as an alias.
     quantity: p.stock,
-    imageUrl: p.imageUrl,
+    imageUrl: resolveImageUrl(p.imageUrl),
     status: p.status,
     categoryId: p.categoryId,
     category: p.category ? { id: p.category.id, name: p.category.name } : undefined,

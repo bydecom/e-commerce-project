@@ -8,6 +8,7 @@ import imageCompression from 'browser-image-compression';
 interface PresignedResponse {
   uploadUrl: string;
   publicUrl: string;
+  key: string;
 }
 
 @Injectable({ providedIn: 'root' })
@@ -44,7 +45,7 @@ export class UploadService {
             return this.http.put(res.data.uploadUrl, fileToUpload, {
               headers: { 'Content-Type': fileToUpload.type }
             }).pipe(
-              map(() => res.data.publicUrl)
+              map(() => res.data.key)
             );
           })
         );
