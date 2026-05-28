@@ -11,6 +11,7 @@ export const s3Client = new S3Client({
 });
 
 export const BUCKET_NAME = process.env.AWS_BUCKET_NAME || 'ecommerce-products';
+export const REGION = process.env.AWS_REGION || 'us-east-1';
 
 /**
  * Resolves a stored image key (e.g. "products/uuid.webp") to a full public URL.
@@ -23,6 +24,6 @@ export function resolveImageUrl(key: string | null | undefined): string | null {
   const base = process.env.CLOUDFRONT_URL
     ?? (process.env.AWS_ENDPOINT
       ? `${process.env.AWS_ENDPOINT}/${BUCKET_NAME}`
-      : `https://${BUCKET_NAME}.s3.${process.env.AWS_REGION ?? 'ap-southeast-1'}.amazonaws.com`);
+      : `https://${BUCKET_NAME}.s3.${REGION}.amazonaws.com`);
   return `${base}/${key}`;
 }

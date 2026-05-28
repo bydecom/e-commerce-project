@@ -188,6 +188,16 @@ if (response.code === '00' && response.finalized === 'success') {
 
 ---
 
+## ⚔️ CÁC BẪY "SILENT KILLERS" (Được phát hiện từ Cao Nhân chỉ điểm)
+
+Hệ thống đã trải qua đợt rà soát sâu (Round 11 - Battle-Tested Audit) với 4 rủi ro thực chiến đặc biệt nghiêm trọng mà các AI và khóa học thường bỏ sót:
+1. **Toán Học Dấu Phẩy Động (Floating Point Trap):** Hiện tại an toàn vì VND là số nguyên, nhưng đã đánh dấu cần thêm `Math.round` khi có logic Discount/VAT sau này.
+2. **Deep Pagination Offset Trap:** Đã an toàn! `parsePagination` có sẵn chặn `limit` tối đa 100, ngăn chặn Crawler/Bot đánh sập CPU PostgreSQL.
+3. **Soft Delete vs Unique Constraint:** Đã an toàn! Hệ thống dùng Hard Delete 100%, không dính bẫy `isDeleted` + `@@unique` email gây lỗi Unique Constraint.
+4. **DLQ Silent Mute (Thùng Rác Không Đổ):** 🔴 **Đã dính!** Cả hai hàng đợi DLQ (AI và Email) đều là hố đen không đáy gây tràn ổ đĩa EC2 âm thầm. Đã **Fix Ngay Lập Tức** bằng cách thêm `x-message-ttl: 7 ngày` (604800000ms) và `x-max-length: 500` vào configuration của cả 2 worker.
+
+---
+
 ## 4. 🖼️ S3 + CloudFront CDN — Plan Đúng, Nhưng Thiếu 2 Bước Quan Trọng
 
 ### ✅ Đúng: CloudFront là lựa chọn tối ưu nhất

@@ -11,13 +11,13 @@ Tài liệu này tổng hợp toàn bộ các nhiệm vụ, cải tiến kiến 
 | **Layer 1 — Process & Runtime** | 5 | 5 | 0 | 100% ✅ |
 | **Layer 2 — Database & Connection** | 3 | 3 | 0 | 100% ✅ |
 | **Layer 3 — Async Queue & Workers** | 6 | 6 | 0 | 100% ✅ |
-| **Layer 4 — Storage & Cloud CDN** | 3 | 2 | 1 (Chờ Console S3) | 66.7% ⚠️ |
+| **Layer 4 — Storage & Cloud CDN** | 3 | 3 | 0 | 100% ✅ |
 | **Layer 5 — CI/CD & Deploy Pipelines** | 4 | 4 | 0 | 100% ✅ |
 | **Layer 6 — Security & DevOps** | 6 | 6 | 0 | 100% ✅ |
 | **Layer 7 — Testing & Verification** | 3 | 3 | 0 | 100% ✅ |
 | **Layer 8 — Observability (Backlog)** | 3 | 0 | 3 (Phase Tiếp Theo) | 0% 🔲 |
 | **UX & Kiến Trúc Phát Sinh (Bonus)** | 6 | 6 | 0 | 100% ✅ |
-| **TỔNG CỘNG** | **39** | **35** | **4** | **89.7%** 🚀 |
+| **TỔNG CỘNG** | **39** | **36** | **3** | **92.3%** 🚀 |
 
 ---
 
@@ -72,7 +72,7 @@ Tài liệu này tổng hợp toàn bộ các nhiệm vụ, cải tiến kiến 
   - *Chi tiết:* Luồng VNPay IPN được giữ chạy đồng bộ trong `prisma.$transaction` để bảo vệ dòng tiền thật. Side-effects gửi mail hay release kho được tách ra ngoài với `.catch()`. 
   - *File kiểm chứng:* [vnpay.controller.ts:406-492](file:///d:/Workspace/Project/e-commerce-project/backend/src/modules/payment/vnpay.controller.ts#L406-L492)
 - [x] **Tách Biệt Queue Theo Loại Job & Dead Letter Queue (DLQ):** 
-  - *Chi tiết:* Thiết lập các hàng đợi cách ly chuyên nghiệp: `q.auth.tasks` (email đăng ký), `q.order.tasks` (email đơn hàng), `q.ai.tasks` (xử lý vector & feedback). Cấu hình DLQ (`ex.dlq`) để chứa các message lỗi, tránh nghẽn CPU do infinite loop retry.
+  - *Chi tiết:* Thiết lập các hàng đợi cách ly chuyên nghiệp: `q.auth.tasks` (email đăng ký), `q.order.tasks` (email đơn hàng), `q.ai.tasks` (xử lý vector & feedback). Cấu hình DLQ (`ex.dlq`) để chứa các message lỗi. **Cải tiến:** Đã vá lỗ hổng "Thùng rác không đổ" (Silent Mute) bằng cách áp dụng TTL 7 ngày và Max Length 500 cho mọi DLQ tránh tràn ổ đĩa EC2.
   - *File kiểm chứng:* [ai.worker.ts:157-165](file:///d:/Workspace/Project/e-commerce-project/backend/src/workers/ai.worker.ts#L157-L165)
 - [x] **Orphaned Feedback Sweeper (Tọa độ 1):** 
   - *Chi tiết:* Viết `feedback-sweeper.service.ts` định kỳ quét feedback kẹt ở trạng thái `PENDING` quá 30 phút bằng SQL Raw. Sử dụng Redis distributed lock (`feedback:sweeper:lock`) chống race condition và republish thông minh qua `Promise.allSettled`.
@@ -91,9 +91,9 @@ Tài liệu này tổng hợp toàn bộ các nhiệm vụ, cải tiến kiến 
 - [x] **Khóa Lỗ Hổng Bảo Mật Upload (Task 4.3):** 
   - *Chi tiết:* Ép buộc truyền tham số `size`, kiểm định `<= 5MB` ở Backend, kết hợp Allowlist cứng phần mở rộng (`['jpg', 'jpeg', 'png', 'webp', 'gif']`). **Ngoài ra:** Tích hợp `browser-image-compression` tại Frontend nén ảnh ngầm qua Web Worker thành `.webp` siêu nhẹ <300KB trước khi upload lên S3.
   - *File kiểm chứng:* [upload.controller.ts](file:///d:/Workspace/Project/e-commerce-project/backend/src/modules/upload/upload.controller.ts) & [upload.service.ts (Frontend)](file:///d:/Workspace/Project/e-commerce-project/frontend/src/app/core/services/upload.service.ts)
-- [ ] **AWS S3 Bucket Policy & CORS (Task 4.2):** 
+- [x] **AWS S3 Bucket Policy & CORS (Task 4.2):** 
   - *Chi tiết:* Chặn tuyệt đối mọi truy cập trực tiếp vào S3 bucket, chỉ cho phép CloudFront OAC đi qua.
-  - *Trạng thái:* 🔲 **Chờ Console** (Cần setup OAC ổn định trên AWS Console trước khi block S3 public để tránh vỡ toàn bộ ảnh sản phẩm trên Production).
+  - *Trạng thái:* ✅ **Đã hoàn thành** (Cấu hình thành công OAC cho GET và CORS cho Presigned PUT).
 
 ---
 
