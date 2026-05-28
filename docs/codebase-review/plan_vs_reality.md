@@ -149,6 +149,20 @@ Không thể kiểm tra từ code. Cần thực hiện trên AWS Console.
 > [!WARNING]
 > **Thứ tự triển khai sống còn:** Bắt buộc phải cấu hình CloudFront OAC hoạt động ổn định **TRƯỚC** khi chặn S3 public access. Nếu làm ngược, toàn bộ hình ảnh sản phẩm trên production sẽ lập tức bị vỡ (HTTP 403 Forbidden).
 
+### 4.4 Refactor Lưu Trữ Ảnh: Full URL → S3 Key — ✅ Đã xong (Round 11)
+
+**⚡ Ngoài plan ban đầu** — Phát hiện từ review kiến trúc: DB đang lưu full URL (`https://xxx.cloudfront.net/products/uuid.webp`) thay vì lưu key (`products/uuid.webp`), gây phụ thuộc cứng vào CDN/S3 domain.
+
+**Giải pháp đã triển khai:**
+- [storage.ts](file:///d:/Workspace/Project/e-commerce-project/backend/src/config/storage.ts): Thêm hàm `resolveImageUrl(key)` — single source of truth để ghép key thành full URL từ env `CLOUDFRONT_URL`.
+- [product.service.ts](file:///d:/Workspace/Project/e-commerce-project/backend/src/modules/product/product.service.ts): `mapProduct()` gọi `resolveImageUrl()` khi trả API — toàn bộ product reads đều đi qua đây.
+- [order.service.ts](file:///d:/Workspace/Project/e-commerce-project/backend/src/modules/order/order.service.ts): `mapItem()` tương tự.
+- [upload.service.ts (FE)](file:///d:/Workspace/Project/e-commerce-project/frontend/src/app/core/services/upload.service.ts): Sau khi upload xong, trả `key` thay vì `publicUrl` để lưu vào DB.
+- [product.schema.ts](file:///d:/Workspace/Project/e-commerce-project/backend/src/modules/product/product.schema.ts): Bỏ `.url()` validation — chấp nhận key format.
+
+> [!NOTE]
+> **Backward compatible:** `resolveImageUrl` tự detect data cũ (bắt đầu bằng `http`) và pass-through không đổi. Không cần migration SQL.
+
 ---
 
 ## LAYER 5 — CI/CD & DEPLOY
@@ -274,6 +288,7 @@ Không thể kiểm tra từ code. Cần thực hiện trên AWS Console.
 | 4.1 | CDN cho S3 | 📋 Gốc | ✅ Done | ✅ Đúng | Đã tích hợp biến CLOUDFRONT_URL |
 | 4.2 | S3 Bucket Policy | 🗺️ R11 | 🔲 Chờ Console | ✅ Đúng | **Cần tạo CloudFront OAC trước khi block S3 public để tránh vỡ ảnh** |
 | 4.3 | Upload Security | 🗺️ R11 | ✅ Done | ✅ Đúng | Bắt buộc truyền size & allowlist; kèm Angular browser-image-compression |
+| 4.4 | Image Key Storage Refactor | ⚡ Ngoài plan | ✅ Done | — | DB lưu key, backend resolve URL qua `resolveImageUrl()`. Backward compatible. |
 | 5.1 | Auto Rollback | 🗺️ R9→R10 | ✅ Done | ✅ Đúng | Backup + smoke test + auto rollback |
 | 5.2 | Env vars | 📋 Gốc | ✅ Done | ✅ Đúng | CORS + VNP_RETURN_URL sang động |
 | 5.3 | Frontend CI/CD | ⚡ Ngoài plan | ✅ Done | — | S3 sync + CloudFront invalidation + smoke test |
@@ -383,5 +398,6 @@ Khi các Worker chạy tách biệt khỏi API chính bằng lệnh `pm2 start e
 **Các Task:**
 - [ ] **Task 4.2:** Thiết lập S3 Bucket Policy chặn Public Access trực tiếp + cấu hình CORS cho Presigned URL Upload. **⚠️ Bắt buộc cấu hình CloudFront OAC trước khi block S3.**
 - [x] **Task 4.3:** Khóa lỗ hổng bảo mật Upload (Mandatory size & Extension Allowlist) -> **✅ ĐÃ XONG SỚM**.
+- [x] **Task 4.4:** Refactor lưu trữ ảnh (Full URL → S3 Key) -> **✅ ĐÃ XONG**. DB lưu key an toàn, Backend tự ánh xạ qua CloudFront.
 - [x] **Task 7.2:** Unit Test Lua Script Redis (Logic Correctness & Error Handling) -> **✅ ĐÃ XONG**. 19/19 tests passed. Vá `attachReservationOrderIdBestEffort` bọc toàn bộ try-catch.
 - [ ] **Layer 8 (8.1 - 8.3):** Quy hoạch khả năng quan sát hệ thống (ELK/Loki, Prometheus, Grafana, APM) -> **🔲 Chờ thực hiện ở Phase sau**.

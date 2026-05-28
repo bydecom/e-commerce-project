@@ -20,7 +20,7 @@ export const getPresignedUploadUrl = async (mimetype: string, extension: string)
       ? `${process.env.AWS_ENDPOINT}/${BUCKET_NAME}/${key}`
       : `https://${BUCKET_NAME}.s3.${process.env.AWS_REGION}.amazonaws.com/${key}`;
 
-  return { uploadUrl, publicUrl };
+  return { uploadUrl, publicUrl, key };
 };
 
 export const deleteFile = async (key: string) => {

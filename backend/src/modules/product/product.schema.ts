@@ -6,7 +6,7 @@ export const createProductSchema = z.object({
   description: z.string().trim().max(8000).optional().nullable(),
   price:       z.number().min(0).finite(),
   stock:       z.number().min(0).int(),
-  imageUrl:    z.string().url('Invalid URL').optional().nullable().or(z.literal('')),
+  imageUrl:    z.string().trim().min(1).optional().nullable().or(z.literal('')),
   categoryId:  z.number().min(1),
   status:      z.enum(['AVAILABLE', 'UNAVAILABLE', 'DRAFT']).default('DRAFT'),
 });

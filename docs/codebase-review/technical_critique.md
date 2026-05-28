@@ -835,7 +835,15 @@ Round 11 đánh dấu bước hoàn thiện cuối cùng của hệ thống trư
 > **4. Xác minh tính Lũy Đẳng (Idempotency) của AI Worker (ĐÃ KIỂM CHỨNG - AN TOÀN):**
 > - **Xác minh thực tế:** Rà soát file [ai.worker.ts](file:///d:/Workspace/Project/e-commerce-project/backend/src/workers/ai.worker.ts) cho thấy cơ chế phòng thủ tối ưu chi phí Gemini API đã chạy chuẩn xác: Kiểm tra `feedback.sentiment !== 'PENDING'` trước khi gọi Gemini API để tránh tốn phí. Nếu job bị trùng lặp hoặc retry, worker sẽ return sớm, tiết kiệm 100% chi phí API thừa.
 
-> **5. Quy hoạch Layer 8 - Observability (Khả năng quan sát - Backlog tương lai):**
+> **5. Refactor Lưu Trữ Ảnh - Kiến trúc "Single Source of Truth" (Task 4.4 - ĐÃ TRIỂN KHAI):**
+> - **Vấn đề Phát sinh (Ngoài Plan):** Phát hiện Database đang lưu trữ URL ảnh dưới dạng Full URL (`https://xxx.cloudfront.net/...`) thay vì S3 Key, gây ra nợ kỹ thuật nghiêm trọng. Điều này tạo ra rủi ro sập toàn bộ link ảnh nếu có nhu cầu chuyển đổi tên miền CDN hoặc cấu trúc Bucket S3 sau này.
+> - **Giải pháp Kiến trúc & Tương thích ngược:** 
+>   - Tạo hàm `resolveImageUrl(key)` trong `storage.ts` để linh hoạt ánh xạ từ S3 key thô thành public URL thông qua biến môi trường CDN.
+>   - Cập nhật toàn bộ các Data Mapper (`mapProduct`, `mapItem`) ở Backend để trả về URL đã được ánh xạ, giúp Frontend hoàn toàn không bị ảnh hưởng (Zero View Changes).
+>   - Đảm bảo tính tương thích ngược (Backward Compatibility): Hàm resolver tự nhận diện dữ liệu cũ (Full URL có prefix `http`) để pass-through, không yêu cầu phải chạy kịch bản migration database đầy rủi ro trên Production.
+> - 🧠 **Bài học Thực chiến:** Sự kiện này đã được đúc kết thành bài phân tích chi tiết về 4 "điểm mù" kinh điển trong Code Review: [Xem chi tiết tại lesson_functional_blindness.md](./lesson_functional_blindness.md).
+
+> **6. Quy hoạch Layer 8 - Observability (Khả năng quan sát - Backlog tương lai):**
 > - **Quyết định:** Tạm gác lại Layer 8 để ưu tiên Go-Live, tuy nhiên đã quy hoạch rõ ràng lộ trình tích hợp:
 >   - **Centralized Logging (8.1):** Đẩy log stdout từ PM2 về Loki hoặc ELK Stack để tra cứu nhanh theo ID giao dịch VNPay.
 >   - **Metrics & Grafana Dashboards (8.2):** Giám sát thời gian thực RAM/CPU máy chủ, database connection pool của Neon, và số lượng message kẹt trong RabbitMQ.

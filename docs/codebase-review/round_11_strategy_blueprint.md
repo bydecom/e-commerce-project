@@ -51,13 +51,14 @@ Round 11 là chặng đường cuối cùng để đưa toàn bộ hệ thống 
 | 12 | PM2 Logrotate cài trên EC2 | Thao tác SSH trực tiếp | ✅ `pm2-logrotate` online, `max_size: 10M`, `retain: 7`, `compress: true` |
 | 13 | Fix `forceKillTimer` 5s → 8s | `ai.worker.ts` dòng 229-232 | ✅ `8_000` ms, comment ghi rõ phải < `kill_timeout` |
 
-### Round 11 — 3/3 Tasks ĐÃ XÁC MINH & HOÀN THÀNH ✅
+### Round 11 — 4/4 Tasks ĐÃ XÁC MINH & HOÀN THÀNH ✅
 
 | # | Task | File kiểm chứng | Kết quả |
 |---|------|-----------------|---------|
 | 1 | AI Worker Idempotency Check trước Gemini call | `ai.worker.ts` dòng 90-93 | ✅ Đã kiểm chứng: kiểm tra `feedback.sentiment !== 'PENDING'` và bỏ qua ngay để chống phí API Gemini. |
 | 2 | Bắt buộc truyền `size` và kiểm soát Upload cực kỳ chặt chẽ (Task 4.3) | `upload.controller.ts` dòng 11-19 | ✅ Đã hoàn thành: Tránh hacker bypass query size, chặn file rác khổng lồ (>5MB) gây tốn phí AWS S3. |
 | 3 | Unit Test Lua Script Redis (Task 7.2) | `stock-reservation.service.test.ts` | ✅ Đã hoàn thành: 19/19 tests passed, chứng minh logic correctness và error handling của Lua script integration. |
+| 4 | Refactor lưu trữ ảnh: Full URL → S3 Key (Task 4.4) | `storage.ts`, `product.service.ts`, `order.service.ts`, `upload.service.ts` (FE) | ✅ Đã hoàn thành: DB lưu key (`products/uuid.webp`), backend resolve URL khi trả API. Backward compatible với data cũ. |
 
 ---
 
@@ -149,6 +150,7 @@ Một hệ thống tự chữa lành chuẩn Enterprise cần có "đôi mắt" 
 | Task | Mục tiêu | Độ ưu tiên | Loại | Trạng thái |
 |------|----------|------------|------|------------|
 | **4.2** | Khóa kín S3, ép traffic qua CloudFront | 🔴 **Cao** | Cloud Infra | ⬜ Chờ triển khai trên AWS Console |
-| **4.3** | Khóa bảo mật Upload (Mandatory Size & Allowlist) | 🟢 **Thấp** | Application | ✅ Hoàn thành sớm |
+| **4.3** | Khóa bảo mật Upload (Mandatory Size & Allowlist) | 🟢 **Thấp** | Application | ✅ Hoàn thành |
+| **4.4** | Refactor lưu trữ ảnh: Full URL → S3 Key | 🟡 **Trung bình** | Application | ✅ Hoàn thành |
 | **7.2** | Unit Test Lua Script Redis (Logic Correctness) | 🟡 **Trung bình** | Testing | ✅ Hoàn thành |
 | **8.x** | Layer 8 - Observability (ELK, Prometheus, Grafana) | 🔵 **Tương lai** | Ops / Infra | 🔲 Chờ thực hiện |
