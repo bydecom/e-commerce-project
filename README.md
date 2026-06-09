@@ -371,10 +371,10 @@ Copy `backend/.env.example` to `backend/.env` and adjust values. Key groups:
 
 ## System configuration (DB-backed)
 
-Admin có thể cấu hình các thông số runtime trong bảng `SystemConfig` (API admin-only: `/api/system-config`) mà **không cần sửa `.env`**.
+Admins can configure runtime parameters dynamically in the `SystemConfig` table (via the admin-only API: `/api/system-config`) **without modifying the `.env` file**.
 
-- **Fallback**: nếu DB chưa có key, backend sẽ fallback sang `process.env` rồi tới giá trị mặc định an toàn.
-- **Seed mặc định**: chạy SQL tại `backend/prisma/migration.sql` (idempotent nhờ `ON CONFLICT DO NOTHING`).
+- **Fallback mechanism**: If a configuration key does not exist in the database, the backend will gracefully fall back to `process.env` variables, and then to safe default values.
+- **Default Seeding**: Execute the SQL script located at `backend/prisma/migration.sql` to populate default configs (this operation is idempotent thanks to `ON CONFLICT DO NOTHING`).
 
 ---
 
