@@ -480,7 +480,10 @@ See [`.env.example`](backend/.env.example) for the full list.
 
 ## System configuration (DB-backed)
 
-Runtime knobs live in `SystemConfig` (admin API `/api/system-config`) so many values can change **without** editing `.env`. Missing keys fall back to `process.env`, then safe defaults.
+Admins can configure runtime parameters dynamically in the `SystemConfig` table (via the admin-only API: `/api/system-config`) **without modifying the `.env` file**.
+
+- **Fallback mechanism**: If a configuration key does not exist in the database, the backend will gracefully fall back to `process.env` variables, and then to safe default values.
+- **Default Seeding**: Execute the SQL script located at `backend/prisma/migration.sql` to populate default configs (this operation is idempotent thanks to `ON CONFLICT DO NOTHING`).
 
 ---
 
