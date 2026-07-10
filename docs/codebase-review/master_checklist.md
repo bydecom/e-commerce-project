@@ -1,12 +1,18 @@
-# 🔱 Master Checklist: Bản Đồ Bám Sát Tiến Độ Go-Live (R1 → R11)
+# 🔱 Master Checklist: Bản Đồ Bám Sát Tiến Độ Go-Live (R1 → R12)
 
-Tài liệu này tổng hợp toàn bộ các nhiệm vụ, cải tiến kiến trúc, và sửa lỗi bảo mật/hiệu năng đã thực hiện từ **Round 1** đến **Round 11**. Bản đồ này được đúc kết từ [technical_critique.md](file:///d:/Workspace/Project/e-commerce-project/docs/codebase-review/technical_critique.md) và [plan_vs_reality.md](file:///d:/Workspace/Project/e-commerce-project/docs/codebase-review/plan_vs_reality.md) để bạn dễ dàng theo dõi và đối chiếu trước khi bàn giao dự án.
+Tài liệu này tổng hợp nhiệm vụ, cải tiến kiến trúc, và sửa lỗi bảo mật/hiệu năng từ **Round 1 → Round 11** (đã ship), cộng **Round 12 backlog**.
+
+Nguồn gốc: [`technical_critique.md`](./technical_critique.md), [`plan_vs_reality.md`](./plan_vs_reality.md), [`round_12_strategy_blueprint.md`](./round_12_strategy_blueprint.md).
+
+> **Audit đối chiếu code:** 2026-07-10 — đã quét lại repo; các mục `[x]` bên dưới khớp implementation hiện tại trừ ghi chú ⚠️ (nếu có). Link dùng path tương đối trong repo (không còn `file:///d:/...`).
 
 ---
 
 ## 📊 TỔNG QUAN TIẾN ĐỘ CHUNG
 
-| Tầng Phân Tích (Layers) | Tổng Số Task | Đã Hoàn Thành (Done) | Chờ Console/Backlog | Tỉ lệ Hoàn Thành |
+### Phạm vi R1 → R11 (đã đóng vòng)
+
+| Tầng Phân Tích (Layers) | Tổng Task | Done | Backlog | Tỉ lệ |
 |---|---|---|---|---|
 | **Layer 1 — Process & Runtime** | 5 | 5 | 0 | 100% ✅ |
 | **Layer 2 — Database & Connection** | 3 | 3 | 0 | 100% ✅ |
@@ -15,173 +21,227 @@ Tài liệu này tổng hợp toàn bộ các nhiệm vụ, cải tiến kiến 
 | **Layer 5 — CI/CD & Deploy Pipelines** | 4 | 4 | 0 | 100% ✅ |
 | **Layer 6 — Security & DevOps** | 6 | 6 | 0 | 100% ✅ |
 | **Layer 7 — Testing & Verification** | 3 | 3 | 0 | 100% ✅ |
-| **Layer 8 — Observability (Backlog)** | 3 | 0 | 3 (Phase Tiếp Theo) | 0% 🔲 |
+| **Layer 8 — Observability** | 3 | 0 | 3 | 0% 🔲 |
 | **UX & Kiến Trúc Phát Sinh (Bonus)** | 6 | 6 | 0 | 100% ✅ |
-| **TỔNG CỘNG** | **39** | **36** | **3** | **92.3%** 🚀 |
+| **TỔNG R1–R11** | **39** | **36** | **3** | **92.3%** |
+
+### Round 12 — EDA Reliability (chưa tính vào 39)
+
+| Phase | Task trong checklist này | Trạng thái |
+|---|---|---|
+| 12A / 12B / 12C | 6 mục ưu tiên (rút từ blueprint 8 gaps) | 🔲 Backlog |
+| **Gộp R1–R12 (checklist này)** | **45** | **36 done / 9 open** (~80% nếu tính cả R12) |
+
+> Round 12 blueprint còn thêm *Retry trước DLQ* và *Cursor pagination* — chưa liệt kê ở đây vì ưu tiên thấp hơn / dài hạn. Xem [`round_12_strategy_blueprint.md`](./round_12_strategy_blueprint.md).
 
 ---
 
 ## 🛠️ CHI TIẾT CHECKLIST THEO TỪNG PHÂN LỚP
 
-### 1. 🏎️ LAYER 1 — PROCESS & RUNTIME (Tầng Ứng Dụng)
-*Mục tiêu: Đảm bảo tiến độ ứng dụng chạy mượt mà, stateless, chịu tải cao và không bị crash rò rỉ tài nguyên.*
+### 1. 🏎️ LAYER 1 — PROCESS & RUNTIME
+*Mục tiêu: App chạy mượt, stateless, chịu tải, không crash / rò rỉ tài nguyên.*
 
-- [x] **SIGTERM & SIGINT Graceful Shutdown:** 
-  - *Chi tiết:* Gọi `stopCleanupLoop()`, `server.close()`, giải phóng kết nối Prisma, Redis, và RabbitMQ mượt mà.
-  - *File kiểm chứng:* [backend/index.ts:22-68](file:///d:/Workspace/Project/e-commerce-project/backend/index.ts#L22-L68) & [email.worker.ts:207-231](file:///d:/Workspace/Project/e-commerce-project/backend/src/workers/email.worker.ts#L207-L231)
-- [x] **Unhandled Rejection & Uncaught Exception Handlers:** 
-  - *Chi tiết:* Bắt trọn mọi ngoại lệ bất ngờ, in log và thực thi tắt app an toàn thay vì để app rơi vào trạng thái zombie hỏng dữ liệu.
-  - *File kiểm chứng:* [backend/index.ts:70-84](file:///d:/Workspace/Project/e-commerce-project/backend/index.ts#L70-L84)
-- [x] **PM2 Cluster Mode & Zero-Downtime Reload:** 
-  - *Chi tiết:* Bật `instances: 'max'`, `exec_mode: 'cluster'`. Kết hợp `wait_ready: true`, nâng `listen_timeout: 8000` (chống cold start Neon) và bắn tín hiệu `process.send?.('ready')` để PM2 reload tuần tự không gây downtime.
-  - *File kiểm chứng:* [backend/ecosystem.config.js:15-16](file:///d:/Workspace/Project/e-commerce-project/backend/ecosystem.config.js#L15-L16)
-- [x] **Rate Limit Phân Hóa & Redis Store Fallback:** 
-  - *Chi tiết:* Tích hợp RedisStore thay thế MemoryStore. Tạo `authRateLimiter` (max 20 reqs/15m) bảo vệ Auth API và `aiRateLimiter` siêu chặt (max 10 reqs/15m) chống spam ví Gemini API. Tự động **fallback về MemoryStore cục bộ** nếu Redis sập.
-  - *File kiểm chứng:* [backend/src/app.ts:77-109](file:///d:/Workspace/Project/e-commerce-project/backend/src/app.ts#L77-L109)
-- [x] **Cleanup Loop Distributed Lock:** 
-  - *Chi tiết:* Sử dụng lệnh `SETNX` với TTL (lockTtlSeconds) để chỉ cho phép duy nhất một instance PM2 thực thi vòng lặp dọn dẹp các giao dịch giữ kho ảo hết hạn, ngăn chặn triệt để SQL Query duplicate và CPU spikes.
-  - *File kiểm chứng:* [stock-reservation.service.ts:324](file:///d:/Workspace/Project/e-commerce-project/backend/src/modules/inventory/stock-reservation.service.ts#L324)
+- [x] **SIGTERM & SIGINT Graceful Shutdown**
+  - *Chi tiết:* `stopCleanupLoop()` → đóng HTTP servers → `prisma.$disconnect()` + Redis `quit` + `closeRabbitConnection()`. Force kill 10s (`.unref()`). Email/AI workers có shutdown riêng.
+  - *File:* [`backend/index.ts`](../../backend/index.ts) · [`email.worker.ts`](../../backend/src/workers/email.worker.ts) · [`ai.worker.ts`](../../backend/src/workers/ai.worker.ts)
 
----
+- [x] **Unhandled Rejection & Uncaught Exception**
+  - *Chi tiết:* Log fatal → gọi `gracefulShutdown()` thay vì zombie process.
+  - *File:* [`backend/index.ts`](../../backend/index.ts)
 
-### 2. 🗄️ LAYER 2 — DATABASE & CONNECTION (Neon PostgreSQL)
-*Mục tiêu: Bảo vệ giới hạn kết nối của Database Serverless Neon và tối ưu hóa số lượng IOPS.*
+- [x] **PM2 Cluster & Zero-Downtime Reload**
+  - *Chi tiết:* `instances: 'max'`, `exec_mode: 'cluster'`, `wait_ready: true`, `listen_timeout: 8000` (Neon cold start), `process.send?.('ready')`, `kill_timeout: 10000`.
+  - *File:* [`backend/ecosystem.config.js`](../../backend/ecosystem.config.js)
 
-- [x] **Neon Connection Pool Limit:** 
-  - *Chi tiết:* Chặn đứng nguy cơ cạn kiệt pooler bằng cách khống chế tham số `&connection_limit=3` trong chuỗi kết nối Database URL.
-  - *File kiểm chứng:* [backend/.env.production:2](file:///d:/Workspace/Project/e-commerce-project/backend/.env.production#L2)
-- [x] **Gỡ Bỏ DB System Logger (Stdout Stream):** 
-  - *Chi tiết:* Loại bỏ hoàn toàn module Prisma `systemLog` khỏi HTTP middleware. Toàn bộ log API được đẩy ra `stdout` ở dạng JSON để PM2 lưu trữ. Trang Dashboard Admin tạm ẩn liên kết này để bảo đảm tính nhất quán dữ liệu.
-  - *File kiểm chứng:* [logger.middleware.ts:14-29](file:///d:/Workspace/Project/e-commerce-project/backend/src/middlewares/logger.middleware.ts#L14-L29)
-- [x] **Database Connection qua SSL:** 
-  - *Chi tiết:* Bảo mật dữ liệu truyền tải với `sslmode=require&channel_binding=require` trong chuỗi env URL.
-  - *File kiểm chứng:* [backend/.env.production](file:///d:/Workspace/Project/e-commerce-project/backend/.env.production)
+- [x] **Rate Limit Phân Hóa & Redis Store**
+  - *Chi tiết:* Production dùng `RedisStore` (shared counter across cluster). `authRateLimiter` max **20**/15m, `aiRateLimiter` max **10**/15m, global **150**/15m. Dev skip / MemoryStore.
+  - ⚠️ *Nuance:* `catch` khi **tạo** RedisStore fail → fallback MemoryStore. Runtime Redis down giữa chừng vẫn có thể làm request rate-limit lỗi (không phải full circuit-breaker) — chấp nhận được cho scope hiện tại.
+  - *File:* [`backend/src/app.ts`](../../backend/src/app.ts)
+
+- [x] **Cleanup Loop Distributed Lock**
+  - *Chi tiết:* Redis `SET` + `NX` + `EX` (SETNX semantics) — chỉ 1 PM2 instance chạy cleanup reservation hết hạn.
+  - *File:* [`stock-reservation.service.ts`](../../backend/src/modules/inventory/stock-reservation.service.ts)
 
 ---
 
-### 3. 🐇 LAYER 3 — ASYNC QUEUE & WORKERS (RabbitMQ & Workers)
-*Mục tiêu: Đưa các tác vụ nặng, tốn thời gian xử lý ra khỏi luồng HTTP chính để tăng latency phản hồi API lên gấp 200 lần (<10ms).*
+### 2. 🗄️ LAYER 2 — DATABASE & CONNECTION (Neon)
+*Mục tiêu: Bảo vệ connection pool Neon + giảm IOPS thừa.*
 
-- [x] **Bất Đồng Bộ Qdrant Vector Sync:** 
-  - *Chi tiết:* Chuyển luồng gọi Gemini API sinh embeddings và upsert Qdrant Cloud sang RabbitMQ (`q.ai.tasks`). Khi Admin lưu sản phẩm, API phản hồi lập tức. Worker chạy ngầm tự xử lý (có tích hợp thêm thông tin giá sản phẩm để tìm kiếm ngữ nghĩa chính xác).
-  - *File kiểm chứng:* [product.service.ts:468-480](file:///d:/Workspace/Project/e-commerce-project/backend/src/modules/product/product.service.ts#L468-L480)
-- [x] **Phân Tích Cảm Xúc Feedback Ngầm:** 
-  - *Chi tiết:* Bổ sung trạng thái `PENDING` vào model Feedback. Khi khách hàng feedback, BE lưu DB và trả về 200 lập tức. Worker (`ai.worker.ts`) tiêu thụ job, gọi Gemini AI phân loại sentiment và tự động tạo `FeedbackActionPlan` trong 1 single transaction.
-  - *File kiểm chứng:* [feedback.service.ts:191-193](file:///d:/Workspace/Project/e-commerce-project/backend/src/modules/feedback/feedback.service.ts#L191-L193)
-- [x] **VNPay IPN processed check (Giữ Đồng Bộ An Toàn):** 
-  - *Chi tiết:* Luồng VNPay IPN được giữ chạy đồng bộ trong `prisma.$transaction` để bảo vệ dòng tiền thật. Side-effects gửi mail hay release kho được tách ra ngoài với `.catch()`. 
-  - *File kiểm chứng:* [vnpay.controller.ts:406-492](file:///d:/Workspace/Project/e-commerce-project/backend/src/modules/payment/vnpay.controller.ts#L406-L492)
-- [x] **Tách Biệt Queue Theo Loại Job & Dead Letter Queue (DLQ):** 
-  - *Chi tiết:* Thiết lập các hàng đợi cách ly chuyên nghiệp: `q.auth.tasks` (email đăng ký), `q.order.tasks` (email đơn hàng), `q.ai.tasks` (xử lý vector & feedback). Cấu hình DLQ (`ex.dlq`) để chứa các message lỗi. **Cải tiến:** Đã vá lỗ hổng "Thùng rác không đổ" (Silent Mute) bằng cách áp dụng TTL 7 ngày và Max Length 500 cho mọi DLQ tránh tràn ổ đĩa EC2.
-  - *File kiểm chứng:* [ai.worker.ts:157-165](file:///d:/Workspace/Project/e-commerce-project/backend/src/workers/ai.worker.ts#L157-L165)
-- [x] **Orphaned Feedback Sweeper (Tọa độ 1):** 
-  - *Chi tiết:* Viết `feedback-sweeper.service.ts` định kỳ quét feedback kẹt ở trạng thái `PENDING` quá 30 phút bằng SQL Raw. Sử dụng Redis distributed lock (`feedback:sweeper:lock`) chống race condition và republish thông minh qua `Promise.allSettled`.
-  - *File kiểm chứng:* [feedback-sweeper.service.ts](file:///d:/Workspace/Project/e-commerce-project/backend/src/modules/feedback/feedback-sweeper.service.ts)
-- [x] **RabbitMQ Prefetch Tuning & Gemini API Timeout:** 
-  - *Chi tiết:* Hạ prefetch từ 2 xuống 1 cho `ai.worker.ts` chặn rate limit của Gemini API. Đồng thời bổ sung `withTimeout` 15s cho Gemini API bảo vệ worker không bị treo vô thời hạn.
-  - *File kiểm chứng:* [ai.worker.ts](file:///d:/Workspace/Project/e-commerce-project/backend/src/workers/ai.worker.ts)
----
+- [x] **Neon Connection Pool Limit**
+  - *Chi tiết:* `connection_limit=3` trên `DATABASE_URL` production.
+  - *File:* `backend/.env.production` (local trên EC2, **không** commit secrets)
 
-### 4. ☁️ LAYER 4 — STORAGE & CLOUD CDN (AWS S3 & CloudFront)
-*Mục tiêu: Chống bypass bảo mật của file tĩnh, tăng tốc độ phân phối ảnh và bảo vệ túi tiền đám mây.*
+- [x] **Gỡ DB System Logger khỏi HTTP hot path**
+  - *Chi tiết:* `dbLoggerMiddleware` ghi **stdout JSON** (PM2 logs), không `prisma.systemLog.create()` mỗi request.
+  - ⚠️ *Nuance:* Route `/api/system-logs` vẫn còn mount (đọc dữ liệu cũ / admin) — không còn write-per-request. Dashboard có thể ẩn link tùy FE.
+  - *File:* [`logger.middleware.ts`](../../backend/src/middlewares/logger.middleware.ts)
 
-- [x] **CloudFront CDN cho S3 Images:** 
-  - *Chi tiết:* Đã tích hợp biến môi trường `CLOUDFRONT_URL` để toàn bộ link ảnh sản phẩm trả về client đều đi qua CloudFront Edge thay vì trực tiếp vào S3 Bucket gốc.
-  - *File kiểm chứng:* [upload.service.ts:17-21](file:///d:/Workspace/Project/e-commerce-project/backend/src/modules/upload/upload.service.ts#L17-L21)
-- [x] **Khóa Lỗ Hổng Bảo Mật Upload (Task 4.3):** 
-  - *Chi tiết:* Ép buộc truyền tham số `size`, kiểm định `<= 5MB` ở Backend, kết hợp Allowlist cứng phần mở rộng (`['jpg', 'jpeg', 'png', 'webp', 'gif']`). **Ngoài ra:** Tích hợp `browser-image-compression` tại Frontend nén ảnh ngầm qua Web Worker thành `.webp` siêu nhẹ <300KB trước khi upload lên S3.
-  - *File kiểm chứng:* [upload.controller.ts](file:///d:/Workspace/Project/e-commerce-project/backend/src/modules/upload/upload.controller.ts) & [upload.service.ts (Frontend)](file:///d:/Workspace/Project/e-commerce-project/frontend/src/app/core/services/upload.service.ts)
-- [x] **AWS S3 Bucket Policy & CORS (Task 4.2):** 
-  - *Chi tiết:* Chặn tuyệt đối mọi truy cập trực tiếp vào S3 bucket, chỉ cho phép CloudFront OAC đi qua.
-  - *Trạng thái:* ✅ **Đã hoàn thành** (Cấu hình thành công OAC cho GET và CORS cho Presigned PUT).
+- [x] **Database Connection qua SSL**
+  - *Chi tiết:* Neon URL dùng `sslmode=require` (và channel binding nếu portal yêu cầu) trên env production.
+  - *File:* `backend/.env.production` (EC2 only)
 
 ---
 
-### 5. 🚀 LAYER 5 — CI/CD & DEPLOY PIPELINES (GitHub Actions)
-*Mục tiêu: Đưa tự động hóa vào vận hành, kiểm thử tự động và tự động phục hồi khi deploy bị lỗi.*
+### 3. 🐇 LAYER 3 — ASYNC QUEUE & WORKERS
+*Mục tiêu: Đưa job nặng (Gemini / email) ra khỏi HTTP.*
 
-- [x] **Smart Auto-Rollback Pipeline (Task 5.1):** 
-  - *Chi tiết:* Thiết lập bước tự động backup thư mục `dist` cũ trước khi đẩy code mới. Tự động kích hoạt Smoke Test kiểm tra sức khỏe qua `/api/health`. Nếu Smoke test fail sau 3 lần retry, pipeline tự động rollback khôi phục lại `dist.backup` và gọi `pm2 reload`.
-  - *File kiểm chứng:* [deploy-backend.yml:32-113](file:///d:/Workspace/Project/e-commerce-project/.github/workflows/deploy-backend.yml#L32-L113)
-- [x] **Dynamic Environment Configuration:** 
-  - *Chi tiết:* Loại bỏ hoàn toàn các địa chỉ IP và Domain cứng. Đọc động `CLIENT_URL` trong CORS setup với hàm strip trailing slash tự động (`.trim().replace(/\/$/, '')`).
-  - *File kiểm chứng:* [app.ts](file:///d:/Workspace/Project/e-commerce-project/backend/src/app.ts)
-- [x] **Frontend S3 Sync & CloudFront Invalidation Pipeline:** 
-  - *Chi tiết:* Pipeline tự động build Angular, sync đè tài nguyên tĩnh lên AWS S3 và tự động phát lệnh `cloudfront create-invalidation` xóa cache cũ trên các CDN Edge, hoàn tất bằng smoke test qua edge URL.
-  - *File kiểm chứng:* [deploy-frontend.yml](file:///d:/Workspace/Project/e-commerce-project/.github/workflows/deploy-frontend.yml)
-- [x] **GitHub Actions Automated Test CI:** 
-  - *Chi tiết:* Chạy tự động toàn bộ Jest test suite trên môi trường CI khi có lượt push hoặc Pull Request, tự động nén gói báo cáo độ phủ `coverage-report` thành artifact.
-  - *File kiểm chứng:* [test.yml](file:///d:/Workspace/Project/e-commerce-project/.github/workflows/test.yml)
+**Queue names thật trong code** ([`events.enum.ts`](../../backend/src/rabbitmq/events.enum.ts)):
 
----
+| Vai trò | Queue / Exchange |
+|---|---|
+| Email auth | `q.notification.email.auth` · exchange `ex.notification` |
+| Email order | `q.notification.email.order` (+ DLQ `q.notification.email.order.dlq`) |
+| AI tasks | `q.ai.tasks` (+ DLQ `q.ai.tasks.dlq`) · exchange `ex.ai` |
+| Dead letters | exchange `ex.dlq` |
 
-### 6. 🔒 LAYER 6 — SECURITY & DEVOPS (Hạ Tầng)
-*Mục tiêu: Đóng kín các lỗ hổng hệ thống và bảo vệ thông tin nhạy cảm của khách hàng.*
+> ❌ Tên cũ trong doc trước đây (`q.auth.tasks` / `q.order.tasks`) **không đúng** — đã sửa ở bản audit này.
 
-- [x] **RabbitMQ Security Hardening:** 
-  - *Chi tiết:* Xóa block `ports` của RabbitMQ trong docker-compose prod để chặn đứng truy cập từ public internet. Đọc động credentials từ `${RABBITMQ_USER}`/`${RABBITMQ_PASS}` trong file `.env.production` local bảo mật tuyệt đối.
-  - *File kiểm chứng:* [docker-compose.prod.yml](file:///d:/Workspace/Project/e-commerce-project/docker-compose.prod.yml)
-- [x] **Triệt Tiêu Nguy Cơ SQL Injection:** 
-  - *Chi tiết:* Rà soát và loại bỏ hoàn toàn các lệnh Prisma `$queryRawUnsafe`. Tất cả các truy vấn thô đều dùng Parameterized Tagged Templates (`$queryRaw`) giúp tự động escape ký tự nguy hại.
-  - *File kiểm chứng:* [product.service.ts:248](file:///d:/Workspace/Project/e-commerce-project/backend/src/modules/product/product.service.ts#L248)
-- [x] **JWT Blacklist Hybrid Fail-Open/Closed (Task 2.4):** 
-  - *Chi tiết:* Cân bằng giữa bảo mật và tính sẵn sàng khi Redis sập ngắn hạn: Token có thời gian sống còn lại > 5 phút được áp dụng cơ chế Fail-Closed (an sau); Token có thời gian sống < 5 phút áp dụng Fail-Open để đảm bảo người dùng bình thường không bị đá văng khỏi phiên làm việc.
-  - *File kiểm chứng:* [jwt-blacklist.ts](file:///d:/Workspace/Project/e-commerce-project/backend/src/modules/auth/jwt-blacklist.ts)
-- [x] **PM2 IPv4 DNS Resolution Order Fix:** 
-  - *Chi tiết:* Bổ sung tham số `node_args: '--dns-result-order=ipv4first'` cho toàn bộ các tiến trình API và Workers trong PM2 để ngăn chặn lỗi nghẽn DNS 5-10s (do cơ chế ưu tiên IPv6 mặc định của Node 17+ kết hợp với hạ tầng Linux EC2).
-  - *File kiểm chứng:* [ecosystem.config.js](file:///d:/Workspace/Project/e-commerce-project/backend/ecosystem.config.js)
-- [x] **PM2 Logrotate Integration:** 
-  - *Chi tiết:* Cấu hình và kích hoạt thành công mô-đun logrotate nội bộ (`max_size: 10M`, `retain: 7`, `compress: true`) trên EC2 production để dọn dẹp các tệp log phình to, tháo ngòi nổ "đầy ổ đĩa" gây sập database và RabbitMQ.
-- [x] **Bảo Mật Credentials Khỏi Git:** 
-  - *Chi tiết:* Đã kiểm tra và đảm bảo `.env.production` chứa thông tin nhạy cảm thật chỉ tồn tại local trên máy chủ và được bỏ qua an toàn bởi Git (nằm trong `.gitignore`).
+- [x] **Bất đồng bộ Qdrant Vector Sync**
+  - *Chi tiết:* Admin save product AVAILABLE → `publishProductVectorSync` → AI worker embed + upsert (kèm price/category trong text). HTTP không chờ Gemini.
+  - *File:* [`product.service.ts`](../../backend/src/modules/product/product.service.ts) · [`ai.worker.ts`](../../backend/src/workers/ai.worker.ts) · [`ai.service.ts`](../../backend/src/modules/ai/ai.service.ts)
 
----
+- [x] **Phân tích Feedback ngầm**
+  - *Chi tiết:* Feedback `sentiment: PENDING` → publish → worker Gemini classify type/sentiment + action plans. Idempotent: skip nếu không còn `PENDING`.
+  - *File:* [`feedback.service.ts`](../../backend/src/modules/feedback/feedback.service.ts) · [`feedback-analyzer.ts`](../../backend/src/modules/ai/feedback/feedback-analyzer.ts)
 
-### 7. 🧪 LAYER 7 — TESTING & VERIFICATION (Kiểm Chứng)
-*Mục tiêu: Đảm bảo các logic nghiệp vụ quan trọng được bao phủ bởi các bài test chuẩn chỉ.*
+- [x] **VNPay IPN giữ sync trong transaction**
+  - *Chi tiết:* IPN verify + DB update trong `$transaction`; side-effects (mail / release stock) tách `.catch()` ngoài.
+  - *File:* [`vnpay.controller.ts`](../../backend/src/modules/payment/vnpay.controller.ts) · [`vnpay.service.ts`](../../backend/src/modules/payment/vnpay.service.ts)
 
-- [x] **VNPay Return & IPN Webhook Integration Tests:** 
-  - *Chi tiết:* Thiết lập bộ test suite chuyên sâu 25 cases bao phủ logic tính success, chữ ký decoded/raw_encoded, và các phản hồi IPN chuẩn (RspCode 97, 01, 04, 02).
-  - *File kiểm chứng:* [vnpay.service.test.ts](file:///d:/Workspace/Project/e-commerce-project/backend/src/modules/payment/__tests__/vnpay.service.test.ts)
-- [x] **Stock Reservation Lua Script & Error Swallowing Tests (Task 7.2):** 
-  - *Chi tiết:* Hoàn thành 19/19 test cases phủ kín logic Atomicity của Lua script giữ kho, cơ chế chống trùng lắp (Idempotency), timeout giữ kho, và kiểm định việc nuốt lỗi (error swallowing) an toàn.
-  - *File kiểm chứng:* [stock-reservation.service.test.ts](file:///d:/Workspace/Project/e-commerce-project/backend/src/modules/inventory/__tests__/stock-reservation.service.test.ts)
-- [x] **Vá Lỗi Best-Effort Redis Swallowing:** 
-  - *Chi tiết:* Bọc toàn bộ kết nối và các câu lệnh Redis của hàm `attachReservationOrderIdBestEffort` vào khối try-catch để ngăn chặn việc lỗi hạ tầng Redis làm gián đoạn luồng checkout mua hàng chính của người dùng.
-  - *File kiểm chứng:* [stock-reservation.service.ts:238-253](file:///d:/Workspace/Project/e-commerce-project/backend/src/modules/inventory/stock-reservation.service.ts#L238-L253)
+- [x] **Tách queue theo loại job + DLQ**
+  - *Chi tiết:* Email vs AI tách queue. DLQ có **TTL 7 ngày** + **max-length 500** (AI DLQ + order email DLQ) — chống “thùng rác không đổ”.
+  - *File:* [`ai.worker.ts`](../../backend/src/workers/ai.worker.ts) · [`email.worker.ts`](../../backend/src/workers/email.worker.ts)
+
+- [x] **Orphaned Feedback Sweeper**
+  - *Chi tiết:* Quét feedback `PENDING` quá hạn; Redis lock `feedback:sweeper:lock`; republish `Promise.allSettled`.
+  - *File:* [`feedback-sweeper.service.ts`](../../backend/src/modules/feedback/feedback-sweeper.service.ts)
+
+- [x] **RabbitMQ Prefetch + Gemini Timeout**
+  - *Chi tiết:* AI worker `prefetch = 1`. Gemini calls bọc `withTimeout` (~15s) trong provider.
+  - *File:* [`ai.worker.ts`](../../backend/src/workers/ai.worker.ts) · [`gemini.provider.ts`](../../backend/src/modules/ai/providers/gemini.provider.ts)
 
 ---
 
-### 8. 🔮 LAYER 8 — OBSERVABILITY (Khả Năng Quan Sát - Phase Sau)
-*Mục tiêu: Cung cấp "đôi mắt" giám sát hệ thống ở quy mô Enterprise (Được quy hoạch chi tiết và chờ thực hiện).*
+### 4. ☁️ LAYER 4 — STORAGE & CLOUD CDN
 
-- [ ] **8.1 Centralized Logging:** Thiết lập Loki hoặc ELK Stack để tập trung hóa PM2 logs và truy vết theo transaction ID.
-- [ ] **8.2 Metrics & Grafana Dashboards:** Đo lường CPU/RAM EC2, pool size Neon, và queue length của RabbitMQ.
-- [ ] **8.3 Application Performance Monitoring (APM):** Đo lường latency từng phân lớp (HTTP -> Queue -> Gemini -> Postgres).
+- [x] **CloudFront CDN cho ảnh**
+  - *Chi tiết:* `CLOUDFRONT_URL` → `publicUrl` trả client đi qua CDN; fallback MinIO endpoint / S3 URL.
+  - *File:* [`upload.service.ts`](../../backend/src/modules/upload/upload.service.ts)
 
----
+- [x] **Upload security (Task 4.3)**
+  - *Chi tiết:* Query bắt buộc `size`; max **5MB**; allowlist mime + ext (`jpg/jpeg/png/webp/gif`). FE nén bằng `browser-image-compression` (thường → webp nhẹ).
+  - *File:* [`upload.controller.ts`](../../backend/src/modules/upload/upload.controller.ts) · [`frontend/.../upload.service.ts`](../../frontend/src/app/core/services/upload.service.ts)
 
-### 🌟 9. UX & KIẾN TRÚC PHÁT SINH (BONUS - Đã Hoàn Thành)
-*Mục tiêu: Mài giũa các chi tiết UX tinh tế và sửa các lỗi kỹ thuật phát sinh không có trong plan gốc.*
-
-- [x] **VNPay GMT+7 Timezone Safety:** 
-  - *Chi tiết:* Sửa hàm `formatVnpDateGmt7` dịch chuyển múi giờ cục bộ +7 giờ trước khi định dạng chuỗi, bảo đảm tham số gửi sang VNPay luôn chuẩn xác bất kể máy chủ EC2 chạy theo giờ UTC.
-- [x] **Auth Cookie Cross-Domain Setup:** 
-  - *Chi tiết:* Chuyển đổi cookie `refresh_token` từ `sameSite: 'strict'` sang `sameSite: 'none'` kèm `secure: true` để trình duyệt không block phiên làm việc giữa Frontend (CloudFront) và API (EC2).
-  - *File kiểm chứng:* [auth.controller.ts](file:///d:/Workspace/Project/e-commerce-project/backend/src/modules/auth/auth.controller.ts)
-- [x] **UX Đếm Ngược Đăng Ký & Định Dạng Tiền VND:** 
-  - *Chi tiết:* Bổ sung màn hình đếm ngược 3 giây tự động chuyển hướng về Login khi xác thực email thành công ở Angular. Chuẩn hóa toàn bộ currency về VND.
-  - *File kiểm chứng:* `EmailVerifiedComponent` & Frontend codebase.
-- [x] **Vá Lỗi Zod Data Stripping (Query Params):** 
-  - *Chi tiết:* Khắc phục lỗi Zod tự động lọc bỏ (strip) các tham số tìm kiếm/lọc (`search`, `status`) do dùng chung schema phân trang cơ bản. Đã mở rộng `.extend()` rành mạch.
-  - *File kiểm chứng:* [order.schema.ts](file:///d:/Workspace/Project/e-commerce-project/backend/src/modules/order/order.schema.ts) & [product.schema.ts](file:///d:/Workspace/Project/e-commerce-project/backend/src/modules/product/product.schema.ts)
-- [x] **Kiểm Định Định Dạng Hotline E.164:** 
-  - *Chi tiết:* Đồng bộ hóa Regex `/^\+?[0-9]{9,15}$/` cho Hotline Store Settings ở cả Backend Zod Schema và Angular Reactive Form, hiển thị trực quan thông báo lỗi màu đỏ khi sai định dạng.
-- [x] **Vá Bẫy PM2 Env Injection (Workers độc lập):** 
-  - *Chi tiết:* Sửa lỗi các Workers chạy ngầm PM2 bị mất cấu hình do `dotenv` chỉ đọc file `.env` mặc định. Đã khai báo nạp động `dotenv.config({ path: '.env.production' })` ngay dòng đầu tiên ở cả 2 Workers.
-  - *File kiểm chứng:* [ai.worker.ts](file:///d:/Workspace/Project/e-commerce-project/backend/src/workers/ai.worker.ts) & [email.worker.ts](file:///d:/Workspace/Project/e-commerce-project/backend/src/workers/email.worker.ts)
+- [x] **S3 Bucket Policy & CloudFront OAC (Task 4.2)**
+  - *Chi tiết:* Chặn public S3 trực tiếp; GET qua OAC; CORS cho Presigned PUT.
+  - *Trạng thái:* ✅ Cấu hình trên AWS (infra) — không nằm trong source code app.
 
 ---
 
-> [!NOTE]
-> Checklist này được lưu trữ tại [master_checklist.md](file:///d:/Workspace/Project/e-commerce-project/docs/codebase-review/master_checklist.md) trong repository dự án để bạn có thể cập nhật trạng thái bất kỳ lúc nào, phục vụ cho đợt bàn giao cuối cùng.
+### 5. 🚀 LAYER 5 — CI/CD & DEPLOY
+
+- [x] **Smart Auto-Rollback (Task 5.1)**
+  - *Chi tiết:* Backup `dist` → deploy → smoke `GET /api/health` (curl `--retry 3`) → fail thì restore `dist.backup` + `pm2 reload`.
+  - *File:* [`.github/workflows/deploy-backend.yml`](../../.github/workflows/deploy-backend.yml)
+
+- [x] **Dynamic CORS / CLIENT_URL**
+  - *Chi tiết:* Không hardcode IP/domain; strip trailing slash trên `CLIENT_URL`.
+  - *File:* [`app.ts`](../../backend/src/app.ts)
+
+- [x] **Frontend S3 Sync + CloudFront Invalidation**
+  - *File:* [`.github/workflows/deploy-frontend.yml`](../../.github/workflows/deploy-frontend.yml)
+
+- [x] **Jest CI + coverage artifact**
+  - *File:* [`.github/workflows/test.yml`](../../.github/workflows/test.yml)
+
+---
+
+### 6. 🔒 LAYER 6 — SECURITY & DEVOPS
+
+- [x] **RabbitMQ Security Hardening**
+  - *Chi tiết:* `docker-compose.prod.yml` **không** publish port `5672`/`15672` ra host public; credentials từ `${RABBITMQ_USER}` / `${RABBITMQ_PASS}`.
+  - *File:* [`docker-compose.prod.yml`](../../docker-compose.prod.yml)
+
+- [x] **Không dùng `$queryRawUnsafe`**
+  - *Chi tiết:* Raw SQL dùng tagged `$queryRaw` (parameterized). Audit 2026-07-10: **0** match `queryRawUnsafe` trong `backend/src`.
+  - *Ví dụ:* [`product.service.ts`](../../backend/src/modules/product/product.service.ts) · sweeper
+
+- [x] **JWT Blacklist Hybrid Fail-Open / Fail-Closed**
+  - *Chi tiết:* Redis down: nếu token còn TTL **> 5 phút** → Fail-Closed (reject); **≤ 5 phút** → Fail-Open (cho qua) — cân bằng security vs availability.
+  - *File:* [`backend/src/utils/jwt-blacklist.ts`](../../backend/src/utils/jwt-blacklist.ts)
+  - ❌ *Sửa lỗi doc cũ:* không còn path `modules/auth/jwt-blacklist.ts`.
+
+- [x] **PM2 IPv4 DNS order**
+  - *Chi tiết:* `node_args: '--dns-result-order=ipv4first'` cho API + workers.
+  - *File:* [`ecosystem.config.js`](../../backend/ecosystem.config.js)
+
+- [x] **PM2 Logrotate**
+  - *Chi tiết:* Module logrotate trên EC2 (`max_size` / `retain` / `compress`) — cấu hình server, không trong git app.
+
+- [x] **Credentials khỏi Git**
+  - *Chi tiết:* `.env.production` gitignored; chỉ tồn tại trên EC2 / máy local.
+
+---
+
+### 7. 🧪 LAYER 7 — TESTING & VERIFICATION
+
+- [x] **VNPay signature & IPN tests — 25 cases**
+  - *File:* [`vnpay.service.test.ts`](../../backend/src/modules/payment/__tests__/vnpay.service.test.ts) *(đếm `it(` = 25, audit 2026-07-10)*
+
+- [x] **Stock reservation Lua / idempotency — 19 cases**
+  - *File:* [`stock-reservation.service.test.ts`](../../backend/src/modules/inventory/__tests__/stock-reservation.service.test.ts) *(đếm = 19)*
+
+- [x] **Best-effort Redis swallow trên attach orderId**
+  - *Chi tiết:* `attachReservationOrderIdBestEffort` bọc try/catch — Redis lỗi không làm gãy checkout.
+  - *File:* [`stock-reservation.service.ts`](../../backend/src/modules/inventory/stock-reservation.service.ts) (~L238+)
+
+**Test modules khác (không nằm trong 3 task Layer 7 nhưng có trong repo):** auth, order, cart, product.
+
+---
+
+### 8. 🔮 LAYER 8 — OBSERVABILITY (Phase sau)
+
+- [ ] **8.1 Centralized Logging** — Loki / ELK + correlation / transaction id
+- [ ] **8.2 Metrics & Grafana** — CPU/RAM, Neon pool, RabbitMQ depth
+- [ ] **8.3 APM** — latency HTTP → Queue → Gemini → Postgres
+
+---
+
+### 🌟 9. UX & KIẾN TRÚC PHÁT SINH (BONUS)
+
+- [x] **VNPay GMT+7** — `formatVnpDateGmt7` trong [`vnpay.service.ts`](../../backend/src/modules/payment/vnpay.service.ts)
+- [x] **Auth cookie cross-domain** — `sameSite: 'none'` + `secure: true` ([`auth.controller.ts`](../../backend/src/modules/auth/auth.controller.ts))
+- [x] **UX verify email countdown + VND formatting** — FE
+- [x] **Zod query stripping fix** — `.extend()` trên order/product query schemas
+- [x] **Hotline E.164** — regex đồng bộ BE Zod + FE form
+- [x] **PM2 worker env injection** — workers load `.env.production` khi `NODE_ENV=production`
+
+**Bonus đã có trong code / R9 (không đếm riêng trong bảng 39):** `app.set('etag', false)`; FE `orderUpdated$` invalidate cache admin orders.
+
+---
+
+### 🔮 10. ROUND 12 — EDA RELIABILITY (Backlog)
+
+Chi tiết: [`round_12_strategy_blueprint.md`](./round_12_strategy_blueprint.md)
+
+- [ ] **12A.1 Publisher Confirms** — `createConfirmChannel()` + `waitForConfirms()`
+- [ ] **12A.3 DLQ Alert** — monitor depth → log / Telegram / Slack
+- [ ] **12A.4 Pagination MAX_PAGE** — cap `page` trong `parsePagination`
+- [ ] **12B.1 Transactional Outbox** — ghi `outbox_events` cùng DB tx, worker publish
+- [ ] **12C.1 Order TTL via DLX** — thay / bổ sung Redis cleanup loop
+- [ ] **12C.3 Managed RabbitMQ / HA** — tách broker khỏi single EC2
+
+*(Tùy chọn blueprint, chưa tick vào checklist ưu tiên: 12A.2 retry-before-DLQ, cursor pagination.)*
+
+---
+
+## ✅ Kết luận audit nhanh (2026-07-10)
+
+| Verdict | Ý nghĩa |
+|---|---|
+| **36/39 R1–R11 là thật** | Các mục Done đối chiếu được với code / workflow / compose |
+| **Sửa doc** | Queue names, path `jwt-blacklist`, link `file://` tuyệt đối, line-number cứng dễ lệch |
+| **Còn mở** | Layer 8 observability (3) + Round 12 EDA (6+) |
+| **Không overclaim** | Rate-limit fallback & system-log route được ghi chú nuance |
+
+Khi bàn giao: dùng checklist này + README sections [AI system](../../README.md#ai-system) / [Technical deep dive](../../README.md#technical-deep-dive) làm narrative; dùng folder này làm bằng chứng “đã bị production đấm và vá”.

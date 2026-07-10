@@ -1,5 +1,8 @@
 # 🔱 Plan vs Reality — Phản Biện Checklist Với Codebase Thực Tế
 
+> [!IMPORTANT]
+> **Bản tổng hợp sống (nên mở trước):** [`master_checklist.md`](./master_checklist.md) — đã audit lại với code ngày **2026-07-10** (sửa queue names, path JWT blacklist, link tương đối). Tài liệu *Plan vs Reality* này giữ chi tiết lịch sử từng layer; nếu lệch với master checklist thì **ưu tiên master checklist**.
+
 > [!NOTE]
 > Tài liệu này đối chiếu từng mục trong **kế hoạch kiến trúc** với code thực tế đã quét.
 > Mỗi mục có verdict: ✅ Đã xong | ⚠️ Plan đúng nhưng cần điều chỉnh | ❌ Plan sai/thiếu | 🔲 Chưa làm
@@ -400,4 +403,19 @@ Khi các Worker chạy tách biệt khỏi API chính bằng lệnh `pm2 start e
 - [x] **Task 4.4:** Refactor lưu trữ ảnh (Full URL → S3 Key) -> **✅ ĐÃ XONG**. DB lưu key an toàn, Backend tự ánh xạ qua CloudFront.
 - [x] **Task 7.2:** Unit Test Lua Script Redis (Logic Correctness & Error Handling) -> **✅ ĐÃ XONG**. 19/19 tests passed. Vá `attachReservationOrderIdBestEffort` bọc toàn bộ try-catch.
 - [x] **Bonus (Battle-Tested Audit):** Khắc phục lỗ hổng "DLQ Silent Mute" -> **✅ ĐÃ XONG**. Đã thêm cấu hình tự động dọn rác DLQ (TTL 7 ngày, max 500 messages) cho các workers.
+- [x] **Bonus (Battle-Tested Audit):** Floating Point defense (`Math.round` order total) + AWS Region consistency + CI/CD Secret + `paymentStatus` guard cho `cancelOrderSystem` -> **✅ ĐÃ XONG**.
 - [ ] **Layer 8 (8.1 - 8.3):** Quy hoạch khả năng quan sát hệ thống (ELK/Loki, Prometheus, Grafana, APM) -> **🔲 Chờ thực hiện ở Phase sau**.
+
+---
+
+## 🔮 ROUND 12 — EDA RELIABILITY & PRODUCTION HARDENING (BACKLOG)
+
+> Chi tiết đầy đủ xem tại: [Round 12 Strategy Blueprint](file:///d:/Workspace/Project/e-commerce-project/docs/codebase-review/round_12_strategy_blueprint.md)
+
+**Bối cảnh:** Sau bài phản biện độc lập từ Senior Mentor, đã ghi nhận các EDA reliability gap chưa đạt production-grade:
+- 🔲 **12A.1:** Publisher Confirms (`createConfirmChannel`)
+- 🔲 **12A.3:** DLQ Monitoring & Alert (Telegram/Slack)
+- 🔲 **12A.4:** Pagination MAX_PAGE Guard
+- 🔲 **12B.1:** Transactional Outbox Pattern
+- 🔲 **12C.1:** Order TTL bằng RabbitMQ DLX (thay thế Redis cleanup loop)
+- 🔲 **12C.3:** Managed RabbitMQ / HA

@@ -1,6 +1,27 @@
 # E-Commerce Platform
 
-A full-stack e-commerce monorepo: **Express 5 + TypeScript + Prisma** on the backend, **Angular 17** on the frontend, with **Docker Compose** for local infrastructure (PostgreSQL, Redis, MinIO, Mailpit, RabbitMQ, and admin tooling).
+**Full-stack e-commerce built in ~5 weeks** — not a CRUD demo. The focus is production-shaped concerns: money paths, stock races, auth sessions, async workers, and deploy/rollback on real AWS infrastructure.
+
+Buyer storefront + admin console. Local stack via Docker Compose; production on **AWS (S3/CloudFront + EC2/PM2)**, **Neon**, **Upstash**, **Qdrant Cloud**, and **VNPay**.
+
+---
+
+## Why this project stands out
+
+| Area | What was built (not just “planned”) |
+|------|-------------------------------------|
+| **Auth & sessions** | Email-verify-before-user-create, short-lived access JWT (in-memory on client), refresh token rotation (HttpOnly cookie, hashed in Redis), JWT `jti` blacklist on logout, OTP soft-lockout, idle timeout |
+| **Inventory** | Redis checkout stock reservation + TTL cleanup with distributed lock — reduces oversell before payment confirms |
+| **Orders** | Enforced status machine (`PENDING → CONFIRMED → SHIPPING → DONE`, or `PENDING → CANCELLED`), Prisma transactions, order event audit trail |
+| **Payments** | VNPay sandbox create + IPN verify, signature checks, idempotency-aware handling, unit tests around the money path |
+| **Async work** | RabbitMQ workers for email + AI/Qdrant sync — keep HTTP handlers off Gemini/embedding latency |
+| **AI** | Provider abstraction (Gemini ↔ local fallback), tool-calling chatbots, Qdrant embeddings, async feedback/vector workers — [details](#ai-system) |
+| **Storage** | Presigned MinIO/S3 uploads; production path toward S3 + CloudFront (OAC / key-based media) |
+| **Runtime** | PM2 cluster, graceful shutdown, Redis-backed rate limits (stricter on auth/AI), health check for smoke/rollback |
+| **Resilience** | Worker reconnect, DLQ, Lua stock idempotency, VNPay IPN idempotency, rate-limit MemoryStore fallback, CI smoke + auto-rollback — [details](#technical-deep-dive) |
+| **Hardening culture** | Multi-round technical critique → implement → verify on EC2 — see [`docs/codebase-review/`](docs/codebase-review/) |
+
+> Interview-friendly one-liner: *“In five weeks I shipped an e-commerce core with Gemini/Qdrant AI, then deliberately hardened order, payment, inventory, auth, and async workers — and documented every production punch.”*
 
 ---
 
@@ -8,7 +29,10 @@ A full-stack e-commerce monorepo: **Express 5 + TypeScript + Prisma** on the bac
 
 - [Tech stack](#tech-stack)
 - [Production infrastructure](#production-infrastructure)
-- [Prerequisites](#prerequisites)
+- [Features](#features)
+- [Architecture (high level)](#architecture-high-level)
+- [AI system](#ai-system)
+- [Technical deep dive](#technical-deep-dive)
 - [Repository structure](#repository-structure)
 - [Getting started](#getting-started)
 - [Database & Prisma](#database--prisma)
@@ -18,6 +42,7 @@ A full-stack e-commerce monorepo: **Express 5 + TypeScript + Prisma** on the bac
 - [Environment variables](#environment-variables)
 - [System configuration (DB-backed)](#system-configuration-db-backed)
 - [Verification checklist](#verification-checklist)
+- [Further reading](#further-reading)
 - [License](#license)
 
 ---
@@ -26,15 +51,15 @@ A full-stack e-commerce monorepo: **Express 5 + TypeScript + Prisma** on the bac
 
 | Layer | Technologies |
 |-------|--------------|
-| Backend | Node.js 20, Express 5, TypeScript, Prisma, Redis, Nodemailer, JWT, Zod validation |
-| Frontend | Angular 17 (standalone components, signals), Tailwind CSS, SCSS |
-| Data | PostgreSQL 16 (pg_trgm) — Neon (prod), Redis 7 — Upstash (prod) |
-| Object Storage | MinIO (local, S3-compatible) → AWS S3 (production). SDK: `@aws-sdk/client-s3` |
-| Message Broker | RabbitMQ 3 (AMQP via `amqplib`) |
-| AI | Google Gemini (`@google/genai`), Qdrant vector DB — Qdrant Cloud (prod) |
-| Payment | VNPay sandbox |
-| Email | Mailpit (local) → Google Mail Service (production) |
-| Dev tooling | Docker Compose, Mailpit, pgAdmin, Redis Commander, Portainer |
+| Backend | Node.js 20, Express 5, TypeScript, Prisma, Redis, Nodemailer, JWT, Zod |
+| Frontend | Angular 17 (standalone, signals), Tailwind CSS, SCSS, SSR-ready layout |
+| Data | PostgreSQL 16 (`pg_trgm`) → Neon (prod); Redis 7 → Upstash (prod) |
+| Object storage | MinIO (local) → AWS S3 (prod); `@aws-sdk/client-s3` + presigner |
+| Message broker | RabbitMQ 3 (`amqplib`) |
+| AI | Google Gemini (`@google/genai`) + Qdrant (local / Qdrant Cloud) |
+| Payment | VNPay sandbox (create + IPN) |
+| Email | Mailpit (local) → Google SMTP (prod) |
+| Ops | Docker Compose, PM2 cluster, Swagger (`/api-docs`) |
 
 ---
 
@@ -42,89 +67,246 @@ A full-stack e-commerce monorepo: **Express 5 + TypeScript + Prisma** on the bac
 
 | Component | Service | Notes |
 |-----------|---------|-------|
-| Frontend | **AWS S3 + CloudFront** | Static hosting with CDN edge caching |
-| Backend API + Workers | **AWS EC2** | PM2 manages API server + email worker |
-| RabbitMQ | **Docker on EC2** (co-located with BE) | `docker-compose.prod.yml` |
-| PostgreSQL | **Neon** (Serverless Postgres) | Managed, auto-scaling |
-| Redis | **Upstash** (Serverless Redis) | Cache, rate-limit, stock reservation |
-| Qdrant | **Qdrant Cloud** | Vector search, semantic embeddings |
-| Object Storage | **AWS S3** | Presigned URL upload; CloudFront CDN layer planned |
-| Email | **Google Mail Service** | Production SMTP |
-| Payment | **VNPay** (sandbox) | IPN webhook via public EC2 |
+| Frontend | **AWS S3 + CloudFront** | Static hosting + CDN |
+| Backend API + workers | **AWS EC2** | PM2: API cluster + email/AI workers |
+| RabbitMQ | **Docker on EC2** | `docker-compose.prod.yml` |
+| PostgreSQL | **Neon** | Serverless Postgres (`connection_limit` tuned for pooler) |
+| Redis | **Upstash** | Cache, rate-limit, reservations, token state |
+| Qdrant | **Qdrant Cloud** | Product embeddings / semantic search |
+| Object storage | **AWS S3** | Presigned upload; CDN for media |
+| Email | **Google Mail** | Production SMTP |
+| Payment | **VNPay** | IPN webhook on public EC2 |
 
 ---
 
-## Prerequisites
+## Features
 
-| Tool | Notes |
-|------|-------|
-| [Node.js](https://nodejs.org) | **v20+** recommended |
-| [Docker Desktop](https://www.docker.com/products/docker-desktop) | Required for PostgreSQL, Redis, MinIO, Mailpit, RabbitMQ |
-| [Git](https://git-scm.com) | |
-| Angular CLI | `npm i -g @angular/cli@17` or use `npx ng` without a global install |
+### Storefront (buyer)
+
+- Browse / search products (`pg_trgm` + optional vector recommend)
+- Cart (client + server sync paths), checkout with stock hold
+- VNPay payment return + order tracking
+- Register → email verify → login / OTP / forgot-password
+- Profile, address (VN location cascade), order history + feedback after `DONE`
+
+### Admin
+
+- Products, categories, orders (status transitions + audit events)
+- Dashboard summary + daily AI mini-advice
+- Feedback / sentiment + action-plan style follow-up
+- Store settings, system config (runtime knobs without redeploy)
+- Presigned image upload, AI description helper, admin chatbot
+
+### Engineering surfaces (easy to miss in a feature list)
+
+- Response envelope: `{ success, message, data, meta }` via shared helpers
+- Module layout: `route → controller → service` under `backend/src/modules/*`
+- Role guards on admin APIs; Zod validation middleware
+- Unit tests on critical paths: auth, order, cart, product, stock reservation, VNPay
+
+---
+
+## Architecture (high level)
+
+```mermaid
+flowchart LR
+  Browser[Angular 17] -->|HTTPS /api| API[Express API - PM2]
+  Browser -->|Presigned PUT| S3[MinIO / S3]
+  API --> PG[(PostgreSQL / Neon)]
+  API --> Redis[(Redis / Upstash)]
+  API -->|publish| MQ[RabbitMQ]
+  MQ --> EmailW[Email worker]
+  MQ --> AIW[AI / Qdrant worker]
+  AIW --> Gemini[Gemini]
+  AIW --> Qdrant[(Qdrant)]
+  API --> VNPay[VNPay sandbox]
+  VNPay -->|IPN| API
+```
+
+**Order status machine (enforced in service):**
+
+```
+PENDING → CONFIRMED → SHIPPING → DONE
+PENDING → CANCELLED   (only while PENDING)
+```
+
+Stock is reserved at checkout (Redis TTL) and business rules around confirm/cancel are applied in transactions — see `backend/src/modules/order` and `inventory`.
+
+---
+
+## AI system
+
+AI is a first-class module (`backend/src/modules/ai/`), not a single “call Gemini” helper. Design goals: **keep HTTP fast**, **fail soft**, and **swap providers** without rewriting product code.
+
+### Provider abstraction
+
+```
+IAIProvider.generateJson<T>()
+    ├── GeminiAIProvider   (@google/genai, structured JSON schema)
+    └── LocalAIProvider    (fallback when Gemini off / no key)
+```
+
+Factory (`ai.factory.ts`) reads **DB-backed** `SystemConfig` (`use_gemini`, `gemini_api_key`) with env fallback — admin can flip provider without redeploy.
+
+### Capabilities
+
+| Capability | Who | How it works |
+|------------|-----|--------------|
+| **Storefront chatbot** `POST /api/ai/chat` | Guest or logged-in (`optionalAuth`) | Orchestrator: extract **intent** → run **tools** (search products, add-to-cart, navigate, orders) → generate final reply. Greeting short-circuit avoids burning quota. |
+| **Admin chatbot** `POST /api/ai/admin/chat` | Admin | Separate orchestrator with intents over dashboard: summary, revenue, orders, customers, products, alerts, order/product detail — grounded in real Prisma/dashboard queries |
+| **Description enhancer** `POST /api/ai/enhance-product-description` | Admin | Copywriter prompt + JSON schema; polishes draft or writes from product name |
+| **Daily mini-advice** `GET /api/ai/mini-advice` | Admin | Week-over-week stats → Gemini bullets; **heuristic fallback** if AI fails so dashboard never goes blank |
+| **Feedback analysis** (async) | Internal worker | After feedback create: classify **type**, **sentiment** (`POSITIVE` / `NEUTRAL` / `NEGATIVE`), suggest **action plans** |
+| **Vector search / recommend** | Sync + query | Embeddings → Qdrant; used for semantic product similarity |
+
+### Vector pipeline (Gemini + Qdrant)
+
+| Detail | Value |
+|--------|--------|
+| Embedding model | `gemini-embedding-001` |
+| Dimensions | **768**, L2-normalized |
+| Distance | Cosine (`products` collection) |
+| Document text | name + category + price + description |
+| Sync path | Product AVAILABLE create/update → RabbitMQ `ai.product.vector.sync` → **AI worker** upserts (HTTP does not wait on Gemini) |
+| Ops script | `backend/src/scripts/sync-qdrant.ts` for bulk reindex |
+
+### Chat orchestration (user)
+
+```mermaid
+sequenceDiagram
+  participant UI as Angular chatbot
+  participant API as POST /api/ai/chat
+  participant Orch as chat-orchestrator
+  participant Tools as Prisma / cart / product
+  participant LLM as IAIProvider
+
+  UI->>API: message + optional context
+  API->>Orch: processUserChat(userId?, message)
+  Orch->>LLM: extract intent + args
+  Orch->>Tools: run tools for intent
+  alt navigate / deterministic
+    Orch-->>UI: reply + actions (no 2nd LLM call)
+  else needs natural language
+    Orch->>LLM: generate final response from tool results
+    Orch-->>UI: reply + product cards / actions
+  end
+```
+
+### Async AI worker (cost & latency control)
+
+`backend/src/workers/ai.worker.ts`:
+
+- Consumes `q.ai.tasks` (`prefetch = 1` — protect Gemini rate limits)
+- Handlers: **product vector sync**, **feedback analyze**
+- **Idempotent** feedback: skip if `sentiment !== PENDING`
+- Manual **ACK / NACK**; failures → **DLQ** (`q.ai.tasks.dlq`, TTL 7 days, max 500 messages)
+- Infinite **reconnect loop** if RabbitMQ drops
+
+Dedicated **AI rate limiter** on `/api/ai` (stricter than global) so chat spam cannot burn the API budget.
+
+### Frontend touchpoints
+
+- Shared chatbot UI (storefront + admin)
+- Product form: “enhance description”
+- Admin dashboard: mini-advice panel
+- Feedback admin: sentiment + suggested action plans after worker completes
+
+---
+
+## Technical deep dive
+
+This section is what separates the repo from a tutorial shop — the parts that usually break in production.
+
+### Auth & session model
+
+| Piece | Implementation |
+|-------|----------------|
+| Register | Pending record + verify token in **Redis**; **User row created only after** email link |
+| Access token | Short-lived JWT (`userId`, `role`, `jti`) — **in-memory only** on Angular (XSS cannot read from `localStorage`) |
+| Refresh | HttpOnly cookie; token **hashed in Redis**; **rotation** + token-family revoke on reuse/logout |
+| Logout | Blacklist access JWT `jti` until `exp` |
+| Client refresh | **Single-flight** Observable so parallel 401s do not stampede `/auth/refresh` |
+| Abuse | Login attempt / OTP soft-lockout, change-password attempt limits, auth-specific rate limiter |
+
+### Inventory & checkout races
+
+- Redis **stock reservation** at checkout with TTL (`CHECKOUT_RESERVATION_TTL_SECONDS`)
+- **Lua script** for atomic reserve + **idempotency** (same hold key → success, no double-count)
+- Cleanup loop under **distributed lock** (`SETNX`) so PM2 cluster does not multi-run expiry
+- Cancel / fail paths **return stock**; guards against cancelling when `paymentStatus === PAID`
+
+### Orders & money
+
+- Status transitions enforced in `order.service` (not only UI)
+- Prisma `$transaction` for multi-write paths
+- `OrderEvent` audit for admin timeline
+- VNPay: signed create URL, **IPN verify**, amount `Math.round` defense, **idempotent** processing (duplicate IPN / unique constraints)
+- Unit tests around VNPay signature & IPN and order/stock services
+
+### Messaging (RabbitMQ)
+
+| Concern | Approach |
+|---------|----------|
+| Topology | Durable topic exchanges + queues |
+| Email | Auth verify / OTP / forgot + order placed / status / completed → email worker |
+| AI | Vector sync + feedback analyze → AI worker |
+| Delivery | Persistent messages; manual ACK; fail → DLQ (not silent drop) |
+| Ops | Prefetch tuned per worker; graceful shutdown on SIGTERM |
+
+### Self-healing & ops
+
+| Layer | Mechanisms |
+|-------|------------|
+| App | RabbitMQ worker reconnect; rate-limit **RedisStore → MemoryStore fallback**; JWT blacklist fail-open/closed trade-off documented in review docs |
+| Infra | `GET /api/health` (DB ping); PM2 cluster + `wait_ready` / `kill_timeout`; pm2-logrotate |
+| Deploy | CI smoke on health; **auto-rollback** path when smoke fails |
+| Data | Feedback orphaned sweeper; stock reservation cleanup; Neon `connection_limit` tuned for serverless pooler |
+
+### API & frontend conventions
+
+- Envelope: `success()` / error middleware — never raw Prisma errors to clients
+- Zod `validateBody` / `validateQuery` on routes
+- Angular: standalone + signals (`AuthService.currentUser`), lazy `/admin`, `authGuard` + `adminGuard`
+- Upload: two-step presigned PUT (browser → MinIO/S3), API never streams large binaries
+
+### Test surface (critical paths)
+
+```
+backend/src/modules/
+  auth/__tests__/
+  order/__tests__/
+  cart/__tests__/
+  product/__tests__/
+  inventory/__tests__/   # Lua / reservation
+  payment/__tests__/     # VNPay signature + IPN
+```
+
+Deeper write-ups (rounds, battle tests, self-healing map): [`docs/codebase-review/`](docs/codebase-review/).
 
 ---
 
 ## Repository structure
 
-### Current layout
-
 ```
 e-commerce-project/
 ├── backend/
-│   ├── prisma/
-│   │   ├── schema.prisma       # Prisma schema (PostgreSQL)
-│   │   └── seed.ts             # Database seeder
+│   ├── prisma/                 # schema + seed
 │   ├── src/
-│   │   ├── config/
-│   │   │   ├── redis.ts        # Redis client (lazy-connect)
-│   │   │   ├── rabbitmq.ts     # RabbitMQ client (lazy-connect)
-│   │   │   ├── storage.ts      # S3/MinIO client config
-│   │   │   └── swagger.ts      # Swagger/OpenAPI setup
-│   │   ├── middlewares/
-│   │   │   ├── auth.middleware.ts
-│   │   │   ├── error.middleware.ts
-│   │   │   ├── logger.middleware.ts
-│   │   │   ├── role.middleware.ts
-│   │   │   └── validate.middleware.ts
-│   │   ├── modules/
-│   │   │   ├── ai/             # Gemini chatbot, embeddings, feedback analysis
-│   │   │   ├── auth/           # Register, login, JWT, OTP, forgot-password
-│   │   │   ├── cart/           # Shopping cart
-│   │   │   ├── category/
-│   │   │   ├── dashboard/      # Admin dashboard + daily insights
-│   │   │   ├── feedback/       # Product feedback + sentiment analysis
-│   │   │   ├── inventory/      # Stock reservation (checkout holds)
-│   │   │   ├── location/       # Vietnam province/district/ward API proxy
-│   │   │   ├── order/          # Order CRUD + status machine
-│   │   │   ├── payment/        # VNPay integration
-│   │   │   ├── product/        # Product CRUD + landing page
-│   │   │   ├── store-setting/  # Store branding config
-│   │   │   ├── system-config/  # Runtime config (DB-backed)
-│   │   │   ├── system-log/     # Request logging
-│   │   │   ├── upload/         # Presigned URL upload (MinIO/S3)
-│   │   │   └── user/           # User CRUD
-│   │   ├── utils/
-│   │   └── app.ts              # Express app setup (CORS, Helmet, routes)
-│   ├── index.ts                # HTTP/HTTPS server bootstrap
-│   ├── package.json
+│   │   ├── config/             # redis, rabbitmq, storage, swagger
+│   │   ├── middlewares/        # auth, role, validate, error, logger
+│   │   ├── modules/            # feature modules (ai, auth, order, payment, …)
+│   │   ├── workers/            # email + AI consumers
+│   │   └── app.ts
+│   ├── index.ts                # HTTP/HTTPS bootstrap + graceful shutdown
 │   └── .env.example
 ├── frontend/
-│   ├── src/
-│   │   ├── app/
-│   │   │   ├── core/           # Guards, interceptors, services
-│   │   │   ├── features/       # Feature modules (lazy-loaded)
-│   │   │   └── shared/         # Reusable components, models, pipes
-│   │   └── environments/
-│   │       ├── environment.ts       # Dev config (HTTP, MinIO on localhost)
-│   │       └── environment.prod.ts  # Prod config (HTTPS, S3/CDN)
-│   ├── angular.json
-│   └── package.json
-├── contexts/                   # Project context / internal notes
-├── docs/                       # Additional documentation
-├── docker-compose.yml          # Infrastructure only (apps run on the host)
-├── CLAUDE.md                   # AI coding assistant context
-├── .gitignore
+│   └── src/app/
+│       ├── core/               # guards, interceptors, Auth/Cart/Upload services
+│       ├── features/           # storefront + lazy /admin
+│       └── shared/
+├── contexts/                   # API contract + AI/agent context
+├── docs/codebase-review/       # multi-round critique, plan-vs-reality, battle tests
+├── docker-compose.yml
 └── README.md
 ```
 
@@ -132,15 +314,20 @@ e-commerce-project/
 
 ## Getting started
 
-### 1. Start infrastructure
+### Prerequisites
 
-From the repository root:
+| Tool | Notes |
+|------|-------|
+| [Node.js](https://nodejs.org) | **v20+** |
+| [Docker Desktop](https://www.docker.com/products/docker-desktop) | Postgres, Redis, MinIO, Mailpit, RabbitMQ, Qdrant, … |
+| [Git](https://git-scm.com) | |
+| Angular CLI | optional — `npx ng` works without a global install |
+
+### 1. Start infrastructure
 
 ```bash
 docker compose up -d
 ```
-
-This starts PostgreSQL 16, Redis 7, MinIO, Mailpit, RabbitMQ, pgAdmin, Redis Commander, Qdrant, and Portainer.
 
 ### 2. Backend
 
@@ -149,15 +336,15 @@ cd backend
 npm install
 # Windows: copy .env.example .env
 # macOS / Linux: cp .env.example .env
-# Edit .env as needed (see "Environment variables" section below)
 npx prisma generate
 npx prisma db push
+npm run db:seed   # optional
 npm run dev
 ```
 
-- API base URL: `http://localhost:3000`
-- Health check: `GET http://localhost:3000/api/health` (includes a database connectivity check)
-- Swagger UI: `http://localhost:3000/api-docs`
+- API: `http://localhost:3000`
+- Health: `GET http://localhost:3000/api/health`
+- Swagger: `http://localhost:3000/api-docs`
 
 ### 3. Frontend
 
@@ -167,72 +354,41 @@ npm install
 npm start
 ```
 
-- App URL: `http://localhost:4200`
+- App: `http://localhost:4200`
 
 ---
 
 ## Database & Prisma
 
-### Overview
+- Schema: [`backend/prisma/schema.prisma`](backend/prisma/schema.prisma)
+- PostgreSQL with `pg_trgm` for product title search indexes
+- All IDs are **`Int` autoincrement** (no UUIDs)
 
-- **ORM:** Prisma (`@prisma/client`); schema: [`backend/prisma/schema.prisma`](backend/prisma/schema.prisma).
-- **Database:** PostgreSQL, aligned with the `postgres` service in `docker-compose.yml`.
-- **Extensions:** The schema enables `postgresqlExtensions` and `pg_trgm` for GIN / `gin_trgm_ops` indexes on `Product.title_unaccent` (search-related).
-- **IDs:** Models use integer primary keys with `autoincrement()`, not UUIDs.
-
-See the schema file for entities (`User`, `Category`, `Product`, `Order`, `OrderItem`, `Feedback`, `FeedbackActionPlan`, `FeedbackType`, `StoreSetting`, `SystemLog`, `SystemConfig`, `PaymentTransaction`, `DashboardDailyInsight`) and enums (`Role`, `OrderStatus`, `PaymentStatus`, `SentimentLabel`, `ProductStatus`, `ActionPlanStatus`).
-
-### `DATABASE_URL` (local development)
-
-When the API runs **on your machine** (not inside Docker), point to `localhost` with the mapped port:
+**Local `DATABASE_URL`** (API on host, DB in Docker — note host port **5433**):
 
 ```env
 DATABASE_URL="postgresql://admin:secret123@localhost:5433/ecommerce"
 ```
 
-> **Note:** Docker maps PostgreSQL to host port **5433** (not the default 5432), and Redis to **6380**.
-
-If you later run the backend **in** Docker on the same Compose network, use the service hostname `postgres` instead of `localhost` (and `redis` for Redis).
-
-### Common Prisma commands
-
 | Goal | Command |
 |------|---------|
-| Apply schema to the database (dev, no migration files) | `npx prisma db push` |
-| Regenerate the Prisma Client after schema changes | `npx prisma generate` |
-| Create a versioned migration (team workflow) | `npx prisma migrate dev --name your_migration_name` |
-| Open Prisma Studio (default `http://localhost:5555`) | `npx prisma studio` |
-| Seed the database | `npm run db:seed` |
-
-For early development, `db push` is often enough. Switch to `migrate dev` when you need reviewable, repeatable database changes.
+| Push schema (dev) | `npx prisma db push` |
+| Generate client | `npx prisma generate` |
+| Migration workflow | `npx prisma migrate dev --name <name>` |
+| Studio | `npx prisma studio` |
+| Seed | `npm run db:seed` |
 
 ---
 
 ## Object Storage (MinIO / AWS S3)
 
-### How it works
+1. Admin calls `GET /api/upload/presigned-url?mimeType=image/jpeg&ext=jpg`
+2. Backend returns `{ uploadUrl, publicUrl }`
+3. Frontend `PUT`s the file to `uploadUrl`
+4. `publicUrl` (or storage key + CDN URL in prod) is saved on the product
 
-The project uses a **presigned-URL upload pattern** powered by the AWS SDK (`@aws-sdk/client-s3`):
+**Local MinIO:** API `9002`, Console `9003` (`admin` / `password123`). Bucket `ecommerce-products` is created by Compose.
 
-1. **Admin requests a presigned URL** → `GET /api/upload/presigned-url?mimeType=image/jpeg&ext=jpg`
-2. **Backend generates** a time-limited PUT URL (5 min) and returns `{ uploadUrl, publicUrl }`.
-3. **Frontend PUTs the file** directly to `uploadUrl` (bypassing the backend for large files).
-4. **`publicUrl`** is saved in the DB (e.g. `Product.imageUrl`).
-
-### Local development (MinIO)
-
-MinIO runs as a Docker container, emulating S3:
-
-| Port | Service |
-|------|---------|
-| `9002` | MinIO API (S3-compatible) |
-| `9003` | MinIO Console (web UI) |
-
-Login to MinIO Console: `admin` / `password123`
-
-The `minio-create-bucket` sidecar container auto-creates the `ecommerce-products` bucket with public download policy.
-
-**Backend `.env` for MinIO:**
 ```env
 AWS_ENDPOINT=http://localhost:9002
 AWS_ACCESS_KEY_ID=admin
@@ -241,131 +397,84 @@ AWS_BUCKET_NAME=ecommerce-products
 AWS_REGION=us-east-1
 ```
 
-**Frontend `environment.ts`:**
-```ts
-storageUrl: 'http://127.0.0.1:9002'
-```
-
-### Production (AWS S3)
-
-- **Remove** `AWS_ENDPOINT` from `.env` (SDK defaults to real S3 endpoints).
-- Set `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_REGION`, `AWS_BUCKET_NAME` to your real AWS credentials.
-- Set `storageUrl` in `environment.prod.ts` to your S3 bucket URL or CloudFront distribution.
+**Production:** omit `AWS_ENDPOINT`; use real AWS credentials and set frontend `storageUrl` / CloudFront domain in `environment.prod.ts`.
 
 ---
 
 ## HTTPS configuration
 
-The backend supports **optional HTTPS** directly in Node.js. This is useful for local/staging environments. **In production, it is recommended to terminate TLS at a reverse proxy** (Nginx, Traefik, AWS ALB, CloudFront).
+Optional TLS in Node for local/staging. Prefer terminating TLS at a reverse proxy / ALB / CloudFront in production.
 
-### Relevant env vars
+| Var | Role |
+|-----|------|
+| `HTTPS_ENABLED` | Start HTTPS listener |
+| `HTTPS_PORT` / `TLS_*_PATH` | Certs |
+| `HTTPS_REDIRECT` | HTTP → HTTPS 301 on `PORT` |
+| `TRUST_PROXY` | Trust `X-Forwarded-*` behind a proxy |
 
-| Var | Description |
-|-----|-------------|
-| `HTTPS_ENABLED` | `true` to start an HTTPS server; `false` (default) for plain HTTP |
-| `HTTPS_PORT` | Port for HTTPS server (default `3443`) |
-| `TLS_KEY_PATH` | Path to private key PEM file |
-| `TLS_CERT_PATH` | Path to certificate PEM file |
-| `HTTPS_REDIRECT` | `true` to spin up an HTTP→HTTPS 301 redirect on `PORT` |
-| `TRUST_PROXY` | `true` when behind a reverse proxy (so `req.protocol`, `req.ip`, and cookie `secure` flags work correctly) |
+Refresh-cookie `secure` follows `NODE_ENV=production` **or** `HTTPS_ENABLED=true`.
 
-### How it works
-
-- `backend/index.ts` reads the env vars and either starts a plain HTTP server or an HTTPS server (with optional HTTP redirect).
-- `auth.controller.ts` uses an `isSecure()` helper to decide the `secure` flag for the refresh-token cookie: true when `NODE_ENV=production` **or** `HTTPS_ENABLED=true`.
-
-### Recommended config by environment
-
-| Environment | Config |
-|-------------|--------|
-| **Local dev** | `HTTPS_ENABLED=false`, `PORT=3000`. Frontend at `http://localhost:4200` |
-| **Staging** | `HTTPS_ENABLED=true`, provide TLS certs, or use a reverse proxy with `TRUST_PROXY=true` |
-| **Production (AWS)** | `HTTPS_ENABLED=false`, `TRUST_PROXY=true`. TLS terminated at ALB/CloudFront |
+| Environment | Typical config |
+|-------------|----------------|
+| Local | `HTTPS_ENABLED=false`, `PORT=3000` |
+| Behind proxy / AWS | `HTTPS_ENABLED=false`, `TRUST_PROXY=true` |
 
 ---
 
 ## Docker services
 
-The application processes are **not** defined in `docker-compose.yml`; only supporting services are. Port reference:
+Apps run on the host; Compose provides infrastructure only.
 
 | Port | Service | Credentials |
 |------|---------|-------------|
 | `5433` | PostgreSQL | `admin` / `secret123` (db: `ecommerce`) |
 | `6380` | Redis | password: `redissecret` |
-| `1025` | Mailpit (SMTP) | — |
-| `8025` | Mailpit (web UI) | — |
-| `9002` | MinIO API (S3-compatible) | `admin` / `password123` |
-| `9003` | MinIO Console | `admin` / `password123` |
-| `5672` | RabbitMQ (AMQP) | `admin` / `secret123` |
-| `15672` | RabbitMQ Management UI | `admin` / `secret123` |
-| `6333` | Qdrant (HTTP API) | — |
-| `6334` | Qdrant (gRPC) | — |
+| `1025` / `8025` | Mailpit SMTP / UI | — |
+| `9002` / `9003` | MinIO API / Console | `admin` / `password123` |
+| `5672` / `15672` | RabbitMQ / Management | `admin` / `secret123` |
+| `6333` / `6334` | Qdrant HTTP / gRPC | — |
 | `5050` | pgAdmin | `admin@admin.com` / `admin` |
 | `8082` | Redis Commander | — |
 | `9000` | Portainer | — |
 
-**pgAdmin (first login):** sign in with `admin@admin.com` / `admin`, then register a server to PostgreSQL using host **`postgres`** (Docker service name), port `5432`, database `ecommerce`, user `admin`, password `secret123`.
-
-**Redis Commander:** preconfigured to reach Redis on the Docker network.
-
-**MinIO Console:** browse and manage buckets at `http://localhost:9003`.
+**pgAdmin:** host **`postgres`**, port `5432` (inside Docker network), db `ecommerce`.
 
 ---
 
 ## Environment variables
 
-Copy `backend/.env.example` to `backend/.env` and adjust values. Key groups:
+Copy `backend/.env.example` → `backend/.env`. Highlights:
 
 ### Core
-| Var | Example | Notes |
-|-----|---------|-------|
-| `DATABASE_URL` | `postgresql://admin:secret123@localhost:5433/ecommerce` | Host port 5433 |
-| `REDIS_URL` | `redis://default:redissecret@localhost:6380` | Host port 6380 |
-| `PORT` | `3000` | Backend HTTP port |
-| `CLIENT_URL` | `http://localhost:4200` | Used for CORS, email links |
-| `NODE_ENV` | `development` | `production` in prod |
 
-### Auth / JWT
-| Var | Example | Notes |
-|-----|---------|-------|
-| `JWT_SECRET` | `your-secret-key` | |
-| `JWT_ACCESS_EXPIRES_IN` | `14m` | Access token TTL |
-| `REFRESH_TOKEN_TTL_SECONDS` | `900` | Refresh token TTL (seconds) |
-| `IDLE_TIMEOUT_SECONDS` | `900` | Auto-logout on idle |
-| `LOGIN_ATTEMPT_LIMIT` | `4` | OTP lockout threshold |
-
-### Object Storage (MinIO / S3)
-| Var | Example | Notes |
-|-----|---------|-------|
-| `AWS_ENDPOINT` | `http://localhost:9002` | Omit for real AWS S3 |
-| `AWS_ACCESS_KEY_ID` | `admin` | |
-| `AWS_SECRET_ACCESS_KEY` | `password123` | |
-| `AWS_BUCKET_NAME` | `ecommerce-products` | |
-| `AWS_REGION` | `us-east-1` | |
-
-### HTTPS
-| Var | Example | Notes |
-|-----|---------|-------|
-| `HTTPS_ENABLED` | `false` | Set `true` only if running TLS in Node.js |
-| `HTTPS_PORT` | `3443` | |
-| `TLS_KEY_PATH` | `path/to/key.pem` | |
-| `TLS_CERT_PATH` | `path/to/cert.pem` | |
-| `HTTPS_REDIRECT` | `false` | HTTP→HTTPS redirect |
-| `TRUST_PROXY` | `false` | Set `true` behind reverse proxy |
-
-### Email / VNPay / AI
 | Var | Example |
 |-----|---------|
-| `MAIL_HOST` | `localhost` |
-| `MAIL_PORT` | `1025` |
-| `MAIL_FROM` | `no-reply@ecommerce.local` |
-| `API_BASE_URL` | `http://localhost:3000` |
-| `VNP_TMN_CODE` | `your_tmn_code` |
-| `VNP_HASH_SECRET` | `your_hash_secret` |
-| `VNP_URL` | `https://sandbox.vnpayment.vn/paymentv2/vpcpay.html` |
-| `VNP_RETURN_URL` | `http://localhost:4200/checkout` |
-| `GEMINI_API_KEY` | `your-key` |
+| `DATABASE_URL` | `postgresql://admin:secret123@localhost:5433/ecommerce` |
+| `REDIS_URL` | `redis://default:redissecret@localhost:6380` |
 | `RABBITMQ_URL` | `amqp://admin:secret123@localhost:5672` |
+| `PORT` / `CLIENT_URL` | `3000` / `http://localhost:4200` |
+
+### Auth
+
+| Var | Notes |
+|-----|-------|
+| `JWT_SECRET` | Required |
+| `JWT_ACCESS_EXPIRES_IN` | e.g. `14m` |
+| `REFRESH_TOKEN_TTL_SECONDS` | Refresh TTL in Redis |
+| `IDLE_TIMEOUT_SECONDS` | Client idle logout |
+| `LOGIN_ATTEMPT_LIMIT` | OTP soft-lockout |
+
+### Storage / payment / AI
+
+| Var | Notes |
+|-----|-------|
+| `AWS_*` / `CLOUDFRONT_URL` | MinIO locally; real S3 + CDN in prod |
+| `VNP_*` | VNPay sandbox portal values |
+| `GEMINI_API_KEY` | Embeddings + chat / enhance / feedback (also overridable via SystemConfig) |
+| `QDRANT_URL` / `QDRANT_API_KEY` | Local `http://localhost:6333` or Qdrant Cloud |
+| `CHECKOUT_RESERVATION_TTL_SECONDS` | Stock hold window (default 900) |
+
+See [`.env.example`](backend/.env.example) for the full list.
 
 ---
 
@@ -380,18 +489,32 @@ Admins can configure runtime parameters dynamically in the `SystemConfig` table 
 
 ## Verification checklist
 
-After a fresh clone:
+- [ ] `docker compose up -d` healthy
+- [ ] `backend/.env` ports match Compose (PG **5433**, Redis **6380**)
+- [ ] `prisma generate` + `db push` OK; `GET /api/health` → 200
+- [ ] Frontend at `http://localhost:4200`
+- [ ] MinIO bucket exists; admin product image upload + display works
+- [ ] (Optional) Mailpit at `http://localhost:8025` shows verification mail
+- [ ] (Optional) VNPay sandbox credentials set for checkout IPN
 
-- [ ] Docker Desktop is running and `docker compose up -d` completes without errors
-- [ ] `backend/.env` exists (copied from `.env.example`) with correct port mappings (PG:5433, Redis:6380)
-- [ ] `npx prisma generate` and `npx prisma db push` succeed
-- [ ] `GET http://localhost:3000/api/health` returns HTTP 200
-- [ ] Frontend is reachable at `http://localhost:4200` via `npm start`
-- [ ] MinIO Console accessible at `http://localhost:9003` and `ecommerce-products` bucket exists
-- [ ] Image upload works: admin creates product with image → file stored in MinIO → image loads in frontend
+---
+
+## Further reading
+
+| Doc | What it is |
+|-----|------------|
+| [`docs/codebase-review/master_checklist.md`](docs/codebase-review/master_checklist.md) | **Living go-live checklist** (R1–R11 done + R12 backlog) — audited vs code 2026-07-10 |
+| [`contexts/API_CONTRACT.MD`](contexts/API_CONTRACT.MD) | HTTP contract |
+| [`contexts/CODEBASE_INDEX.MD`](contexts/CODEBASE_INDEX.MD) | Agent/onboarding index |
+| [`CLAUDE.md`](CLAUDE.md) | Stack + conventions for AI assistants |
+| [`docs/codebase-review/technical_critique.md`](docs/codebase-review/technical_critique.md) | Architecture critique (multi-round) |
+| [`docs/codebase-review/plan_vs_reality.md`](docs/codebase-review/plan_vs_reality.md) | Checklist: plan ↔ code (historical detail) |
+| [`docs/codebase-review/self_healing_assessment.md`](docs/codebase-review/self_healing_assessment.md) | Self-healing map |
+| [`docs/codebase-review/battle_test_audit.md`](docs/codebase-review/battle_test_audit.md) | Floating-point, pagination, money traps |
+| [`docs/codebase-review/`](docs/codebase-review/) | Full round blueprints (R9–R12) |
 
 ---
 
 ## License
 
-This project is licensed under the **ISC** License (see [`backend/package.json`](backend/package.json)).
+ISC (see [`backend/package.json`](backend/package.json)).
