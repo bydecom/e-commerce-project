@@ -1,8 +1,9 @@
 # 🗺️ Round 12 Strategy Blueprint — EDA Reliability & Production Hardening
 
-> **Bối cảnh:** Sau 11 round review và implement, hệ thống đã đạt 92.3% hoàn thành (36/39 tasks). Một bài phản biện độc lập từ Senior Mentor đã chỉ ra rằng kiến trúc EDA hiện tại là **"hợp lý cho mock project đã deploy cloud"** nhưng còn thiếu nhiều cơ chế reliability để gọi là production-grade. Round 12 được thiết kế dựa trên những gap đó.
+> **Bối cảnh:** Sau 11 round review và implement, hệ thống đã đạt 92.3% hoàn thành (36/39 tasks R1–R11). Một bài phản biện độc lập từ Senior Mentor đã chỉ ra rằng kiến trúc EDA hiện tại là **"hợp lý cho mock project đã deploy cloud"** nhưng còn thiếu nhiều cơ chế reliability để gọi là production-grade. Round 12 được thiết kế dựa trên những gap đó.
 > **Mục tiêu:** Ghi nhận đầy đủ những gì hệ thống **đã có**, và lập bản đồ rõ ràng cho những gì **cần bổ sung** khi scale lên production thật.
-> **Trạng thái:** 🔲 **Backlog — Phase sau ngày 6/6**
+> **Trạng thái:** 🔲 **Backlog**
+> **Tracking:** Các mục ưu tiên đã được kéo vào [`master_checklist.md`](./master_checklist.md) §10 (audit 2026-07-10).
 
 ---
 

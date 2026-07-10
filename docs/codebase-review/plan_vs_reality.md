@@ -1,5 +1,8 @@
 # 🔱 Plan vs Reality — Phản Biện Checklist Với Codebase Thực Tế
 
+> [!IMPORTANT]
+> **Bản tổng hợp sống (nên mở trước):** [`master_checklist.md`](./master_checklist.md) — đã audit lại với code ngày **2026-07-10** (sửa queue names, path JWT blacklist, link tương đối). Tài liệu *Plan vs Reality* này giữ chi tiết lịch sử từng layer; nếu lệch với master checklist thì **ưu tiên master checklist**.
+
 > [!NOTE]
 > Tài liệu này đối chiếu từng mục trong **kế hoạch kiến trúc** với code thực tế đã quét.
 > Mỗi mục có verdict: ✅ Đã xong | ⚠️ Plan đúng nhưng cần điều chỉnh | ❌ Plan sai/thiếu | 🔲 Chưa làm

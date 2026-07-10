@@ -4,9 +4,19 @@ on:
   push:
     branches:
       - develop
+    paths-ignore:
+      - '**/*.md'
+      - '**/*.mdc'
+      - 'docs/**'
+      - 'contexts/**'
   pull_request:
     branches:
       - master
+    paths-ignore:
+      - '**/*.md'
+      - '**/*.mdc'
+      - 'docs/**'
+      - 'contexts/**'
 
 jobs:
   test-backend:
